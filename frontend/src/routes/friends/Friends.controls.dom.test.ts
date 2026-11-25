@@ -4,17 +4,19 @@ import { msg } from '../../lib/i18n';
 import { friendCode } from '../../lib/services/social';
 import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import FriendCodeCard from './FriendCodeCard.svelte';
 import Friends from './Friends.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
-vi.mock('../../lib/services/social', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/social')>()),
-  friendCode: vi.fn(),
-}));
+vi.mock('../../lib/services/social', async (original) => (await import('./friendsTesting')).socialService(await original()));
+vi.mock('../../lib/services/messaging', async (original) => (await import('./friendsTesting')).messagingService(await original()));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'messaging'));
 
 beforeEach(() => {
+  resetBindings();
   // jsdom has no ResizeObserver; the page's segmented controls measure with one.
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
@@ -24,6 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  expect(calls).toEqual([]);
   authState.set('bootstrapping');
   vi.mocked(friendCode).mockReset();
   vi.unstubAllGlobals();

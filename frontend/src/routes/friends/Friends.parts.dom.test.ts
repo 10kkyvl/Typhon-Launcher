@@ -11,6 +11,7 @@ import { friendsPage } from '../../lib/stores/social';
 import { friendsView } from '../../lib/stores/ui';
 import { authState } from '../../lib/stores/user';
 import { user as userEvents } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import Friends from './Friends.svelte';
 
 // The page keeps what its parts share and hands it down: the search and the sorting (bound), the
@@ -18,24 +19,17 @@ import Friends from './Friends.svelte';
 // the buttons of each card list as a snippet. A prop passed without `bind:`, a callback not wired or a
 // reserve taken from the wrong list breaks nothing a type check sees: these tests go through each such
 // seam the way a player does, and through the page's reads and what makes them run again.
-// Not held here: that the cards slide and fade only when one comes or goes and not when a tab mounts
-// the list (the transitions are local; no test counts them), the blocked list read again once the
+// Not held here: that a card slides in only when one comes and not when a tab mounts the list (the transitions are local; no test counts them), the blocked list read again once the
 // sync consent is given (only the sign-in is driven), the grid view's rows (the same props as the
 // list's), the friend code card, the consent dialog and the add dialog's own lookup, which are the
 // page's and its children's, not seams of this split.
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
-vi.mock('../../lib/services/social', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/social')>()),
-  accept: vi.fn(async () => {}),
-  blocks: vi.fn(async () => []),
-  decline: vi.fn(async () => {}),
-  friends: vi.fn(async () => ({ friends: [], incoming: [], outgoing: [] })),
-  refresh: vi.fn(async () => {}),
-  unblock: vi.fn(async () => {}),
-  unfriend: vi.fn(async () => {}),
-}));
+vi.mock('../../lib/services/social', async (original) => (await import('./friendsTesting')).socialService(await original()));
+vi.mock('../../lib/services/messaging', async (original) => (await import('./friendsTesting')).messagingService(await original()));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'messaging'));
 vi.mock('../../lib/stores/router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/stores/router')>()),
   navigate: vi.fn(),
@@ -88,9 +82,11 @@ beforeEach(() => {
   friendsPage.set({ friends: FRIENDS, incoming: INCOMING, outgoing: OUTGOING });
   vi.mocked(friends).mockResolvedValue({ friends: FRIENDS, incoming: INCOMING, outgoing: OUTGOING });
   vi.mocked(blocks).mockResolvedValue(BLOCKED);
+  resetBindings();
 });
 
 afterEach(() => {
+  expect(calls).toEqual([]);
   cleanup();
   document.body.replaceChildren();
   friendsPage.set({ friends: [], incoming: [], outgoing: [] });

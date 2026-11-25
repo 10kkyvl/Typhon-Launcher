@@ -4,27 +4,28 @@ import { msg } from '../../lib/i18n';
 import { profile, sendRequest, type PublicProfile, type SendResult } from '../../lib/services/social';
 import { toasts } from '../../lib/stores/toasts';
 import { user } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import AddFriendModal from './AddFriendModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../lib/services/social', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/social')>()),
-  profile: vi.fn(),
-  profileByCode: vi.fn(),
-  sendRequest: vi.fn(),
-}));
+vi.mock('../../lib/services/social', async (original) => (await import('./friendsTesting')).socialService(await original()));
+vi.mock('../../lib/services/messaging', async (original) => (await import('./friendsTesting')).messagingService(await original()));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'messaging'));
 
 const lena = { username: 'lena', displayName: 'Lena', avatarUrl: '', relation: 'none', mutualCount: 0 } as unknown as PublicProfile;
 
 let app: HTMLDivElement;
 
 beforeEach(() => {
+  resetBindings();
   app = document.createElement('div');
   app.id = 'app';
   document.body.append(app);
 });
 
 afterEach(() => {
+  expect(calls).toEqual([]);
   toasts.set([]);
   vi.clearAllMocks();
   document.body.replaceChildren();

@@ -1,19 +1,29 @@
 import { screen } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserCard } from '../../lib/services/social';
 import { openGameByIGDB } from '../../lib/social/openGame';
 import { renderDom } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import overlayFriends from '../../overlay/OverlayFriends.svelte?raw';
 import FriendRow from './FriendRow.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/social/openGame', () => ({ openGameByIGDB: vi.fn() }));
+vi.mock('../../lib/services/social', async (original) => (await import('./friendsTesting')).socialService(await original()));
+vi.mock('../../lib/services/messaging', async (original) => (await import('./friendsTesting')).messagingService(await original()));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'messaging'));
 
 const ann = { id: 'u1', username: 'ann', displayName: 'Ann', avatarUrl: '' } as unknown as UserCard;
 const TITLE = 'The Legend of Heroes: Trails in the Sky the 3rd';
 
+beforeEach(() => {
+  resetBindings();
+});
+
 afterEach(() => {
+  expect(calls).toEqual([]);
   vi.mocked(openGameByIGDB).mockReset();
 });
 
