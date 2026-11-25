@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { frontendSources } from '../lib/testing/sources';
 
 /**
- * A source tripwire: the sign-in and support forms leave their fields' edge, fill, ring and locked look
- * to the shared `.input` rule (global.css), which draws an edge that can be seen on any surface. A
+ * A source tripwire: the base text field and the forms that still draw raw fields leave the fields'
+ * edge, fill, ring and locked look to the shared `.input` rule (global.css), which draws an edge that
+ * can be seen on any surface. A
  * selector can name a field in more ways than a guard can list (`#reply`, `[class~="area"]`,
  * `:where(textarea)`, `.form > *`), so the check is turned around: in these files no rule at all sets
  * a border, a background, an outline, a shadow or `all`, and no element carries them inline, except
@@ -21,6 +22,10 @@ const INVALID_EDGE = ['.input.invalid', 'border-color: var(--danger);'] as const
 type Allowed = Record<string, string>;
 
 const FORMS: Record<string, Allowed> = {
+  // The base field: the red edge of a bad value and room for its trailing control; its message's plate.
+  'lib/components/TextField.svelte': {
+    '.error': "a field message's plate over the backdrop",
+  },
   'routes/auth/AuthScreen.svelte': {
     '.auth': 'the page the screen paints itself',
     '.panel': 'the card the form sits in',
@@ -157,7 +162,7 @@ function fieldLookOffences(source: string, allowed: Allowed): string[] {
   return out;
 }
 
-describe("the sign-in and support forms' fields", () => {
+describe("the base text field's and the raw forms' fields", () => {
   it.each(Object.keys(FORMS))('%s gives its fields no look of its own', (path) => {
     const source = frontendSources[path] ?? '';
     expect(fieldTags(source).length, path).toBeGreaterThan(0);

@@ -26,6 +26,7 @@ const BASE = [
   'Slider',
   'Tabs',
   'SearchInput',
+  'TextField',
   'HexColorField',
   'IntegerInput',
   'Notice',

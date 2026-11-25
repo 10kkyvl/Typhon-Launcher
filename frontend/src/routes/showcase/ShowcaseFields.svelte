@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { LayoutGrid, List } from '@lucide/svelte';
+  import { Eye, LayoutGrid, List, X } from '@lucide/svelte';
+  import Button from '../../lib/components/Button.svelte';
   import Checkbox from '../../lib/components/Checkbox.svelte';
   import HexColorField from '../../lib/components/HexColorField.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -11,6 +13,7 @@
   import type { SelectOption } from '../../lib/components/select';
   import type { SegmentOption } from '../../lib/components/segmented';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import TextField from '../../lib/components/TextField.svelte';
   import { tabPanel, type TabItem } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { validAccent } from '../../lib/theme/accent';
@@ -88,6 +91,15 @@
   let optional = $state('');
 
   let fps = $state(60);
+
+  let email = $state('');
+  let handle = $state('taken_name');
+  // An error that comes after an action is announced; the one above was there when the page opened.
+  let checked = $state('');
+  let host = $state('');
+  let secret = $state('fake-pass');
+  let revealed = $state(false);
+  let search = $state('a query to clear');
 </script>
 
 <ShowcaseSection title="Fields" note="Checkboxes, switches, selects, segmented controls, tabs, search, colour and number fields. The page holds every value, as a real caller does.">
@@ -155,6 +167,35 @@
     <div class="panel" {...tabPanel(`${uid}-tabs`, tab)}>The {tab} tab's panel. Tab moves here from the chosen tab.</div>
     <Tabs tabs={TABS} bind:value={pill} variant="pill" idPrefix="{uid}-pills" label="Game page, pill" />
     <div class="panel" {...tabPanel(`${uid}-pills`, pill)}>The {pill} pill's panel.</div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Text fields: a hint, required, an error shown on opening, an error after Check, read-only, disabled, disabled with a reason, named by a label beside it" stack>
+    <span class="text"><TextField label="E-mail" type="email" autocomplete="email" required hint="We send the confirmation here." bind:value={email} /></span>
+    <span class="text"><TextField label="Username" autocomplete="username" maxlength={24} error="This username is taken." bind:value={handle} /></span>
+    <span class="text"><TextField label="Display name" bind:value={host} error={checked} /></span>
+    <span><Button size="sm" onclick={() => (checked = host.trim() ? '' : 'Enter a display name.')}>Check</Button></span>
+    <span class="text"><TextField label="Signed in as" value="player_one" readonly /></span>
+    <span class="text"><TextField label="Disabled" value="proxy.example.test" disabled /></span>
+    <span class="text"><TextField label="Proxy host" value="proxy.example.test" disabledReason="The proxy is off." hint="A host name or an address." /></span>
+    <span class="field-label" id="{uid}-beside">Named by the label beside it</span>
+    <span class="text"><TextField labelledby="{uid}-beside" placeholder="Type here" /></span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Text fields with a control at the end: reveal a password, clear" stack>
+    <span class="text">
+      <TextField label="Password" type={revealed ? 'text' : 'password'} autocomplete="current-password" bind:value={secret}>
+        {#snippet trailing()}
+          <IconButton size="sm" label="Show password" pressed={revealed} onclick={() => (revealed = !revealed)}><Eye size="1.6rem" /></IconButton>
+        {/snippet}
+      </TextField>
+    </span>
+    <span class="text">
+      <TextField label="Filter" bind:value={search}>
+        {#snippet trailing()}
+          {#if search}<IconButton size="sm" label="Clear" onclick={() => (search = '')}><X size="1.6rem" /></IconButton>{/if}
+        {/snippet}
+      </TextField>
+    </span>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Search fields">
@@ -240,5 +281,10 @@
   .search {
     display: flex;
     width: 28rem;
+  }
+
+  .text {
+    display: block;
+    width: 32rem;
   }
 </style>
