@@ -17,6 +17,7 @@ import {
   type Stats,
   type Transfer,
 } from '../services/lan';
+import { msg } from '../i18n';
 import { sourceErrorText } from '../sources/sourceErrors';
 import { settings } from './settings';
 import { toast } from './toasts';
@@ -40,6 +41,10 @@ const emptyStats: Stats = {
 export const lanStats = writable<Stats>(emptyStats);
 
 function upsertTransfer(item: Transfer) {
+  // A failure is said by the transfer the list held: the row leaves, and nothing else would say why.
+  if (item.status === 'failed' && get(transfers).some((t) => t.id === item.id)) {
+    toast(msg('transfers.lanTransferFailedToast', { title: item.title, error: sourceErrorText(item.error, msg('transfers.lanUnknownError')) }), 'danger');
+  }
   transfers.update((list) => {
     if (item.status !== 'receiving') return list.filter((t) => t.id !== item.id);
     const index = list.findIndex((t) => t.id === item.id);

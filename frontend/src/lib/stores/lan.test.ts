@@ -86,6 +86,47 @@ describe('transfers store', () => {
   });
 });
 
+describe('a transfer that failed', () => {
+  it('is said once, naming the game and the reason in the words of its code', async () => {
+    const { store } = await load();
+    const { msg } = await import('../i18n');
+    const { toast } = await import('./toasts');
+    handlers['lan:transfer']({ data: makeTransfer() });
+
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'failed', error: 'typhon:lan.unsafe_paths: lan: the peer’s torrent lists paths outside the game folder' }) });
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'failed', error: 'typhon:lan.unsafe_paths: again' }) });
+
+    expect(get(store.transfers)).toHaveLength(0);
+    expect(toast).toHaveBeenCalledExactlyOnceWith(
+      msg('transfers.lanTransferFailedToast', { title: 'Игра', error: msg('errSources.lanUnsafePaths') }),
+      'danger',
+    );
+  });
+
+  it('without a reason Go named is said with the catalogued unknown reason', async () => {
+    await load();
+    const { msg } = await import('../i18n');
+    const { toast } = await import('./toasts');
+    handlers['lan:transfer']({ data: makeTransfer() });
+
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'failed', error: 'lan: dial tcp 10.0.0.2: refused' }) });
+
+    expect(toast).toHaveBeenCalledExactlyOnceWith(msg('transfers.lanTransferFailedToast', { title: 'Игра', error: msg('transfers.lanUnknownError') }), 'danger');
+  });
+
+  it('a completed or cancelled transfer leaves without a word', async () => {
+    await load();
+    const { toast } = await import('./toasts');
+    handlers['lan:transfer']({ data: makeTransfer() });
+    handlers['lan:transfer']({ data: makeTransfer({ id: 't2' }) });
+
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'completed' }) });
+    handlers['lan:transfer']({ data: makeTransfer({ id: 't2', status: 'cancelled' }) });
+
+    expect(toast).not.toHaveBeenCalled();
+  });
+});
+
 describe('share / unshare race', () => {
   function makeShare(patch: Partial<Record<string, unknown>> = {}) {
     return {
