@@ -141,6 +141,27 @@ describe('rowFocus: the catch-all and a dialog\'s return', () => {
     await vi.waitFor(() => expect(scrolled.mock.contexts).toContain(document.querySelector('[data-row="b"]')));
   });
 
+  // A list that changes under a focused row that stays (a poll's answer) must not focus it again or
+  // scroll it back into view: the player may have scrolled away.
+  it('touches nothing when the focused row stays', async () => {
+    page({ one: ['a', 'b'] });
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    const { catchLeaving } = rowFocus(scoped);
+    const kept = button('Stop a');
+    kept.focus();
+    const focused = vi.spyOn(kept, 'focus');
+
+    catchLeaving();
+    dropRow('b');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(document.activeElement).toBe(kept);
+    expect(focused).not.toHaveBeenCalled();
+    expect(scrolled).not.toHaveBeenCalled();
+  });
+
   it('leaves focus outside the rows alone', async () => {
     page({ one: ['a'] });
     const { catchLeaving } = rowFocus(scoped);
