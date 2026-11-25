@@ -1,8 +1,7 @@
 import { msg } from '../../lib/i18n';
 import type { ConfirmPrompt } from '../../lib/confirm/prompts';
-import { diskusageErrorText, isScanCancelled } from '../../lib/diskusage/errors';
-import { leftoverKindKey } from '../../lib/diskusage/usage';
-import { installErrorText } from '../../lib/install/installErrors';
+import { diskusageErrorText, isScanCancelled, PartialDeleteError } from '../../lib/diskusage/errors';
+import { gameTitle, leftoverKindKey } from '../../lib/diskusage/usage';
 import {
   cachedUsage,
   cancelScan,
@@ -12,16 +11,21 @@ import {
   deleteSnapshots,
   scanUsage,
   type DownloadUsage,
+  type GroupDelete,
   type GroupUsage,
   type Leftover,
   type Report,
 } from '../../lib/services/diskusage';
 import { toast } from '../../lib/stores/toasts';
+import { placeOf, returnTo, type RowPlace } from './rowFocus';
 
 export type DiskUsagePage = ReturnType<typeof createDiskUsagePage>;
 
-function failureText(err: unknown) {
-  return installErrorText(err, msg('diskusage.deleteFailed'));
+/** The one confirmation in view: what it asks, what it runs, where focus goes when its row has gone. */
+export interface PendingDelete {
+  prompt: ConfirmPrompt;
+  run: () => Promise<void>;
+  returnFocus: () => HTMLElement | null;
 }
 
 /**
@@ -34,7 +38,7 @@ export function createDiskUsagePage() {
   let report = $state<Report | null>(null);
   let scanning = $state(false);
   let scanError = $state('');
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  let pending = $state<PendingDelete | null>(null);
   let scanSerial = 0;
   let left = false;
 
@@ -79,17 +83,28 @@ export function createDiskUsagePage() {
     cancelScan().catch((err: unknown) => console.warn('cancel the disk usage scan', err));
   }
 
-  function ask(prompt: ConfirmPrompt, action: () => Promise<unknown>, done: string) {
+  /**
+   * Opens the confirmation of one delete. Its run re-reads the disk after Go answered, worked or not,
+   * so the rows show what is left; a refusal or a group delete that left items rejects, and the
+   * confirmation keeps that failure in view with Retry. `row` is the row's key: where it stood is read
+   * now, for focus once the row has gone.
+   */
+  function ask(prompt: ConfirmPrompt, action: () => Promise<GroupDelete | void>, done: string, row: string) {
+    const place: RowPlace = placeOf(row, 'delete');
     pending = {
       prompt,
+      returnFocus: () => returnTo(place),
       run: async () => {
+        let result: GroupDelete | void;
         try {
-          await action();
-          toast(done, 'success');
+          result = await action();
         } catch (err) {
-          toast(failureText(err), 'danger');
+          await refresh();
+          throw err;
         }
         await refresh();
+        if (result && result.failed > 0) throw new PartialDeleteError(result);
+        toast(done, 'success');
       },
     };
   }
@@ -104,6 +119,7 @@ export function createDiskUsagePage() {
       },
       () => deleteDownloadData(download.id),
       msg('diskusage.downloadDeleted'),
+      `downloads:${download.id}`,
     );
   }
 
@@ -120,6 +136,7 @@ export function createDiskUsagePage() {
       },
       () => deleteLeftover(leftover.path),
       msg('diskusage.leftoverDeleted'),
+      `leftovers:${leftover.path}`,
     );
   }
 
@@ -127,12 +144,13 @@ export function createDiskUsagePage() {
     ask(
       {
         title: msg('diskusage.screenshotsConfirmTitle'),
-        text: msg('diskusage.screenshotsConfirmText', { title: group.title, count: group.count }),
+        text: msg('diskusage.screenshotsConfirmText', { title: gameTitle(group), count: group.count }),
         confirm: msg('diskusage.deleteAll'),
         busy: msg('diskusage.deleting'),
       },
       () => deleteScreenshots(group.gameId),
       msg('diskusage.screenshotsDeleted'),
+      `screenshots:${group.gameId}`,
     );
   }
 
@@ -140,13 +158,14 @@ export function createDiskUsagePage() {
     ask(
       {
         title: msg('diskusage.snapshotsConfirmTitle'),
-        text: msg('diskusage.snapshotsConfirmText', { title: group.title, count: group.count }),
+        text: msg('diskusage.snapshotsConfirmText', { title: gameTitle(group), count: group.count }),
         note: msg('diskusage.snapshotsConfirmNote'),
         confirm: msg('diskusage.snapshotsConfirmAction'),
         busy: msg('diskusage.deleting'),
       },
       () => deleteSnapshots(group.gameId),
       msg('diskusage.snapshotsDeleted'),
+      `snapshots:${group.gameId}`,
     );
   }
 

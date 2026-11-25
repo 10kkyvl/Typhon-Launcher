@@ -59,6 +59,12 @@ export function gameBlockedKey(game: GameUsage): MessageKey | null {
   return null;
 }
 
+/** The name of the game a group or a copy belongs to; "Unknown game" when nothing knows it. */
+export function gameTitle(item: { title?: string; titleUnknown?: boolean }): string {
+  const title = item.title?.trim() ?? '';
+  return item.titleUnknown || !title ? msg('diskusage.unknownGame') : title;
+}
+
 export function canManageGame(game: GameUsage): boolean {
   return !game.external && !game.running && !game.busy;
 }

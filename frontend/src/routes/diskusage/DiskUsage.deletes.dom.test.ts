@@ -163,4 +163,112 @@ describe.each(CASES.map((c) => [c.name, c] as const))('DiskUsage: deleting %s', 
     const said = [...vi.mocked(toast).mock.calls, [screen.queryByRole('dialog')?.textContent ?? '']].flat().join(' ');
     expect(said).toContain(msg('errInstall.diskusageNotScanned'));
   });
+
+  it('when Go refuses, keeps the failure in the confirmation, with Retry, and re-reads the disk', async () => {
+    vi.mocked(c.service).mockRejectedValue(new Error('typhon:diskusage.not_deletable: текст из Go'));
+    const { user, dialog } = await ask(c);
+    await user.click(within(dialog).getByRole('button', { name: msg(c.confirm) }));
+
+    await vi.waitFor(() => expect(within(dialog).getByRole('alert').textContent?.trim()).toBe(msg('errInstall.diskusageNotDeletable')));
+    expect(screen.getByRole('dialog', { name: msg(c.title) })).toBe(dialog);
+    expect(within(dialog).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
+    expect(toast).not.toHaveBeenCalled();
+    expect(scanUsage).toHaveBeenCalledTimes(2);
+
+    vi.mocked(c.service).mockReset();
+    const worked = c.service === deleteScreenshots || c.service === deleteSnapshots ? { deleted: 1, gone: 0, failed: 0, code: '' as const } : undefined;
+    (vi.mocked(c.service) as unknown as { mockResolvedValue(value: unknown): void }).mockResolvedValue(worked);
+    await user.click(within(dialog).getByRole('button', { name: msg('common.retry') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(c.service).mock.calls).toEqual([[c.argument]]);
+    expect(vi.mocked(toast).mock.calls).toEqual([[msg(c.done), 'success']]);
+  });
+});
+
+describe.each([
+  ['screenshots', 'diskusage.screenshotsTitle', 'Hades', 'diskusage.screenshotsConfirmTitle', 'diskusage.deleteAll', deleteScreenshots],
+  ['save snapshots', 'diskusage.snapshotsTitle', 'Celeste', 'diskusage.snapshotsConfirmTitle', 'diskusage.snapshotsConfirmAction', deleteSnapshots],
+] as const)('DiskUsage: a group of %s Go could delete only in part', (_name, heading, row, title, confirm, service) => {
+  it('says what went and what stayed in the confirmation, and re-reads the disk', async () => {
+    vi.mocked(service).mockResolvedValue({ deleted: 9, gone: 1, failed: 2, code: 'diskusage.delete_partial' });
+    const view = renderDom(DiskUsage);
+    await screen.findByText(row);
+    await view.user.click(within(rowOf(heading, row)).getByRole('button', { name: msg('diskusage.deleteAll') }));
+    const dialog = await screen.findByRole('dialog', { name: msg(title) });
+    await view.user.click(within(dialog).getByRole('button', { name: msg(confirm) }));
+
+    await vi.waitFor(() => expect(within(dialog).getByRole('alert').textContent?.trim()).toBe(msg('diskusage.delete_partial', { deleted: 10, failed: 2 })));
+    expect(toast).not.toHaveBeenCalled();
+    expect(scanUsage).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DiskUsage: a group of a game nothing knows', () => {
+  it('is named "Unknown game" in its row and in its confirmation, never by an empty title or its id', async () => {
+    vi.mocked(scanUsage).mockResolvedValue(report({ screenshots: [group('3f2a-raw-id', '', 3, { titleUnknown: true, inLibrary: false })] }));
+    const view = renderDom(DiskUsage);
+    await screen.findByText(msg('diskusage.screenshotsCount', { count: 3 }));
+    const row = rowOf('diskusage.screenshotsTitle', msg('diskusage.unknownGame'));
+    expect(row.textContent).not.toContain('3f2a-raw-id');
+    await view.user.click(within(row).getByRole('button', { name: msg('diskusage.deleteAll') }));
+    const dialog = await screen.findByRole('dialog', { name: msg('diskusage.screenshotsConfirmTitle') });
+    expect(within(dialog).getByText(msg('diskusage.screenshotsConfirmText', { title: msg('diskusage.unknownGame'), count: 3 }))).toBeTruthy();
+  });
+});
+
+describe('DiskUsage: a row Go keeps', () => {
+  it('offers no Delete, only its reason', async () => {
+    vi.mocked(scanUsage).mockResolvedValue(
+      report({
+        downloads: [download('d-ref', 'Needed', { referenced: true, reasonCode: 'diskusage.reason.owned_by_install' })],
+        leftovers: [leftover('D:\\Games\\.kept', 'update_previous', { deletable: false, reasonCode: 'diskusage.reason.update_owned' })],
+      }),
+    );
+    renderDom(DiskUsage);
+    await screen.findByText('Needed');
+    const download_ = rowOf('diskusage.downloadsTitle', 'Needed');
+    const kept = rowOf('diskusage.leftoversTitle', 'D:\\Games\\.kept');
+    expect(within(download_).queryAllByRole('button')).toEqual([]);
+    expect(within(kept).queryAllByRole('button')).toEqual([]);
+    expect(within(download_).getByText(msg('diskusage.reason.owned_by_install'))).toBeTruthy();
+    expect(within(kept).getByText(msg('diskusage.reason.update_owned'))).toBeTruthy();
+  });
+});
+
+describe('DiskUsage: focus after a delete', () => {
+  const three = report({
+    leftovers: [
+      leftover('D:\\Games\\.a', 'install_partial', { sizeBytes: 3 }),
+      leftover('D:\\Games\\.b', 'install_partial', { sizeBytes: 2 }),
+      leftover('D:\\Games\\.c', 'install_partial', { sizeBytes: 1 }),
+    ],
+  });
+  const without = (path: string) => report({ leftovers: three.leftovers.filter((l) => l.path !== path) });
+
+  async function deleteRow(path: string, after: ReturnType<typeof report>) {
+    vi.mocked(scanUsage).mockResolvedValueOnce(three).mockResolvedValueOnce(after);
+    const view = renderDom(DiskUsage);
+    await screen.findByText(path);
+    const button = within(rowOf('diskusage.leftoversTitle', path)).getByRole('button', { name: msg('diskusage.leftoverDelete') });
+    await view.user.click(button);
+    const dialog = await screen.findByRole('dialog');
+    await view.user.click(within(dialog).getByRole('button', { name: msg('diskusage.leftoverDelete') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+  }
+
+  it('goes to the same control of the row that took the place of the one deleted', async () => {
+    await deleteRow('D:\\Games\\.b', without('D:\\Games\\.b'));
+    expect(document.activeElement).toBe(within(rowOf('diskusage.leftoversTitle', 'D:\\Games\\.c')).getByRole('button', { name: msg('diskusage.leftoverDelete') }));
+  });
+
+  it('goes to the row above when the last row went', async () => {
+    await deleteRow('D:\\Games\\.c', without('D:\\Games\\.c'));
+    expect(document.activeElement).toBe(within(rowOf('diskusage.leftoversTitle', 'D:\\Games\\.b')).getByRole('button', { name: msg('diskusage.leftoverDelete') }));
+  });
+
+  it('goes to the page heading when the section has nothing left to take it', async () => {
+    await deleteRow('D:\\Games\\.a', report({ downloads: [download('d-1', 'Other')] }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+  });
 });

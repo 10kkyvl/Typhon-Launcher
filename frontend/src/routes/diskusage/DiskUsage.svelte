@@ -15,9 +15,10 @@
   import { isEmulated } from '../../lib/library/emulation';
   import { libraryGames } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
-  import { installErrorText } from '../../lib/install/installErrors';
+  import { deleteErrorText } from '../../lib/diskusage/errors';
   import { activeMove } from '../../lib/stores/relocate';
   import { createDiskUsagePage } from './diskUsagePage.svelte';
+  import { placeOf, returnTo, type RowPlace } from './rowFocus';
   import DownloadsSection from './DownloadsSection.svelte';
   import GamesSection from './GamesSection.svelte';
   import GroupsSection from './GroupsSection.svelte';
@@ -63,7 +64,11 @@
     hadMove = active;
   });
 
+  // Where the removed game's row stood, read at the press: focus follows the row rule once it has gone.
+  let removePlace: RowPlace | null = null;
+
   function openRemove(game: { id: string; title: string }) {
+    removePlace = placeOf(`games:${game.id}`, 'remove');
     removeTarget = { id: game.id, title: game.title };
     removeMode = 'disk';
     removeOpen = true;
@@ -150,12 +155,19 @@
       title={removeTarget.title}
       emulated={isEmulated($libraryGames.find((game) => game.id === removeTarget?.id))}
       onremoved={() => void page.refresh()}
+      returnFocus={() => returnTo(removePlace)}
     />
   {/if}
 
   {#if page.pending}
     {@const current = page.pending}
-    <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => page.closePending()} errorText={(err) => installErrorText(err)} />
+    <ConfirmModal
+      prompt={current.prompt}
+      onconfirm={current.run}
+      onclose={() => page.closePending()}
+      errorText={deleteErrorText}
+      returnFocus={current.returnFocus}
+    />
   {/if}
 </Page>
 

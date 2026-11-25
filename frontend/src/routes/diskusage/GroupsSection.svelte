@@ -2,6 +2,7 @@
   import Button from '../../lib/components/Button.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
+  import { gameTitle } from '../../lib/diskusage/usage';
   import type { GroupUsage } from '../../lib/services/diskusage';
   import { libraryGamesById } from '../../lib/stores/library';
   import { usageSectionIds } from './sections';
@@ -53,7 +54,7 @@
   {#each groups as group (group.gameId)}
     <UsageRow
       key="{kind}:{group.gameId}"
-      title={group.title}
+      title={gameTitle(group)}
       gameId={$libraryGamesById.has(group.gameId) ? group.gameId : null}
       path={msg(words.count, { count: group.count })}
       isPath={false}
@@ -65,7 +66,7 @@
         {/if}
       {/snippet}
       {#snippet actions()}
-        <Button size="sm" variant="danger" onclick={() => ondelete(group)}>
+        <Button size="sm" variant="danger" data-row-control="delete" onclick={() => ondelete(group)}>
           {msg('diskusage.deleteAll')}
         </Button>
       {/snippet}

@@ -8,7 +8,8 @@
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
 
-  // Leftovers of installs, downloads, moves and updates: what each is, why it cannot go, and its Delete.
+  // Leftovers of installs, downloads, moves, updates and removals: what each is, why it cannot go, and
+  // its Delete only where Go lets it go (the screen never offers a delete Go did not).
   let {
     leftovers,
     totalBytes,
@@ -39,9 +40,11 @@
       size={size(leftover)}
     >
       {#snippet actions()}
-        <Button size="sm" variant="danger" disabled={!leftover.deletable} onclick={() => ondelete(leftover)}>
-          {msg('diskusage.leftoverDelete')}
-        </Button>
+        {#if leftover.deletable}
+          <Button size="sm" variant="danger" data-row-control="delete" onclick={() => ondelete(leftover)}>
+            {msg('diskusage.leftoverDelete')}
+          </Button>
+        {/if}
       {/snippet}
     </UsageRow>
   {/each}

@@ -85,10 +85,10 @@
       {/snippet}
       {#snippet actions()}
         {#if !game.external}
-          <Button size="sm" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openMoveGame(game.id)}>
+          <Button size="sm" data-row-control="move" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openMoveGame(game.id)}>
             {msg('diskusage.move')}
           </Button>
-          <Button size="sm" variant="danger" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => onremove(game)}>
+          <Button size="sm" variant="danger" data-row-control="remove" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => onremove(game)}>
             {msg('diskusage.remove')}
           </Button>
         {/if}

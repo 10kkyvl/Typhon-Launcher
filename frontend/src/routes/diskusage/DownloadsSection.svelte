@@ -9,7 +9,8 @@
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
 
-  // The data of downloads: why a download's data cannot go, its marks, and its Delete.
+  // The data of downloads: why a download's data cannot go, its marks, and its Delete only where Go
+  // lets it go.
   let {
     downloads,
     totalBytes,
@@ -52,9 +53,11 @@
         {/if}
       {/snippet}
       {#snippet actions()}
-        <Button size="sm" variant="danger" disabled={blocked} onclick={() => ondelete(download)}>
-          {msg('diskusage.downloadDelete')}
-        </Button>
+        {#if !blocked}
+          <Button size="sm" variant="danger" data-row-control="delete" onclick={() => ondelete(download)}>
+            {msg('diskusage.downloadDelete')}
+          </Button>
+        {/if}
       {/snippet}
     </UsageRow>
   {/each}
