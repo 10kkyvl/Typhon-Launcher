@@ -193,4 +193,41 @@ describe('Lan: actions named after their game', () => {
     expect(ruleBody(css, '.title')['overflow-wrap']).toBe('anywhere');
     expect(ruleBody(css, '.title')['white-space']).toBeUndefined();
   });
+
+  // The share's "prepared" date has no other way to be read: a narrow window wraps it under the title
+  // instead of hiding it (the frame itself is for a real browser).
+  it('hides nothing under a width query: a narrow share row wraps its date to a line of its own', () => {
+    const css = styleOf(page, 'Lan');
+    const queries = widthQueries(css);
+
+    expect(queries.length).toBeGreaterThan(0);
+    for (const { query, body } of queries) {
+      expect(body, query).not.toMatch(/display\s*:\s*none|visibility\s*:\s*hidden/);
+    }
+    const narrow = queries.map((q) => q.body).join('\n');
+    expect(ruleBody(narrow, '.share')['flex-wrap']).toBe('wrap');
+    expect(ruleBody(narrow, '.share .date')['flex-basis']).toBe('100%');
+    shares.set([share({ builtAt: '2026-11-20T10:00:00Z' })]);
+    renderDom(Lan);
+    expect(rowOf('Hades').classList.contains('share')).toBe(true);
+    expect(rowOf('Hades').querySelector('.date')?.textContent?.trim()).not.toBe('');
+  });
 });
+
+/** The bodies of the style's `@media` blocks that depend on the width, by their query. */
+function widthQueries(css: string): { query: string; body: string }[] {
+  const found: { query: string; body: string }[] = [];
+  for (const match of css.matchAll(/@media([^{]*)\{/g)) {
+    if (!/width/.test(match[1])) continue;
+    let depth = 1;
+    let at = (match.index ?? 0) + match[0].length;
+    const from = at;
+    while (depth > 0 && at < css.length) {
+      if (css[at] === '{') depth++;
+      else if (css[at] === '}') depth--;
+      at++;
+    }
+    found.push({ query: match[1].trim(), body: css.slice(from, at - 1) });
+  }
+  return found;
+}

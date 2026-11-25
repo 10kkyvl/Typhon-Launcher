@@ -80,11 +80,12 @@ describe('Lan: a game offered nearby', () => {
     renderDom(Lan);
     const version = screen.getByText('1.0');
     const css = styleOf(page, 'Lan');
-    const hiding = [...css.matchAll(/@media[^{]*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)].flatMap((block) =>
+    const blocks = [...css.matchAll(/@media[^{]*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)];
+    const hiding = blocks.flatMap((block) =>
       [...block[1].matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => /display:\s*none/.test(rule[2])).flatMap((rule) => topLevel(rule[1].trim())),
     );
 
-    expect(hiding.length).toBeGreaterThan(0);
+    expect(blocks.length).toBeGreaterThan(0);
     expect(hiding.filter((selector) => version.closest(selector))).toEqual([]);
   });
 });

@@ -262,7 +262,7 @@
               </li>
             {/each}
             {#each $shares as share (share.gameId)}
-              <li class="row" data-lan-row={share.gameId}>
+              <li class="row share" data-lan-row={share.gameId}>
                 <div class="main">
                   <p class="title"><GameLink id={pageOf(share.gameId)} name={share.title} /></p>
                 </div>
@@ -452,8 +452,7 @@
     min-width: 7rem;
   }
 
-  /* The version tells two offers of the same game apart: unlike a share's date, it stays at every
-     width. */
+  /* The version tells two offers of the same game apart; the date says when a share was prepared. */
   .date,
   .version {
     min-width: 9rem;
@@ -464,9 +463,19 @@
     margin-left: var(--space-2);
   }
 
+  /* A narrow window wraps a share's date under its title: nothing else says it. */
   @media (max-width: 1300px) {
-    .date {
-      display: none;
+    .share {
+      flex-wrap: wrap;
+      align-content: center;
+      row-gap: 0;
+    }
+
+    .share .date {
+      order: 1;
+      flex-basis: 100%;
+      min-width: 0;
+      text-align: left;
     }
   }
 </style>
