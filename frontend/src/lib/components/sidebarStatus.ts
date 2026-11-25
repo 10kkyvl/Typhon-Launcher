@@ -4,7 +4,7 @@ import { accountErrorText } from '../services/accountMessages';
 import { msg } from '../i18n';
 import { openCloudConflict } from '../stores/cloudsaves';
 import { navigate } from '../stores/router';
-import { requestDownload, retryFailed } from '../stores/selfupdate';
+import { isHandoffUndoFailed, requestDownload, retryFailed } from '../stores/selfupdate';
 import { toast } from '../stores/toasts';
 import { leaveGuest } from '../stores/user';
 
@@ -68,6 +68,8 @@ export function updateRow(
     const percent = total > 0 ? Math.round(Math.min(100, Math.max(0, (done / total) * 100))) : 0;
     return { kind: 'downloading', version: next, percent };
   }
+  // Go refuses every update after an undo it could not make: no restart is offered, as for a failed check.
+  if (view === 'ready' && isHandoffUndoFailed(status)) return { kind: 'version', version: status.currentVersion };
   if (view === 'ready') return { kind: 'ready', version: next };
   if (view === 'available') return { kind: 'available', version: next };
   return { kind: 'version', version: status.currentVersion };

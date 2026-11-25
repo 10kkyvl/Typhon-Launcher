@@ -184,3 +184,38 @@ describe('confirming the restart of a downloaded update', () => {
     expect(service.beginHandoff).toHaveBeenCalledOnce();
   });
 });
+
+describe('a seamless restart whose undo failed', () => {
+  // Go could not put the previous launcher back: it refuses every update until the launcher is
+  // closed and started again, so nothing here may ask it for one.
+  const UNDO_FAILED: SelfUpdateStatus = { ...READY, error: 'selfupdate: the new launcher exited before it showed its window\nselfupdate: put back', errorCode: 'handoff_undo_failed' };
+
+  it('is its own state: not the rollback, and the update stays where Go left it', async () => {
+    const { service, store, show } = await load();
+    vi.mocked(service.beginHandoff).mockResolvedValue(undefined);
+    await store.requestHandoff();
+    store.selfUpdateStatus.set(APPLYING);
+
+    store.selfUpdateStatus.set(UNDO_FAILED);
+
+    expect(get(show.updateShow)?.phase).toBe('home');
+    expect(get(store.selfUpdateApplying)).toBe(false);
+    expect(get(store.handoffUndoFailed)).toBe(true);
+    expect(get(store.handoffFailed)).toBe(false);
+    store.selfUpdateStatus.set(ROLLED_BACK);
+    expect(get(store.handoffUndoFailed)).toBe(false);
+  });
+
+  it('asks Go for neither restart, whichever is pressed', async () => {
+    const { service, store, show } = await load();
+    store.selfUpdateStatus.set(UNDO_FAILED);
+
+    await store.requestHandoff();
+    await store.requestApply();
+
+    expect(service.beginHandoff).not.toHaveBeenCalled();
+    expect(service.applyUpdate).not.toHaveBeenCalled();
+    expect(get(show.updateShow)).toBeNull();
+    expect(get(store.selfUpdateApplying)).toBe(false);
+  });
+});

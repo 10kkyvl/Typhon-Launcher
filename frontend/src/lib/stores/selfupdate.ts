@@ -62,6 +62,16 @@ export const selfUpdateApplying = derived(effectiveStatus, ({ status }) => statu
 
 /** Go rolled a seamless restart back: the launcher runs as before and the update is still ready. */
 export const handoffFailed = derived(effectiveStatus, ({ status }) => status.state === 'ready' && status.errorCode === 'handoff_failed');
+
+/**
+ * A seamless restart failed and Go could not put the previous launcher back: it refuses every update,
+ * with or without a restart, until the launcher has been closed and started again.
+ */
+export function isHandoffUndoFailed(status: SelfUpdateStatus): boolean {
+  return status.state === 'ready' && status.errorCode === 'handoff_undo_failed';
+}
+
+export const handoffUndoFailed = derived(effectiveStatus, ({ status }) => isHandoffUndoFailed(status));
 export const selfUpdateProgress = writable<SelfUpdateProgress | null>(null);
 export const selfUpdateChecking = writable(false);
 export const selfUpdateDownloading = writable(false);
@@ -267,9 +277,9 @@ export async function requestCancelDownload() {
   }
 }
 
-/** False while an earlier press is still waiting for Go's answer. */
+/** False while an earlier press is still waiting for Go's answer, or while Go refuses any restart. */
 function confirmRestart(handoff: boolean): boolean {
-  if (get(confirmed)?.over === null) return false;
+  if (get(confirmed)?.over === null || get(handoffUndoFailed)) return false;
   confirmed.set({ startedAt: Date.now(), handoff, over: null });
   return true;
 }

@@ -34,6 +34,8 @@ const SITES: Record<string, Site[]> = {
   'lib/components/UpdateBanner.svelte': [
     ['danger', 'dynamic'],
     ['info', 'dynamic'],
+    // A seamless restart whose undo failed: Go refuses every update until the next start.
+    ['danger', 'dynamic'],
     ['success', 'dynamic'],
     ['info', 'dynamic'],
   ],

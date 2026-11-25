@@ -8,6 +8,7 @@
   import UpdateRestartModal from './UpdateRestartModal.svelte';
   import {
     handoffFailed,
+    handoffUndoFailed,
     requestCancelDownload,
     requestDismiss,
     requestDownload,
@@ -118,6 +119,13 @@
   <div class="message">
     <Notice announce={moved} title={msg('ui.installingUpdate', { version: status.availableVersion ?? '' })}>
       {msg('ui.launcherRestartShort')}
+    </Notice>
+  </div>
+{:else if view === 'ready' && $handoffUndoFailed}
+  <!-- Go refuses any update until the next start: the failure is said, nothing is offered. -->
+  <div class="message">
+    <Notice tone="danger" announce={moved} title={msg('ui.handoffFailedTitle')}>
+      {msg('state.selfupdateHandoffUndoFailed')}
     </Notice>
   </div>
 {:else if view === 'ready'}

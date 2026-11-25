@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
@@ -7,6 +8,7 @@ import { selfUpdateStatus } from '../stores/selfupdate';
 import { toasts } from '../stores/toasts';
 import { endUpdateShow, updateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
+import SidebarStatus from './SidebarStatus.svelte';
 import UpdateBanner from './UpdateBanner.svelte';
 import UpdateShow from './UpdateShow.svelte';
 
@@ -118,5 +120,75 @@ describe('a seamless restart Go rolled back', () => {
     expect(notice).toBeTruthy();
     await user.click(within(notice).getByRole('button', { name: msg('ui.restartAndUpdate') }));
     expect(await failureDialog()).toBeTruthy();
+  });
+});
+
+describe('a seamless restart whose undo failed', () => {
+  // Go refuses every update until the launcher is closed and started again: the screen says so and
+  // offers no restart of either kind.
+  const UNDO_FAILED = { ...READY, error: 'selfupdate: the new launcher exited before it showed its window\nselfupdate: put back', errorCode: 'handoff_undo_failed' } as const;
+  const footer = (dialog: HTMLElement) => Array.from(dialog.querySelectorAll('.foot button')).map((button) => button.textContent?.trim());
+
+  async function undoFailed() {
+    vi.mocked(beginHandoff).mockResolvedValue(undefined);
+    const result = await confirmRestart();
+    renderDom(SidebarStatus);
+    await vi.waitFor(() => expect(beginHandoff).toHaveBeenCalledOnce());
+    selfUpdateStatus.set(APPLYING);
+    selfUpdateStatus.set(UNDO_FAILED);
+    return result;
+  }
+
+  it('opens the dialog once the show has gone home, saying so with one button that closes it', async () => {
+    const { user } = await undoFailed();
+    const dialog = await failureDialog();
+    expect(get(updateShow)).toBeNull();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(dialog.textContent).toContain(msg('state.selfupdateHandoffUndoFailed'));
+    expect(dialog.textContent).not.toContain(msg('state.selfupdateHandoffFailed'));
+    expect(dialog.textContent).not.toContain('put back');
+    expect(footer(dialog)).toEqual([msg('common.gotIt')]);
+    const only = within(dialog).getByRole('button', { name: msg('common.gotIt') });
+    expect(document.activeElement).toBe(only);
+
+    await user.click(only);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    selfUpdateStatus.set({ ...UNDO_FAILED });
+    await tick();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(beginHandoff).toHaveBeenCalledOnce();
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('closes on Escape like the rolled-back dialog, asking Go for nothing', async () => {
+    const { user } = await undoFailed();
+    await failureDialog();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(beginHandoff).toHaveBeenCalledOnce();
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('is said on the About banner as a failure, with no restart and no "Not now"', async () => {
+    selfUpdateStatus.set(UNDO_FAILED);
+    renderDom(UpdateBanner);
+    const notice = screen.getByText(msg('state.selfupdateHandoffUndoFailed')).closest('.notice') as HTMLElement;
+    expect(notice).toBeTruthy();
+    expect(notice.dataset.tone).toBe('danger');
+    expect(notice.textContent).not.toContain(msg('ui.updateReadyMessage', { version: '1.5.0' }));
+    expect(screen.queryByRole('button', { name: msg('ui.restartAndUpdate') })).toBeNull();
+    expect(screen.queryByRole('button', { name: msg('ui.notNow') })).toBeNull();
+    expect(screen.queryByRole('button', { name: msg('common.retry') })).toBeNull();
+  });
+
+  it('leaves no control on the banner or the sidebar that reaches Go', async () => {
+    selfUpdateStatus.set(UNDO_FAILED);
+    const { user } = renderDom(UpdateBanner);
+    renderDom(SidebarStatus);
+    for (const button of screen.queryAllByRole('button')) await user.click(button);
+    for (const button of screen.queryAllByRole('button')) await user.click(button);
+    expect(beginHandoff).not.toHaveBeenCalled();
+    expect(applyUpdate).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-update="ready"]')).toBeNull();
   });
 });

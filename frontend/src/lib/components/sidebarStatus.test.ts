@@ -195,6 +195,21 @@ describe('updateRow', () => {
       want: { kind: 'ready', version: '1.5.0' },
     },
     {
+      // Go refuses every update until the next start: the row offers none, as for a failed check.
+      name: 'a seamless restart whose undo failed offers no restart',
+      status: update({ state: 'ready', availableVersion: '1.5.0', error: 'x', errorCode: 'handoff_undo_failed' }),
+      view: 'ready',
+      downloading: false,
+      want: { kind: 'version', version: '1.4.1' },
+    },
+    {
+      name: 'a seamless restart Go rolled back still offers the restart',
+      status: update({ state: 'ready', availableVersion: '1.5.0', error: 'x', errorCode: 'handoff_failed' }),
+      view: 'ready',
+      downloading: false,
+      want: { kind: 'ready', version: '1.5.0' },
+    },
+    {
       name: 'the download of an available update failed',
       status: update({ state: 'available', availableVersion: '1.5.0', error: 'x', errorCode: 'download' }),
       view: 'failed',
