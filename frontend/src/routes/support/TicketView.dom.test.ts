@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -255,6 +255,23 @@ describe('TicketView: the reply is the base multi-line field', () => {
     await user.type(replyBox(), 'one{Enter}two');
     expect(replyBox().value).toBe('one\ntwo');
     expect(replyTicket).not.toHaveBeenCalled();
+  });
+
+  // jsdom neither composes nor repeats keys: the events are made by hand, beside the press that sends.
+  it.each([
+    ['while composing', { isComposing: true }],
+    ['after the composition ended, as WebKit sends it (key code 229)', { keyCode: 229 }],
+    ['held down', { repeat: true }],
+  ] as const)('does not send on a Ctrl+Enter %s', async (_name, init) => {
+    vi.mocked(replyTicket).mockReturnValue(new Promise(() => {}));
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+
+    fireEvent.keyDown(replyBox(), { key: 'Enter', ctrlKey: true, ...init });
+    expect(replyTicket).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(replyBox(), { key: 'Enter', ctrlKey: true, keyCode: 13 });
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
   });
 
   it('after a reply is sent, clears the box and keeps focus in it', async () => {

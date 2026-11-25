@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -408,5 +408,31 @@ describe('NewTicket: sending', () => {
     await user.keyboard('{Enter}more');
     expect(bodyField().value).toBe('  The code never arrives.  \nmore');
     expect(createTicket).not.toHaveBeenCalled();
+  });
+});
+
+// An input method (Japanese, Chinese, Korean) takes Enter to commit what is being composed, and a key
+// held down repeats: neither is a press that sends. jsdom does not compose or repeat, so the events are
+// made by hand, each beside the same press that does send.
+describe('NewTicket: keys that do not send', () => {
+  async function ready() {
+    await filled();
+    vi.mocked(createTicket).mockReturnValue(new Promise(() => {}));
+  }
+
+  it.each([
+    ['Enter that commits a composition in the subject', () => subjectField(), { key: 'Enter', isComposing: true }],
+    ['Enter after the composition ended, as WebKit sends it (key code 229), in the subject', () => subjectField(), { key: 'Enter', keyCode: 229 }],
+    ['a held Enter in the subject', () => subjectField(), { key: 'Enter', repeat: true }],
+    ['a held Ctrl+Enter in the text', () => bodyField(), { key: 'Enter', ctrlKey: true, repeat: true }],
+    ['Ctrl+Enter while composing in the text', () => bodyField(), { key: 'Enter', ctrlKey: true, isComposing: true }],
+    ['Ctrl+Enter after the composition ended, as WebKit sends it (key code 229), in the text', () => bodyField(), { key: 'Enter', ctrlKey: true, keyCode: 229 }],
+  ] as const)('%s', async (_name, field, init) => {
+    await ready();
+    fireEvent.keyDown(field(), init);
+    expect(createTicket).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(field(), { key: 'Enter', ctrlKey: 'ctrlKey' in init, keyCode: 13 });
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
   });
 });

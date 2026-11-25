@@ -2,7 +2,7 @@ import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
 import type { TextAreaCounter } from '../../lib/components/textArea';
 import { bodyLength } from '../../lib/support/draft';
-import { onMacKeyboard } from '../../lib/utils/shortcut';
+import { composing, onMacKeyboard } from '../../lib/utils/shortcut';
 
 /** A support call found the session gone: a Retry cannot help, signing in again can. */
 export function sessionGone(err: unknown): boolean {
@@ -14,14 +14,17 @@ export function sendKeys(mac: boolean = onMacKeyboard()): string {
   return mac ? '⌘ Enter' : 'Ctrl Enter';
 }
 
-/** Ctrl+Enter or Cmd+Enter in a support text: send it. A plain Enter is a new line; a held key repeats nothing. */
+/**
+ * Ctrl+Enter or Cmd+Enter in a support text: send it. A plain Enter is a new line; a held key repeats
+ * nothing, and an Enter that commits an input method's text is the input method's.
+ */
 export function isSendShortcut(event: KeyboardEvent): boolean {
-  return event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !event.isComposing && !event.repeat;
+  return event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !composing(event) && !event.repeat;
 }
 
 /** Enter alone in a one-line support field: send the form. */
 export function isPlainEnter(event: KeyboardEvent): boolean {
-  return event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && !event.isComposing && !event.repeat;
+  return event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && !composing(event) && !event.repeat;
 }
 
 /** The counter of a support text, counted as Go's limit counts it (trimmed, line breaks folded). */
