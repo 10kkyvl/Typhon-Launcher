@@ -1,5 +1,4 @@
 <script lang="ts">
-  import '../../styles/zoom-slider.css';
   import ColorPalette from '../../lib/components/ColorPalette.svelte';
   import HexColorField from '../../lib/components/HexColorField.svelte';
   import { validAccent } from '../../lib/theme/accent';
@@ -15,7 +14,9 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import Slider from '../../lib/components/Slider.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
+  import TextField from '../../lib/components/TextField.svelte';
   import { removeCoverPrompt, resetProfileAppearancePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import Toggle from '../../lib/components/Toggle.svelte';
   import {
@@ -109,7 +110,10 @@
   let error = $state('');
   let alive = true;
   let sequence = 0;
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => void } | null>(null);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => void; returnFocus?: () => HTMLElement | null | undefined } | null>(null);
+  let panel = $state<HTMLElement>();
+  // The remove button and the crop's leave with the cover: focus goes on to the upload.
+  const uploadControl = () => panel?.querySelector<HTMLElement>('[data-cover-upload]');
   const locked = $derived(disabled || reading || uploading || cropOpen);
   onDestroy(() => { alive = false; sequence++; });
 
@@ -225,7 +229,7 @@
   function reset() { originalSource = ''; draft.appearance = { ...DEFAULT_APPEARANCE }; error = ''; }
 </script>
 
-<div class="panel" style={accentStyle}>
+<div class="panel" style={accentStyle} bind:this={panel}>
   <fieldset disabled={locked}>
     <section>
       <h3 id="{uid}-theme-label">{msg('profile.theme')}</h3>
@@ -269,9 +273,19 @@
           </div>
           {#if palette === 'to'}<div id={paletteId('to')}><ColorPalette value={a.customTo} onchange={(v) => setColor('customTo', v)} disabled={locked} /></div>{/if}
           {#if toBad}<p class="hint danger" id={hexError('to')} role="alert">{msg('settings.accentInvalid')}</p>{/if}
-          <label class="slider"><span>{msg('profileStyle.angle')} <output>{a.customAngle}°</output></span>
-            <input class="zoom-slider" style:--zoom-progress={`${a.customAngle / 3.6}%`} type="range" aria-label={msg('profileStyle.angle')} min="0" max="360" value={a.customAngle} oninput={(e) => patch({ customAngle: Number(e.currentTarget.value) })} />
-          </label>
+          <div class="slider">
+            <Slider
+              label={msg('profileStyle.angle')}
+              valueText={`${a.customAngle}°`}
+              position={a.customAngle}
+              max={360}
+              page={15}
+              fill
+              disabled={locked}
+              oninput={(at) => at !== null && patch({ customAngle: at })}
+              onchange={(at) => patch({ customAngle: at })}
+            />
+          </div>
           <div class="toggle-row">
             <div>
               <span class="pick-label" id="{uid}-custom-pure-label">{msg('profileStyle.customPure')}</span>
@@ -315,13 +329,25 @@
     <section>
       <h3>{msg('profile.cover')}</h3>
       <input class="file" bind:this={input} type="file" accept={COVER_TYPES.join(',')} onchange={() => { void choose(input?.files?.[0]); if (input) input.value = ''; }} />
-      <Button onclick={() => input?.click()}><Upload size="1.5rem" />{msg('profile.upload')}</Button>
+      <Button data-cover-upload onclick={() => input?.click()}><Upload size="1.5rem" />{msg('profile.upload')}</Button>
       <p class="hint">{msg('profileStyle.coverHint')}</p>
       {#if a.coverUrl}
         {#if originalSource}<Button size="sm" variant="ghost" onclick={() => { cropSource = originalSource; cropOpen = true; }}>{msg('profile.editCrop')}</Button>{/if}
-        <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: removeCoverPrompt(), run: removeCover })}>{msg('profile.removeCover')}</Button>
+        <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: removeCoverPrompt(), run: removeCover, returnFocus: uploadControl })}>{msg('profile.removeCover')}</Button>
       {/if}
-      <label class="slider"><span>{msg('profile.dim')} <output>{a.coverDim}%</output></span><input class="zoom-slider" style:--zoom-progress={`${a.coverDim}%`} type="range" aria-label={msg('profile.dim')} min="0" max="100" value={a.coverDim} oninput={(e) => patch({ coverDim: Number(e.currentTarget.value) })} /></label>
+      <div class="slider">
+        <Slider
+          label={msg('profile.dim')}
+          valueText={`${a.coverDim}%`}
+          position={a.coverDim}
+          max={100}
+          page={10}
+          fill
+          disabled={locked}
+          oninput={(at) => at !== null && patch({ coverDim: at })}
+          onchange={(at) => patch({ coverDim: at })}
+        />
+      </div>
       {#if reading || uploading}<div class="message"><Spinner size="sm" label={msg('profile.uploading')} /></div>{/if}
       {#if error}<div class="message"><Notice tone="danger" compact>{error}</Notice></div>{/if}
     </section>
@@ -395,7 +421,7 @@
     </section>
 
     <section>
-      <h3>{msg('profileStyle.status')}</h3>
+      <h3 id="{uid}-status-label">{msg('profileStyle.status')}</h3>
       <div class="status-row">
         <IconButton
           id={emojiId}
@@ -408,12 +434,19 @@
         >
           {#if draft.statusEmoji}<span class="emoji">{draft.statusEmoji}</span>{:else}<Smile size="1.8rem" />{/if}
         </IconButton>
-        <input class="input text" type="text" autocomplete="off" spellcheck="true" placeholder={msg('profileStyle.statusPlaceholder')}
-          aria-label={msg('profileStyle.status')} aria-invalid={statusError ? 'true' : undefined}
-          aria-describedby={statusError ? `${uid}-status-error` : undefined} value={draft.statusText ?? ''} oninput={setStatusText} />
+        <!-- The text is cut to its limit in characters by setStatusText: maxlength counts UTF-16 units. -->
+        <div class="text">
+          <TextField
+            labelledby="{uid}-status-label"
+            autocomplete="off"
+            placeholder={msg('profileStyle.statusPlaceholder')}
+            error={statusError ? layoutErrorText(statusError) : undefined}
+            value={draft.statusText ?? ''}
+            oninput={setStatusText}
+          />
+        </div>
         <span class="counter" class:full={statusLength >= MAX_STATUS_TEXT}>{statusLength}/{MAX_STATUS_TEXT}</span>
       </div>
-      {#if statusError}<p class="status-error" id="{uid}-status-error" role="alert">{layoutErrorText(statusError)}</p>{/if}
       {#if emojiOpen}
         <div class="emoji-grid" id={emojiGridId} role="radiogroup" aria-label={msg('profileStyle.emojiPick')}>
           {#each STATUS_EMOJI as emoji}
@@ -433,14 +466,13 @@
   <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} />
 {/if}
 {#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} />
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} returnFocus={pending.returnFocus} />
 {/if}
 <style>
   .panel { min-width: 0; }
   h3 { font-size: var(--font-sm); font-weight: 600; margin-bottom: 1.2rem; }
   fieldset { border: 0; padding: 0; min-width: 0; } fieldset:disabled { opacity: .65; }
   section { padding: 1.7rem 0; border-bottom: 1px solid var(--border); }
-  .status-error { width: fit-content; padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--danger); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
   .hint { color: var(--text-3); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
   .danger { width: fit-content; padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--danger); }
   .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
@@ -458,8 +490,7 @@
   .color { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
   .hex { margin-top: 1.2rem; }
   .message { margin-top: .8rem; }
-  .slider { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.6rem; font-size: var(--font-xs); }
-  .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; }
+  .slider { margin-top: 1.6rem; }
   .frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
   .names { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; }
   h4.sub { margin: 1.4rem 0 .8rem; font-size: var(--font-xs); font-weight: 600; color: var(--text-3); }

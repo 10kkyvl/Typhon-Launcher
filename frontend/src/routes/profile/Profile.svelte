@@ -44,6 +44,7 @@
   import { initProfile, profileDraft, profileFailed, profileSnapshot, refreshProfile } from '../../lib/stores/profile';
   import { navigate, registerLeaveGuard } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { authState, currentUser, isOffline, saveProfile } from '../../lib/stores/user';
   import HiddenBadge from './HiddenBadge.svelte';
   import ProfileAppearancePanel from './ProfileAppearancePanel.svelte';
@@ -82,7 +83,10 @@
   // is on screen.
   let answered = $state(get(profileSnapshot) !== EMPTY_SNAPSHOT);
   let settingsOpen = $state(false);
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => void } | null>(null);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => void; returnFocus?: () => HTMLElement | null | undefined } | null>(null);
+  let workspace = $state<HTMLElement>();
+  // The header's "Customize profile": where focus goes when the editor and its bar leave.
+  const editControl = () => workspace?.querySelector<HTMLElement>('[data-profile-edit]');
 
   const isGuest = $derived($authState === 'guest');
   const settings = $derived((isGuest ? null : $currentUser?.profile) ?? DEFAULT_PROFILE);
@@ -184,7 +188,9 @@
 
   function cancel() {
     if (!dirty) {
+      const handOff = focusHandOff();
       leaveEditing();
+      void handOff(editControl);
       return;
     }
     pending = {
@@ -195,6 +201,7 @@
         cancel: msg('profile.keepEditing'),
       },
       run: leaveEditing,
+      returnFocus: editControl,
     };
   }
 
@@ -281,6 +288,7 @@
 
   async function save() {
     if (!canSave) return;
+    const handOff = focusHandOff();
     saving = true;
     saveError = '';
     try {
@@ -297,6 +305,7 @@
       if ($currentUser?.id !== owner) return;
       toast(msg('social.settingsSaved'), 'success');
       leaveEditing();
+      void handOff(editControl);
     } catch (err) {
       saveError = accountErrorText(err, msg('profile.saveFailed'));
     } finally {
@@ -394,7 +403,7 @@
     </div>
   {/if}
 
-  <div class="workspace" class:editing>
+  <div class="workspace" class:editing bind:this={workspace}>
     <div class="profile">
       <ProfileCanvas {appearance} {autoArt}>
         {#if editing}
@@ -415,7 +424,8 @@
               <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
             </Button>
             <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
-            <Button variant="primary" disabled={!canSave} onclick={save}>
+            <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. -->
+            <Button variant="primary" busy={saving} disabled={!saving && !canSave} onclick={save}>
               {saving ? msg('social.saving') : msg('common.save')}
             </Button>
           </div>
@@ -489,7 +499,13 @@
   {/if}
 
   {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} />
+    <ConfirmModal
+      prompt={pending.prompt}
+      onconfirm={pending.run}
+      onclose={() => (pending = null)}
+      errorText={(err) => accountErrorText(err)}
+      returnFocus={pending.returnFocus}
+    />
   {/if}
 </Page>
 

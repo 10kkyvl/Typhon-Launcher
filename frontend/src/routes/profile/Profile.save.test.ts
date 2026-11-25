@@ -25,6 +25,8 @@ function harness(saveProfile: () => Promise<boolean>) {
     'accountErrorText',
     'msg',
     'currentUser',
+    'focusHandOff',
+    'editControl',
     `
     let saving = false, saveError = '';
     const canSave = true, owner = 'u1', resetLayout = false;
@@ -43,6 +45,8 @@ function harness(saveProfile: () => Promise<boolean>) {
     (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback),
     (key: string) => key,
     { id: 'u1' },
+    () => async () => {},
+    () => null,
   ) as { save: () => Promise<void>; state: () => { saving: boolean; saveError: string } };
   return { ...api, calls };
 }

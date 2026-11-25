@@ -245,7 +245,7 @@
               {msg('social.createAccountButton')}
             </Button>
           {:else}
-            <Button size="sm" onclick={onedit}>{msg('profileStyle.edit')}</Button>
+            <Button size="sm" data-profile-edit onclick={onedit}>{msg('profileStyle.edit')}</Button>
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ props })}
