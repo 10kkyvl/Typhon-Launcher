@@ -159,6 +159,10 @@ var (
 	errEmptyCatalogTitle    = uierr.New("library.no_catalog_title", "не указано название игры")
 	errInstallationChanged  = uierr.New("library.installation_changed", "установка изменилась во время обновления")
 	errAlreadyAdded         = uierr.New("library.already_added", "эта игра уже добавлена")
+	// errStateUnreadable refuses every save after the library's files could
+	// not be read again when a successor's old launcher had gone: the files
+	// on disk stay the only copy until the next start reads them.
+	errStateUnreadable = uierr.New("library.state_unreadable", "library not saved, its files could not be read")
 )
 
 func IsGameNotFound(err error) bool {
@@ -480,7 +484,7 @@ func (s *Service) persist() error {
 		return errors.New("library path unavailable")
 	}
 	if s.loadErr != nil {
-		return fmt.Errorf("library not saved, its files could not be read: %w", s.loadErr)
+		return fmt.Errorf("%w: %w", errStateUnreadable, s.loadErr)
 	}
 	if err := s.checkHoldsLocked(); err != nil {
 		return err

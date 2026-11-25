@@ -43,7 +43,7 @@ func (s *Service) persistExcludedLocked() error {
 		return errors.New("excluded path unavailable")
 	}
 	if s.loadErr != nil {
-		return fmt.Errorf("library not saved, its files could not be read: %w", s.loadErr)
+		return fmt.Errorf("%w: %w", errStateUnreadable, s.loadErr)
 	}
 	data, err := json.MarshalIndent(s.excluded, "", "  ")
 	if err != nil {

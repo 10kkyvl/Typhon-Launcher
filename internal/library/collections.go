@@ -65,7 +65,7 @@ func (s *Service) persistCollectionsLocked() error {
 		return errors.New("collections path unavailable")
 	}
 	if s.loadErr != nil {
-		return fmt.Errorf("library not saved, its files could not be read: %w", s.loadErr)
+		return fmt.Errorf("%w: %w", errStateUnreadable, s.loadErr)
 	}
 	list := s.collections
 	if list == nil {
