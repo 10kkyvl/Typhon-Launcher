@@ -34,7 +34,7 @@ func (sc *scanner) scanLeftovers() error {
 			partialRoots.add(filepath.Dir(g.InstallDir))
 		}
 	}
-	for _, d := range sc.s.deps.Downloads.List() {
+	for _, d := range sc.downloads {
 		partRoots.add(d.Destination)
 	}
 
@@ -51,6 +51,12 @@ func (sc *scanner) scanLeftovers() error {
 			return err
 		}
 	}
+	// The files a deleted download left are listed before the part files:
+	// its own .part is its leftover, deletable through the manager, not a
+	// part file no record accounts for.
+	if err := sc.scanOrphans(); err != nil {
+		return err
+	}
 	for _, root := range partRoots.out {
 		err := sc.scanRoot(root, KindDownloadPart,
 			func(e fs.DirEntry) bool { return download.IsPartFile(e.Name()) },
@@ -62,9 +68,6 @@ func (sc *scanner) scanLeftovers() error {
 		}
 	}
 	if err := sc.scanStagings(); err != nil {
-		return err
-	}
-	if err := sc.scanOrphans(); err != nil {
 		return err
 	}
 	return sc.scanUpdateDirs()
@@ -144,6 +147,9 @@ func (sc *scanner) scanOrphans() error {
 			return err
 		}
 		path := c.Path
+		if sc.coveredByDownload(path) {
+			continue
+		}
 		check := func() (bool, string, string) { return sc.orphanVerdict(path) }
 		o := entry{
 			root:  filepath.Dir(path),
@@ -171,6 +177,33 @@ func (sc *scanner) scanOrphans() error {
 		}
 	}
 	return nil
+}
+
+// coveredByDownload says a current download writes at path: the files a
+// deleted download left there are that download's now, counted in its row or
+// listed as its part file, not a leftover of the deleted one.
+func (sc *scanner) coveredByDownload(path string) bool {
+	for _, d := range sc.downloads {
+		if root, ok := d.DataRoot(); ok {
+			if overlaps(root, path) || platform.SamePath(root+download.PartFileSuffix, path) {
+				return true
+			}
+			continue
+		}
+		if !d.Flat || d.Destination == "" {
+			continue
+		}
+		for _, f := range d.Files {
+			if !filepath.IsLocal(filepath.FromSlash(f.Path)) {
+				continue
+			}
+			file := filepath.Join(d.Destination, filepath.FromSlash(f.Path))
+			if overlaps(file, path) || platform.SamePath(file+download.PartFileSuffix, path) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // orphanVerdict is the full ownership check for files a deleted download left
@@ -257,6 +290,7 @@ func (sc *scanner) addLeftover(path, kind string, o entry) error {
 			return m.err
 		}
 		l.SizeBytes, l.SizeUnknown = m.size, m.unknown || m.viaLink
+		l.counted = countedAt(path, m)
 		l.Deletable, l.ReasonCode, l.Reason = o.check()
 		if l.Deletable {
 			l.ReasonCode, l.Reason = "", ""

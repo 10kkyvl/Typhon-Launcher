@@ -35,6 +35,9 @@ type scanner struct {
 	// the first group of a game without a card needs one.
 	history map[string]string
 	sets    map[groupKey][]string
+	// downloads is the download list as the downloads step read it; the
+	// leftover steps judge against the same list.
+	downloads []download.Download
 }
 
 func (sc *scanner) warn(code string, err error) {
@@ -110,7 +113,10 @@ type measured struct {
 	unknown bool
 	missing bool
 	viaLink bool
-	err     error
+	// rootLink: the path itself is a link, measured through its target, so
+	// no walk of a folder around it counted these bytes.
+	rootLink bool
+	err      error
 }
 
 // measure sizes a file or folder. A missing path is its own answer and any
@@ -132,15 +138,15 @@ func (sc *scanner) measure(path string) measured {
 		// at: measure the target, and say the number came through a link.
 		target, evalErr := filepath.EvalSymlinks(path)
 		if evalErr != nil {
-			return measured{unknown: true, viaLink: true}
+			return measured{unknown: true, viaLink: true, rootLink: true}
 		}
 		if info, err = os.Stat(target); err != nil {
-			return measured{unknown: true, viaLink: true}
+			return measured{unknown: true, viaLink: true, rootLink: true}
 		}
 		path = target
 	}
 	if !info.IsDir() {
-		return measured{size: info.Size(), viaLink: linked}
+		return measured{size: info.Size(), viaLink: linked, rootLink: linked}
 	}
 	if linked {
 		// A trailing separator makes the walk open the folder itself instead
@@ -149,9 +155,18 @@ func (sc *scanner) measure(path string) measured {
 	}
 	size, inner, err := walkSize(sc.ctx, path)
 	if err != nil {
-		return measured{unknown: true, viaLink: linked, err: sc.ctx.Err()}
+		return measured{unknown: true, viaLink: linked, rootLink: linked, err: sc.ctx.Err()}
 	}
-	return measured{size: size, viaLink: linked || inner}
+	return measured{size: size, viaLink: linked || inner, rootLink: linked}
+}
+
+// gameFolder is where a game's measured bytes lie: its folder, or the image
+// of an emulated game.
+func gameFolder(g library.Game) string {
+	if g.Emulation != nil {
+		return g.Executable
+	}
+	return g.InstallDir
 }
 
 // measureGame takes the stored size of an emulated game: its folder is whatever
@@ -165,7 +180,7 @@ func (sc *scanner) measureGame(g library.Game) measured {
 	if image.missing || image.err != nil {
 		return image
 	}
-	return measured{size: g.SizeBytes, unknown: g.SizeUnknown || image.unknown}
+	return measured{size: g.SizeBytes, unknown: g.SizeUnknown || image.unknown, rootLink: image.rootLink}
 }
 
 func (sc *scanner) scanGames() error {
@@ -193,6 +208,7 @@ func (sc *scanner) scanGames() error {
 			InstalledAt: g.InstalledAt,
 			Running:     sc.s.deps.Library.IsRunning(g.ID),
 			Busy:        sc.s.deps.Installs.GameBusy(g),
+			counted:     countedAt(gameFolder(g), m),
 		})
 		if m.unknown || m.missing || m.viaLink {
 			continue
@@ -211,7 +227,8 @@ func (sc *scanner) scanDownloads() error {
 			owners[g.SourceDownloadID] = g.ID
 		}
 	}
-	for _, d := range sc.s.deps.Downloads.List() {
+	sc.downloads = sc.s.deps.Downloads.List()
+	for _, d := range sc.downloads {
 		if err := sc.ctx.Err(); err != nil {
 			return err
 		}
@@ -233,6 +250,7 @@ func (sc *scanner) scanDownloads() error {
 			Seeding:     d.Seeding,
 			GameID:      owners[d.ID],
 			Installed:   owners[d.ID] != "",
+			counted:     countedAt(root, m),
 		}
 		switch checkErr := sc.s.deps.Installs.CheckDownloadDeletable(d); {
 		case d.Status != download.StatusCompleted:

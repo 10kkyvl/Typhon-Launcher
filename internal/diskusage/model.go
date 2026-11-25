@@ -30,6 +30,8 @@ type GameUsage struct {
 	InstalledAt time.Time  `json:"installedAt"`
 	Running     bool       `json:"running"`
 	Busy        bool       `json:"busy"`
+
+	counted string
 }
 
 type DownloadUsage struct {
@@ -45,6 +47,8 @@ type DownloadUsage struct {
 	Referenced  bool   `json:"referenced"`
 	Reason      string `json:"reason"`
 	ReasonCode  string `json:"reasonCode"`
+
+	counted string
 }
 
 type Leftover struct {
@@ -55,6 +59,8 @@ type Leftover struct {
 	Deletable   bool   `json:"deletable"`
 	Reason      string `json:"reason"`
 	ReasonCode  string `json:"reasonCode"`
+
+	counted string
 }
 
 // GroupUsage is a game's screenshots or save snapshots. Title comes from the
@@ -137,25 +143,42 @@ func (r Report) clone() Report {
 	return out
 }
 
+// recount sums the sections. Each byte is counted once, in the innermost row
+// that holds it (ownBytes); the rows keep the sizes of their own folders.
 func (r *Report) recount() {
-	var t Totals
+	rows := make([]countedRow, 0, len(r.Games)+len(r.Leftovers)+len(r.Downloads))
 	for _, g := range r.Games {
-		t.GamesBytes += g.SizeBytes
-		t.UnknownSizes = t.UnknownSizes || g.SizeUnknown
-	}
-	for _, d := range r.Downloads {
-		t.DownloadsBytes += d.SizeBytes
-		t.UnknownSizes = t.UnknownSizes || d.SizeUnknown
-		if !d.Referenced {
-			t.ReclaimableBytes += d.SizeBytes
-		}
+		rows = append(rows, countedRow{path: g.counted, rank: rankGame, size: g.SizeBytes})
 	}
 	for _, l := range r.Leftovers {
-		t.LeftoversBytes += l.SizeBytes
+		rows = append(rows, countedRow{path: l.counted, rank: rankLeftover, size: l.SizeBytes})
+	}
+	for _, d := range r.Downloads {
+		rows = append(rows, countedRow{path: d.counted, rank: rankDownload, size: d.SizeBytes})
+	}
+	own := ownBytes(rows)
+	var t Totals
+	next := 0
+	for _, g := range r.Games {
+		t.GamesBytes += own[next]
+		next++
+		t.UnknownSizes = t.UnknownSizes || g.SizeUnknown
+	}
+	for _, l := range r.Leftovers {
+		t.LeftoversBytes += own[next]
 		t.UnknownSizes = t.UnknownSizes || l.SizeUnknown
 		if l.Deletable {
-			t.ReclaimableBytes += l.SizeBytes
+			t.ReclaimableBytes += own[next]
 		}
+		next++
+	}
+	for _, d := range r.Downloads {
+		t.DownloadsBytes += own[next]
+		t.UnknownSizes = t.UnknownSizes || d.SizeUnknown
+		if !d.Referenced {
+			t.ReclaimableBytes += own[next]
+		}
+		next++
 	}
 	for _, g := range r.Screenshots {
 		t.ScreenshotsBytes += g.SizeBytes
