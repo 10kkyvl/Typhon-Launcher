@@ -1,6 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
-  import { onMount, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { LogIn, ShieldCheck, UserPlus, Users } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -9,6 +9,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import {
@@ -26,7 +27,7 @@
   import { presenceDot } from '../../lib/social/presence';
   import { commonLine, sentAt } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
-  import { friendsPage, incomingCount, needsSocialConsent } from '../../lib/stores/social';
+  import { friendsLoaded, friendsLoadError, friendsPage, incomingCount, needsSocialConsent, reloadFriends } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { relativeDate } from '../../lib/utils/format';
@@ -47,6 +48,11 @@
   const codeId = `${uid}-code`;
   let consentOpen = $state(false);
   let blocked = $state<UserCard[]>([]);
+  let blockedLoaded = $state(false);
+  let blockedError = $state<unknown>(null);
+  let retrying = $state(false);
+  let blockedRetrying = $state(false);
+  let content = $state<HTMLElement>();
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let busy = $state('');
   let myCode = $state('');
@@ -54,7 +60,10 @@
   let sortBy = $state<'name' | 'status'>('status');
 
   const isGuest = $derived($authState === 'guest');
+  const canRead = $derived(!isGuest && !$needsSocialConsent);
   const page = $derived($friendsPage);
+  const friendsFailed = $derived(!$friendsLoaded && $friendsLoadError != null);
+  const blockedFailed = $derived(!blockedLoaded && blockedError != null);
 
   const onlineFriends = $derived(
     page.friends.filter((f) => {
@@ -105,13 +114,15 @@
     return stats;
   }
 
+  // A count before its list is read would say "none".
+  const counted = (count: number) => ($friendsLoaded ? count : undefined);
   const tabs = $derived([
-    { id: 'all', label: msg('social.friendsTabAll'), count: page.friends.length },
-    { id: 'online', label: msg('social.presenceOnline'), count: onlineFriends.length },
-    { id: 'away', label: msg('social.friendsTabAway'), count: awayFriends.length },
-    { id: 'offline', label: msg('social.presenceOffline'), count: offlineFriends.length },
-    { id: 'requests', label: msg('social.friendsTabRequests'), count: $incomingCount + page.outgoing.length },
-    { id: 'blocked', label: msg('social.friendsTabBlocked'), count: blocked.length },
+    { id: 'all', label: msg('social.friendsTabAll'), count: counted(page.friends.length) },
+    { id: 'online', label: msg('social.presenceOnline'), count: counted(onlineFriends.length) },
+    { id: 'away', label: msg('social.friendsTabAway'), count: counted(awayFriends.length) },
+    { id: 'offline', label: msg('social.presenceOffline'), count: counted(offlineFriends.length) },
+    { id: 'requests', label: msg('social.friendsTabRequests'), count: counted($incomingCount + page.outgoing.length) },
+    { id: 'blocked', label: msg('social.friendsTabBlocked'), count: blockedLoaded ? blocked.length : undefined },
   ]);
 
   function report(err: unknown, fallback: string) {
@@ -119,15 +130,17 @@
     toast(accountErrorText(err, fallback), 'danger');
   }
 
-  function reload() {
-    refresh().catch((err) => report(err, msg('social.friendsRefreshFailed')));
-  }
-
-  async function loadBlocks() {
+  /** Reads the blocked list; answers whether it is there. A failure before any list is kept as state. */
+  async function loadBlocks(): Promise<boolean> {
     try {
       blocked = await fetchBlocks();
+      blockedLoaded = true;
+      blockedError = null;
+      return true;
     } catch (err) {
-      report(err, msg('social.friendsBlockedLoadFailed'));
+      if (blockedLoaded) report(err, msg('social.friendsBlockedLoadFailed'));
+      else blockedError = err;
+      return false;
     }
   }
 
@@ -186,12 +199,15 @@
     });
   });
 
+  // Read on arrival and again whenever the session changes under the screen (a guest signs in, the
+  // connection comes back): the store forgets the lists of a session that ended.
   $effect(() => {
-    if (!isGuest && !$needsSocialConsent) loadBlocks();
-  });
-
-  onMount(() => {
-    if (!isGuest && !$needsSocialConsent) reload();
+    void $authState;
+    if (!canRead) return;
+    untrack(() => {
+      void reloadFriends();
+      void loadBlocks();
+    });
   });
 </script>
 
@@ -270,90 +286,128 @@
 
     <SegmentedControl options={tabs} label={msg('social.friendsTabLabel')} variant="pill" bind:value={tab} />
 
-    {#if presenceTabs.has(tab)}
-      {#if page.incoming.length > 0}
-        <section class="incoming" aria-label={msg('social.friendsIncomingHeading')}>
-          <h4 class="eyebrow">
-            <span class="eyebrow-dot"></span>
-            {msg('social.friendsIncomingHeading')}
-            <span class="eyebrow-count">{page.incoming.length}</span>
-          </h4>
-          {@render incomingCards()}
-        </section>
+    {#if tab !== 'blocked'}
+      {#if friendsFailed || retrying}
+        <!-- On success focus that was on Retry goes to the first control of the lists. -->
+        <div class="load-failed">
+          <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: reloadFriends, within: () => content }}>
+            {accountErrorText($friendsLoadError, msg('state.socialLoadFriendsFailed'))}
+          </Notice>
+        </div>
       {/if}
 
-      <FriendsList
-        friends={page.friends}
-        group={groupFor}
-        {tab}
-        reserve={listReserve}
-        bind:search
-        bind:sortBy
-        onadd={() => (addOpen = true)}
-        onmenu={onMenu}
-        onopen={openProfile}
-      />
-    {:else if tab === 'requests'}
-      {#if page.incoming.length === 0 && page.outgoing.length === 0}
-        <EmptyState level={2} title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
+      {#if !$friendsLoaded}
+        {#if !friendsFailed}
+          <div class="loading"><Spinner label={msg('social.loadingEllipsis')} /></div>
+        {/if}
       {:else}
-        {#if page.incoming.length > 0}
-          <h4 class="eyebrow">
-            <span class="eyebrow-dot"></span>
-            {msg('social.friendsIncomingHeading')}
-            <span class="eyebrow-count">{page.incoming.length}</span>
-          </h4>
-          {@render incomingCards()}
-        {/if}
+        <div class="content" bind:this={content}>
+          {#if presenceTabs.has(tab)}
+            {#if page.incoming.length > 0}
+              <section class="incoming" aria-label={msg('social.friendsIncomingHeading')}>
+                <h4 class="eyebrow">
+                  <span class="eyebrow-dot"></span>
+                  {msg('social.friendsIncomingHeading')}
+                  <span class="eyebrow-count">{page.incoming.length}</span>
+                </h4>
+                {@render incomingCards()}
+              </section>
+            {/if}
 
-        {#if page.outgoing.length > 0}
-          <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
-          <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
-            {#snippet actions(request)}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!!busy}
-                onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
-              >
-                {msg('social.cancelRequestButton')}
-              </Button>
-            {/snippet}
-          </RequestCards>
-        {/if}
+            <FriendsList
+              friends={page.friends}
+              group={groupFor}
+              {tab}
+              reserve={listReserve}
+              bind:search
+              bind:sortBy
+              onadd={() => (addOpen = true)}
+              onmenu={onMenu}
+              onopen={openProfile}
+            />
+          {:else if page.incoming.length === 0 && page.outgoing.length === 0}
+            <EmptyState level={2} title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
+          {:else}
+            {#if page.incoming.length > 0}
+              <h4 class="eyebrow">
+                <span class="eyebrow-dot"></span>
+                {msg('social.friendsIncomingHeading')}
+                <span class="eyebrow-count">{page.incoming.length}</span>
+              </h4>
+              {@render incomingCards()}
+            {/if}
+
+            {#if page.outgoing.length > 0}
+              <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
+              <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
+                {#snippet actions(request)}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!!busy}
+                    onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
+                  >
+                    {msg('social.cancelRequestButton')}
+                  </Button>
+                {/snippet}
+              </RequestCards>
+            {/if}
+          {/if}
+        </div>
       {/if}
 
-      <div class="safety">
-        <Notice announce={false} title={msg('social.friendsSafetyTitle')} level={4}>
-          {#snippet icon()}
-            <ShieldCheck size="1.6rem" strokeWidth={1.8} />
-          {/snippet}
-          {msg('social.friendsSafetyDesc')}
-        </Notice>
-      </div>
-    {:else if blocked.length === 0}
-      <EmptyState level={2}
-        title={msg('social.friendsEmptyBlockedTitle')}
-        description={msg('social.friendsEmptyBlockedDesc')}
-      />
+      {#if tab === 'requests'}
+        <div class="safety">
+          <Notice announce={false} title={msg('social.friendsSafetyTitle')} level={4}>
+            {#snippet icon()}
+              <ShieldCheck size="1.6rem" strokeWidth={1.8} />
+            {/snippet}
+            {msg('social.friendsSafetyDesc')}
+          </Notice>
+        </div>
+      {/if}
     {:else}
-      <RequestCards users={blocked} {busy} reserve={blockedReserve}>
-        {#snippet actions(user)}
-          <Button
-            size="sm"
-            disabled={!!busy}
-            onclick={() =>
-              run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
-          >
-            {msg('social.unblockButton')}
-          </Button>
-        {/snippet}
-      </RequestCards>
+      {#if blockedFailed || blockedRetrying}
+        <!-- On success focus that was on Retry goes to the first control of the list. -->
+        <div class="load-failed">
+          <Notice tone="danger" bind:retrying={blockedRetrying} retry={{ label: msg('common.retry'), run: loadBlocks, within: () => content }}>
+            {accountErrorText(blockedError, msg('social.friendsBlockedLoadFailed'))}
+          </Notice>
+        </div>
+      {/if}
+
+      {#if !blockedLoaded}
+        {#if !blockedFailed}
+          <div class="loading"><Spinner label={msg('social.loadingEllipsis')} /></div>
+        {/if}
+      {:else}
+        <div class="content" bind:this={content}>
+          {#if blocked.length === 0}
+            <EmptyState level={2}
+              title={msg('social.friendsEmptyBlockedTitle')}
+              description={msg('social.friendsEmptyBlockedDesc')}
+            />
+          {:else}
+            <RequestCards users={blocked} {busy} reserve={blockedReserve}>
+              {#snippet actions(user)}
+                <Button
+                  size="sm"
+                  disabled={!!busy}
+                  onclick={() =>
+                    run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
+                >
+                  {msg('social.unblockButton')}
+                </Button>
+              {/snippet}
+            </RequestCards>
+          {/if}
+        </div>
+      {/if}
     {/if}
   {/if}
 
   {#if !isGuest && !$needsSocialConsent}
-    <AddFriendModal bind:open={addOpen} onsent={reload} />
+    <AddFriendModal bind:open={addOpen} onsent={() => void reloadFriends()} />
   {/if}
 
   <SocialConsentScreen bind:open={consentOpen} />
@@ -366,6 +420,16 @@
 <style>
   .code {
     margin-bottom: var(--space-5);
+  }
+
+  .load-failed {
+    margin-top: var(--space-5);
+  }
+
+  .loading {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-10) 0;
   }
 
   .incoming {

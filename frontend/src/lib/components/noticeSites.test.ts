@@ -210,8 +210,15 @@ const SITES: Record<string, Site[]> = {
   // The areas the scan just could not read.
   'routes/diskusage/UsageWarnings.svelte': [['danger', true]],
   'routes/friends/AddFriendModal.svelte': [['danger', true]],
-  // Safety advice of the requests tab, read with it.
-  'routes/friends/Friends.svelte': [['info', false]],
+  // The code that could not be read (just happened).
+  'routes/friends/FriendCodeCard.svelte': [['danger', true]],
+  // The friends and the blocked list that could not be read (just happened); the safety advice of the
+  // requests tab, read with it.
+  'routes/friends/Friends.svelte': [
+    ['danger', true],
+    ['info', false],
+    ['danger', true],
+  ],
   // The downloads list that could not be read at startup, with its Retry: the failure just happened.
   'routes/downloads/Downloads.svelte': [['danger', true]],
   // Downloads held while a game runs: it starts and ends while the page is open.

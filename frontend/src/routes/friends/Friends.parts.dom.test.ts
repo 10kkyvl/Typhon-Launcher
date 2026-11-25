@@ -2,7 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { accept, blocks, decline, refresh, unblock, unfriend, type FriendView, type RequestView, type UserCard } from '../../lib/services/social';
+import { accept, blocks, decline, friends, refresh, unblock, unfriend, type FriendView, type RequestView, type UserCard } from '../../lib/services/social';
 import type { Settings } from '../../lib/services/settings';
 import { commonLine } from '../../lib/social/view';
 import { navigate } from '../../lib/stores/router';
@@ -31,6 +31,7 @@ vi.mock('../../lib/services/social', async (importOriginal) => ({
   accept: vi.fn(async () => {}),
   blocks: vi.fn(async () => []),
   decline: vi.fn(async () => {}),
+  friends: vi.fn(async () => ({ friends: [], incoming: [], outgoing: [] })),
   refresh: vi.fn(async () => {}),
   unblock: vi.fn(async () => {}),
   unfriend: vi.fn(async () => {}),
@@ -85,6 +86,7 @@ beforeEach(() => {
   authState.set('authenticated');
   settings.set({ accountSync: true } as Settings);
   friendsPage.set({ friends: FRIENDS, incoming: INCOMING, outgoing: OUTGOING });
+  vi.mocked(friends).mockResolvedValue({ friends: FRIENDS, incoming: INCOMING, outgoing: OUTGOING });
   vi.mocked(blocks).mockResolvedValue(BLOCKED);
 });
 
@@ -216,6 +218,7 @@ describe('Friends: the card lists', () => {
 
   it('frames each list by its own users', async () => {
     friendsPage.set({ friends: FRIENDS, incoming: [{ ...INCOMING[0], card: framed }], outgoing: OUTGOING });
+    vi.mocked(friends).mockResolvedValue({ friends: FRIENDS, incoming: [{ ...INCOMING[0], card: framed }], outgoing: OUTGOING });
     await mount({ tab: 'requests' });
 
     const reserve = (name: string) => (cardOf(name).querySelector('.avatar') as HTMLElement).style.getPropertyValue('--reserve-l');
@@ -233,7 +236,7 @@ describe('Friends: the card lists', () => {
 });
 
 describe('Friends: the page’s reads', () => {
-  it('reads the friends once on mount and the blocked list again once a guest signs in', async () => {
+  it('reads nothing for a guest, and the friends and the blocked list once a guest signs in', async () => {
     authState.set('guest');
     render(Friends, { target: document.getElementById('app') as HTMLElement, props: {} });
     await tick();
@@ -241,7 +244,7 @@ describe('Friends: the page’s reads', () => {
 
     authState.set('authenticated');
     await vi.waitFor(() => expect(blocks).toHaveBeenCalledTimes(1));
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('opens on the tab it is given, and on a new one when it changes', async () => {

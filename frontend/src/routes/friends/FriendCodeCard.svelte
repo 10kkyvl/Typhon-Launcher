@@ -4,6 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
@@ -14,16 +15,22 @@
   let { code = $bindable('') }: { code?: string } = $props();
 
   let loading = $state(!code);
+  let failure = $state<unknown>(null);
+  let retrying = $state(false);
+  let card = $state<HTMLElement>();
   let rotating = $state(false);
   let confirmOpen = $state(false);
   let copied = $state('');
 
-  async function load() {
-    loading = true;
+  /** Reads the code; answers whether it is there. A failure is said in the card, with Retry. */
+  async function load(): Promise<boolean> {
     try {
       code = await friendCode();
+      failure = null;
+      return true;
     } catch (err) {
-      toast(accountErrorText(err, msg('social.friendsCodeFetchFailed')), 'danger');
+      failure = err;
+      return false;
     } finally {
       loading = false;
     }
@@ -60,10 +67,15 @@
 </script>
 
 <Card padding="sm">
-  <div class="card">
+  <div class="card" bind:this={card}>
     <div class="text">
       <span class="label">{msg('social.friendsYourCode')}</span>
-      {#if loading}
+      {#if failure || retrying}
+        <!-- On success focus that was on Retry goes to the code, the card's first control. -->
+        <Notice tone="danger" compact bind:retrying retry={{ label: msg('common.retry'), run: load, within: () => card }}>
+          {accountErrorText(failure, msg('social.friendsCodeFetchFailed'))}
+        </Notice>
+      {:else if loading}
         <span class="code pending"><Spinner size="sm" label={msg('social.loadingEllipsis')} /></span>
       {:else if !code}
         <span class="code pending">—</span>

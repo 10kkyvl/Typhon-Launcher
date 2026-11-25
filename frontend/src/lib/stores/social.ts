@@ -1,4 +1,4 @@
-import { derived, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { AccountError } from '../services/account';
 import { accountErrorText } from '../services/accountMessages';
@@ -7,6 +7,7 @@ import {
   emptyFriendsPage,
   friends as fetchFriends,
   kick,
+  refresh,
   toFriendsPage,
   type FriendsPage,
   type RequestsSignal,
@@ -18,6 +19,14 @@ import { toast } from './toasts';
 import { authState } from './user';
 
 export const friendsPage = writable<FriendsPage>(emptyFriendsPage());
+
+/** A page of friends has been read for this account: until then `friendsPage` says nothing about who is there. */
+export const friendsLoaded = writable(false);
+/** Why the first read for this account failed; null once a page has arrived. */
+export const friendsLoadError = writable<unknown>(null);
+
+// The account the reads belong to: an answer that comes after a sign-in or a sign-out is dropped.
+let session = 0;
 
 const requestsSignal = writable<number | null>(null);
 
@@ -49,12 +58,44 @@ function setPage(page: FriendsPage) {
   requestsSignal.set(null);
 }
 
+function received(page: FriendsPage) {
+  setPage(page);
+  friendsLoaded.set(true);
+  friendsLoadError.set(null);
+}
+
+/** Before any page a failed read is the state the screens show; after one the lists stay and a toast says it. */
+function readFailed(err: unknown, fallback: string) {
+  if (get(friendsLoaded)) report(err, fallback);
+  else friendsLoadError.set(err);
+}
+
 export async function loadFriends(): Promise<void> {
+  const started = session;
   try {
-    setPage(await fetchFriends());
+    const page = await fetchFriends();
+    if (started === session) received(page);
   } catch (err) {
-    report(err, msg('state.socialLoadFriendsFailed'));
+    if (started === session) readFailed(err, msg('state.socialLoadFriendsFailed'));
   }
+}
+
+/**
+ * Has Go read the friends again and takes the page it then holds. Never rejects: answers whether a
+ * page is there now (a failure is kept or said as `readFailed` does).
+ */
+export async function reloadFriends(): Promise<boolean> {
+  const started = session;
+  try {
+    await refresh();
+    const page = await fetchFriends();
+    if (started === session) received(page);
+  } catch (err) {
+    if (started !== session) return get(friendsLoaded);
+    readFailed(err, msg('social.friendsRefreshFailed'));
+    return false;
+  }
+  return get(friendsLoaded);
 }
 
 let started = false;
@@ -65,7 +106,7 @@ export async function initSocial(): Promise<void> {
   if (!inWails) return;
 
   Events.On('social:friends', (event) => {
-    setPage(toFriendsPage(event.data));
+    received(toFriendsPage(event.data));
   });
   Events.On('social:requests', (event) => {
     const signal = event.data as RequestsSignal | null;
@@ -77,6 +118,9 @@ export async function initSocial(): Promise<void> {
     const changed = previous !== state;
     previous = state;
     if (!changed) return;
+    session += 1;
+    friendsLoaded.set(false);
+    friendsLoadError.set(null);
     resetFeed();
     if (state !== 'authenticated') {
       setPage(emptyFriendsPage());

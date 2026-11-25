@@ -11,7 +11,7 @@ import Sources from './sources/Sources.svelte';
 import { msg } from '../lib/i18n';
 import { downloads } from '../lib/stores/downloads';
 import { libraryGames, libraryLoaded } from '../lib/stores/library';
-import { friendsPage } from '../lib/stores/social';
+import { friendsLoaded, friendsPage } from '../lib/stores/social';
 import { sources, sourcesLoaded } from '../lib/stores/sources';
 import { authState } from '../lib/stores/user';
 import type { Download } from '../lib/services/downloads';
@@ -42,6 +42,7 @@ afterEach(() => {
   libraryGames.set([]);
   libraryLoaded.set(false);
   friendsPage.set({ friends: [], incoming: [], outgoing: [] });
+  friendsLoaded.set(false);
   sources.set([]);
   sourcesLoaded.set(false);
   authState.set('bootstrapping');
@@ -97,6 +98,7 @@ describe('row menu buttons name their row', () => {
       incoming: [],
       outgoing: [],
     });
+    friendsLoaded.set(true);
 
     const names = menuButtonNames(render(Friends, { props: {} }).body).map(unescape);
 
