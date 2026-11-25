@@ -3,7 +3,7 @@ import { frontendSources } from '../testing/sources';
 
 /**
  * The main window draws its buttons with the base: Button, IconButton, Chip, TextLink, the segmented
- * control, tabs, menu items, the switch and the checkbox. A raw <button> elsewhere is either a
+ * control, the option list, tabs, menu items, the switch and the checkbox. A raw <button> elsewhere is either a
  * control of another kind, listed here by file and class with what it is, or a hand-made copy of a
  * base control, which this guard refuses. Big Picture, the overlay and the test harnesses are not on
  * this path. A new raw button is added here with its kind, or drawn with the base.
@@ -30,7 +30,7 @@ type Kind =
   | 'disclosure'; // the live island's message: the pill that opens into its card, the card's head that closes it
 
 /** The base components that own a raw <button>: the only place a button's look is written. */
-const BASE = ['Button', 'Checkbox', 'Chip', 'IconButton', 'MenuList', 'SegmentedControl', 'Select', 'Tabs', 'TextLink', 'Toggle'].map(
+const BASE = ['Button', 'Checkbox', 'Chip', 'IconButton', 'MenuList', 'OptionList', 'SegmentedControl', 'Select', 'Tabs', 'TextLink', 'Toggle'].map(
   (name) => `lib/components/${name}.svelte`,
 );
 

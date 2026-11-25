@@ -6,6 +6,8 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import OptionList from '../../lib/components/OptionList.svelte';
+  import type { OptionItem } from '../../lib/components/optionList';
   import PathField from '../../lib/components/PathField.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -116,6 +118,19 @@
       }, 1000);
     });
   }
+
+  const SAVE_FOLDERS: OptionItem[] = [
+    { id: 'documents', title: 'C:/Users/me/Documents/My Games/Hades', note: 'Changed today', fact: '12 MB' },
+    { id: 'appdata', title: 'C:/Users/me/AppData/Local/Supergiant Games/A folder whose name runs on for long enough to wrap/Hades/Profiles', fact: '3 MB' },
+    { id: 'old', title: 'D:/Old games/Hades', disabledReason: 'The drive is not connected.' },
+    { id: 'cloud', title: 'E:/Cloud/Hades' },
+  ];
+  let saveFolder = $state('');
+  const MODES: OptionItem[] = [
+    { id: 'keep', title: 'Keep the files', note: 'The game leaves the library; its folder stays.' },
+    { id: 'delete', title: 'Delete the files', note: 'Saves inside the folder go with it.' },
+  ];
+  let mode = $state('keep');
 
   function browseDestination() {
     destination = 'D:/Games/Hades';
@@ -252,6 +267,16 @@
     <span class="text"><PathField label="Move to" value="D:/Games/Hades" disabledReason="The game is running." browseLabel="Browse" onbrowse={() => {}} /></span>
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Option lists: none chosen yet, a second line, a fact at the end, a long path that wraps, a row refused with its reason; the page holds the choice through onchange; rows drawn by the caller" stack>
+    <span class="field-label" id="{uid}-saves">Save folder (chosen: {saveFolder || 'none'})</span>
+    <span class="text"><OptionList labelledby="{uid}-saves" options={SAVE_FOLDERS} value={saveFolder} onchange={(id) => (saveFolder = id)} /></span>
+    <span class="text">
+      <OptionList label="When removing" options={MODES} bind:value={mode}>
+        {#snippet row(option)}<span class="mode-title">{option.title}</span> <span class="field-label">{option.note}</span>{/snippet}
+      </OptionList>
+    </span>
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Search fields">
     <span class="search"><SearchInput label="Search the showcase" bind:value={query} placeholder="Type a name" /></span>
     <span class="search"><SearchInput label="Searching" value="hollow" loading /></span>
@@ -340,5 +365,10 @@
   .text {
     display: block;
     width: 32rem;
+  }
+
+  .mode-title {
+    display: block;
+    font-size: var(--font-sm);
   }
 </style>
