@@ -291,10 +291,11 @@ describe('TextArea: growing with its text', () => {
     expect(field.style.overflowY).toBe('hidden');
   });
 
-  it('measures again once it is shown: mounted hidden with text, it does not stay clipped to its rows', async () => {
+  it('measures again once it is shown: mounted hidden with text, it does not stay clipped to its rows; lets the observer go when it goes', async () => {
     // Hidden (display: none), a field has no content height to read; shown, it has its text's.
     let shown = false;
     const resized: (() => void)[] = [];
+    let disconnected = 0;
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -306,7 +307,9 @@ describe('TextArea: growing with its text', () => {
           resized.push(this.callback);
         }
         unobserve() {}
-        disconnect() {}
+        disconnect() {
+          disconnected += 1;
+        }
       },
     );
     const real = window.getComputedStyle;
@@ -319,7 +322,7 @@ describe('TextArea: growing with its text', () => {
     Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', { configurable: true, get: () => (shown ? 9 * 20 + 18 : 0) });
     Object.defineProperty(HTMLTextAreaElement.prototype, 'offsetWidth', { configurable: true, get: () => (shown ? 300 : 0) });
     try {
-      renderDom(TextAreaHarness, { grow: 5, initial: 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine' });
+      const { unmount } = renderDom(TextAreaHarness, { grow: 5, initial: 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine' });
       await tick();
       expect(box().style.height).toBe(`${4 * 20 + 20}px`);
 
@@ -328,6 +331,10 @@ describe('TextArea: growing with its text', () => {
       await tick();
       expect(box().style.height).toBe(`${5 * 20 + 20}px`);
       expect(box().style.overflowY).toBe('auto');
+
+      expect(disconnected).toBe(0);
+      unmount();
+      expect(disconnected).toBe(1);
     } finally {
       Reflect.deleteProperty(HTMLTextAreaElement.prototype, 'scrollHeight');
       Reflect.deleteProperty(HTMLTextAreaElement.prototype, 'offsetWidth');
