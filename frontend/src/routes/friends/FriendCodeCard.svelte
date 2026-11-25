@@ -121,7 +121,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -138,8 +138,8 @@
   }
 
   .code.copy {
-    padding: 0.2rem 0.8rem;
-    margin: -0.2rem -0.8rem;
+    padding: var(--space-1) var(--space-2);
+    margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
     border-radius: var(--radius-sm);
     color: var(--text);
     text-align: left;

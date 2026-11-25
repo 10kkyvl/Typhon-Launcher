@@ -124,8 +124,8 @@
   .row.compact {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.35rem;
-    padding: 0.8rem 0;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
   }
 
   .compact .playing,
@@ -138,7 +138,7 @@
   .compact .playing {
     display: flex;
     align-items: baseline;
-    gap: 0.35rem;
+    gap: var(--space-1);
   }
 
   .playing-label {
@@ -150,7 +150,7 @@
     grid-template-columns: minmax(0, 30rem) minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--space-4);
-    padding: 0.8rem;
+    padding: var(--space-2);
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
@@ -184,7 +184,7 @@
   .presence {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: var(--space-2);
     min-width: 0;
   }
 
@@ -202,7 +202,7 @@
   .presence .playing {
     display: flex;
     align-items: baseline;
-    gap: 0.35rem;
+    gap: var(--space-1);
   }
 
   .offline .presence .meta {
@@ -247,7 +247,7 @@
 
   .grid-actions {
     justify-content: space-between;
-    margin: 0 -0.6rem -0.4rem;
+    margin: 0 calc(var(--space-2) * -1) calc(var(--space-1) * -1);
   }
 
   .card-row {
@@ -285,7 +285,7 @@
   .names {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: 0;
     min-width: 0;
   }
 

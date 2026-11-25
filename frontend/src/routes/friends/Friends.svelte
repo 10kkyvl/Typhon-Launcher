@@ -7,6 +7,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
@@ -46,6 +47,8 @@
   let codeOpen = $state(false);
   const uid = $props.id();
   const codeId = `${uid}-code`;
+  const incomingHeading = `${uid}-incoming`;
+  const outgoingHeading = `${uid}-outgoing`;
   let consentOpen = $state(false);
   let blocked = $state<UserCard[]>([]);
   let blockedLoaded = $state(false);
@@ -332,12 +335,8 @@
         <div class="content" bind:this={content}>
           {#if presenceTabs.has(tab)}
             {#if page.incoming.length > 0}
-              <section class="incoming" data-friends-section="incoming" aria-label={msg('social.friendsIncomingHeading')}>
-                <h4 class="eyebrow">
-                  <span class="eyebrow-dot"></span>
-                  {msg('social.friendsIncomingHeading')}
-                  <span class="eyebrow-count">{page.incoming.length}</span>
-                </h4>
+              <section class="incoming" data-friends-section="incoming" aria-labelledby={incomingHeading}>
+                <SectionHeader id={incomingHeading} title={msg('social.friendsIncomingHeading')} count={page.incoming.length} />
                 {@render incomingCards()}
               </section>
             {/if}
@@ -359,19 +358,15 @@
             <EmptyState level={2} title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
           {:else}
             {#if page.incoming.length > 0}
-              <section data-friends-section="incoming" aria-label={msg('social.friendsIncomingHeading')}>
-                <h4 class="eyebrow">
-                  <span class="eyebrow-dot"></span>
-                  {msg('social.friendsIncomingHeading')}
-                  <span class="eyebrow-count">{page.incoming.length}</span>
-                </h4>
+              <section class="group" data-friends-section="incoming" aria-labelledby={incomingHeading}>
+                <SectionHeader id={incomingHeading} title={msg('social.friendsIncomingHeading')} count={page.incoming.length} />
                 {@render incomingCards()}
               </section>
             {/if}
 
             {#if page.outgoing.length > 0}
-              <section data-friends-section="outgoing" aria-label={msg('social.friendsSentHeading')}>
-                <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
+              <section class="group" data-friends-section="outgoing" aria-labelledby={outgoingHeading}>
+                <SectionHeader id={outgoingHeading} title={msg('social.friendsSentHeading')} count={page.outgoing.length} />
                 <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
                   {#snippet actions(request)}
                     <Button
@@ -393,7 +388,7 @@
 
       {#if tab === 'requests'}
         <div class="safety">
-          <Notice announce={false} title={msg('social.friendsSafetyTitle')} level={4}>
+          <Notice announce={false} title={msg('social.friendsSafetyTitle')} level={2}>
             {#snippet icon()}
               <ShieldCheck size="1.6rem" strokeWidth={1.8} />
             {/snippet}
@@ -474,42 +469,17 @@
     padding: var(--space-10) 0;
   }
 
+  /* The requests waiting for an answer, over the list: an accent plate the kit's Card has no tone for. */
   .incoming {
     margin-top: var(--space-5);
-    padding: 0 var(--space-4) var(--space-4);
+    padding: var(--space-4);
     border: 1px solid var(--accent-ring);
     border-radius: var(--radius-lg);
     background: var(--accent-subtle);
   }
 
-  .incoming .eyebrow {
-    margin-top: var(--space-4);
-    color: var(--accent-text);
-  }
-
-  .eyebrow-dot {
-    width: 0.8rem;
-    height: 0.8rem;
-    border-radius: 50%;
-    background: var(--accent-bright);
-  }
-
-  .eyebrow-count {
-    font-variant-numeric: tabular-nums;
-    color: var(--text-2);
-  }
-
-  .eyebrow {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    margin: var(--space-6) 0 var(--space-3);
-    padding: 0 0.2rem;
-    font-size: 1.2rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-3);
+  .group {
+    margin-top: var(--space-6);
   }
 
   .safety {

@@ -207,7 +207,7 @@
   .info {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -223,14 +223,14 @@
   }
 
   .bio {
-    margin-top: 0.4rem;
+    margin-top: var(--space-1);
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);
   }
 
   .mutual {
-    margin-top: 0.4rem;
+    margin-top: var(--space-1);
     font-size: var(--font-xs);
     color: var(--text-3);
   }
