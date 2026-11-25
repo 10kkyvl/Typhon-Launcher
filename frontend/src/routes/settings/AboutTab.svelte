@@ -7,6 +7,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import RollbackAction from '../../lib/components/RollbackAction.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import StableOffer from '../../lib/components/StableOffer.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import { msg } from '../../lib/i18n';
@@ -27,12 +28,43 @@
 
   const logsProgressPercent = $derived(page.logsProgress ? uploadPercent(page.logsProgress) : 0);
   const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(page.appInfo?.channel));
+  const missing = $derived(msg('settings.aboutValueMissing'));
+
+  const buildLine = $derived.by(() => {
+    const version = msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: page.appInfo?.version ?? missing });
+    const parts = { version, platform: page.appInfo?.platform ?? '', arch: page.appInfo?.arch ?? '' };
+    return msg(page.appInfo?.devMock ? 'settings.aboutBuildLineDevmock' : 'settings.aboutBuildLine', parts);
+  });
 
   function cpuLine(info: SystemInfo): string {
+    const cpu = info.cpuUnknown ? msg('settings.aboutUnknown') : info.cpu;
     const threads = msg('settings.aboutCpuThreads', { cores: info.cores });
-    const cores = info.physicalCoresUnknown ? '' : `${msg('settings.aboutCpuCores', { cores: info.physicalCores })} · `;
-    return `${info.cpuUnknown ? msg('settings.aboutUnknown') : info.cpu} · ${cores}${threads}`;
+    if (info.physicalCoresUnknown) return msg('settings.aboutCpuLineNoCores', { cpu, threads });
+    return msg('settings.aboutCpuLine', { cpu, cores: msg('settings.aboutCpuCores', { cores: info.physicalCores }), threads });
   }
+
+  const checkHint = $derived.by(() => {
+    if ($selfUpdateChecking) return msg('settings.aboutCheckUpdatesChecking');
+    const installed = msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || page.appInfo?.version || missing });
+    if (!$selfUpdateStatus.checkedAt) return installed;
+    return msg('settings.aboutInstalledCheckedAt', { installed, checked: msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) }) });
+  });
+
+  const logsSaveHint = $derived(
+    page.logsBundle
+      ? msg('settings.aboutLogsBundleLine', { name: page.logsBundle.name, size: bytesLabel(page.logsBundle.sizeBytes), hint: msg('settings.aboutLogsAttachHint') })
+      : msg('settings.aboutLogsSaveHint'),
+  );
+
+  // Where the send has got to, under its row: the row's hint keeps saying where the file goes.
+  const logsStageText = $derived.by(() => {
+    if (page.logsStage === 'preparing') return msg('settings.aboutLogsPreparingEllipsis');
+    if (page.logsStage === 'sending' && page.logsProgress) return msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent });
+    if (page.logsStage === 'sending') return msg('settings.aboutLogsSendingEllipsis');
+    if (page.logsStage === 'waiting') return msg('settings.aboutLogsWaitingEllipsis');
+    if (page.logsSendResult) return msg('settings.aboutLogsSentStatus');
+    return '';
+  });
 </script>
 
 <div class="settings-grid">
@@ -41,212 +73,133 @@
       <div class="about-logo">
         <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
         <div>
+          <!-- The product's name, as every screen writes it: not translated. -->
           <h3>Typhon Launcher</h3>
-          <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: page.appInfo?.version ?? '—' })} · {page.appInfo?.platform ?? ''}/{page.appInfo?.arch ?? ''}{page.appInfo?.devMock ? ' · devmock' : ''}</span>
+          <span class="build">{buildLine}</span>
         </div>
       </div>
-      <div class="rows">
-        {#if page.appInfo?.portable}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
-              <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: page.appInfo.dataDir })}</span>
-            </div>
-          </div>
-        {/if}
-        {#if page.systemInfo}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-              <span class="row-sub">{page.systemInfo.osUnknown ? msg('settings.aboutUnknown') : page.systemInfo.os}</span>
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-              <span class="row-sub">{cpuLine(page.systemInfo)}</span>
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-              <span class="row-sub">{page.systemInfo.ramBytes > 0 ? bytesLabel(page.systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
-            </div>
-          </div>
-        {:else if page.systemFailed}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-              <span class="row-sub">{msg('settings.aboutSystemFailed')}</span>
-            </div>
-          </div>
-        {/if}
-        {#if page.wineStatus?.required}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
-              <span class="row-sub">
-                {#if page.wineStatus.installed}
-                  CrossOver {page.wineStatus.version}
-                {:else}
-                  {msg('settings.aboutRuntimeMissing')}
-                {/if}
-              </span>
-            </div>
-          </div>
-        {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
-            <span class="row-sub">
-              {#if $selfUpdateChecking}
-                {msg('settings.aboutCheckUpdatesChecking')}
-              {:else}
-                {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || page.appInfo?.version || '—' })}
-                {#if $selfUpdateStatus.checkedAt}
-                  · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
-                {/if}
-              {/if}
-            </span>
-          </div>
-          <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
+      {#if page.appInfo?.portable}
+        <SettingsRow label={msg('settings.aboutPortableLabel')} hint={msg('settings.aboutPortableDataDir', { path: page.appInfo.dataDir })} />
+      {/if}
+      {#if page.systemInfo}
+        <SettingsRow
+          label={msg('settings.aboutSystemLabel')}
+          hint={page.systemInfo.osUnknown ? msg('settings.aboutUnknown') : page.systemInfo.os}
+        />
+        <SettingsRow label={msg('settings.aboutCpuLabel')} hint={cpuLine(page.systemInfo)} />
+        <SettingsRow
+          label={msg('settings.aboutMemoryLabel')}
+          hint={page.systemInfo.ramBytes > 0 ? bytesLabel(page.systemInfo.ramBytes) : msg('settings.aboutUnknown')}
+        />
+      {:else if page.systemFailed}
+        <SettingsRow label={msg('settings.aboutSystemLabel')} hint={msg('settings.aboutSystemFailed')} />
+      {/if}
+      {#if page.wineStatus?.required}
+        <SettingsRow
+          label={msg('settings.aboutRuntimeLabel')}
+          hint={page.wineStatus.installed
+            ? msg('settings.aboutRuntimeCrossOver', { version: page.wineStatus.version })
+            : msg('settings.aboutRuntimeMissing')}
+        />
+      {/if}
+      <SettingsRow label={msg('settings.aboutCheckUpdatesLabel')} hint={checkHint}>
+        {#snippet children({ hintId })}
+          <Button size="sm" aria-describedby={hintId} disabled={$selfUpdateChecking} onclick={requestCheck}>
             <ListChecks size="1.5rem" strokeWidth={1.8} />
             {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
           </Button>
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
-            <span class="row-sub">
-              {#if $releaseNotesHistory.length > 0}
-                {msg('settings.aboutHistoryHasNotes')}
-              {:else}
-                {msg('settings.aboutHistoryEmpty')}
-              {/if}
-            </span>
-          </div>
-          <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (page.historyOpen = true)}>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow
+        label={msg('settings.aboutHistoryLabel')}
+        hint={$releaseNotesHistory.length > 0 ? msg('settings.aboutHistoryHasNotes') : msg('settings.aboutHistoryEmpty')}
+      >
+        {#snippet children({ hintId })}
+          <Button size="sm" aria-describedby={hintId} disabled={$releaseNotesHistory.length === 0} onclick={() => (page.historyOpen = true)}>
             <ScrollText size="1.5rem" strokeWidth={1.8} />
             {msg('settings.aboutHistoryButtonLabel')}
           </Button>
-        </div>
-        {#if rollbackShown($rollbackInfo)}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutRollbackLabel')}</span>
-              <span class="row-sub">
-                {#if $rollbackInfo.available}
-                  {msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version })}
-                {:else}
-                  {rollbackReason($rollbackInfo)}
-                {/if}
-              </span>
-            </div>
+        {/snippet}
+      </SettingsRow>
+      {#if rollbackShown($rollbackInfo)}
+        <SettingsRow
+          label={msg('settings.aboutRollbackLabel')}
+          hint={$rollbackInfo.available ? msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version }) : rollbackReason($rollbackInfo)}
+        >
+          {#snippet children()}
             <RollbackAction />
-          </div>
-        {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
-            <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
-          </div>
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('discord.communityLabel')}</span>
-            <span class="row-sub">{msg('discord.communitySub')}</span>
-          </div>
-          <DiscordJoinButton />
-        </div>
-        <UpdateBanner />
-        <StableOffer />
-      </div>
+          {/snippet}
+        </SettingsRow>
+      {/if}
+      <SettingsRow label={msg('settings.aboutLicenseLabel')} hint={msg('settings.aboutLicenseText')} />
+      <SettingsRow label={msg('discord.communityLabel')} hint={msg('discord.communitySub')}>
+        {#snippet children({ hintId })}
+          <DiscordJoinButton describedby={hintId} />
+        {/snippet}
+      </SettingsRow>
+      <UpdateBanner />
+      <StableOffer />
     </Card>
-
   </div>
   <div class="settings-column">
     <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
-            <span class="row-sub">
-              {#if page.logsBundle}
-                {page.logsBundle.name} · {bytesLabel(page.logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
-              {:else}
-                {msg('settings.aboutLogsSaveHint')}
-              {/if}
-            </span>
-          </div>
-          <Button size="sm" disabled={page.logsSaving} onclick={page.saveLogs}>
+      <SettingsRow label={msg('settings.aboutLogsLabel')} hint={logsSaveHint}>
+        {#snippet children({ hintId })}
+          <Button size="sm" aria-describedby={hintId} disabled={page.logsSaving} onclick={page.saveLogs}>
             <Download size="1.5rem" strokeWidth={1.8} />
             {page.logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
           </Button>
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
-            <span class="row-sub">
-              {#if page.logsStage === 'preparing'}
-                {msg('settings.aboutLogsPreparingEllipsis')}
-              {:else if page.logsStage === 'sending' && page.logsProgress}
-                {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
-              {:else if page.logsStage === 'sending'}
-                {msg('settings.aboutLogsSendingEllipsis')}
-              {:else if page.logsStage === 'waiting'}
-                {msg('settings.aboutLogsWaitingEllipsis')}
-              {:else if page.logsSendResult}
-                {msg('settings.aboutLogsSentStatus')}
-              {:else}
-                {msg('settings.aboutLogsSendConfirmNote')}
-              {/if}
-            </span>
-            {#if page.logsSendFailure}
-              <div class="message">
-                <Notice tone="danger" compact title={page.logsSendFailure}>{msg('settings.aboutLogsSendFailedHint')}</Notice>
-              </div>
-            {/if}
-            {#if page.logsSending}
-              <div class="logs-upload-progress">
-                <ProgressBar
-                  value={logsProgressPercent}
-                  indeterminate={page.logsStage !== 'sending' || !page.logsProgress}
-                  height={5}
-                  label={msg('settings.aboutLogsLabel')}
-                />
-              </div>
-            {/if}
-          </div>
-          <Button size="sm" disabled={page.logsSending} onclick={page.openSendLogsConfirm}>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.aboutLogsSendButton')} hint={msg('settings.aboutLogsSendConfirmNote')}>
+        {#snippet children({ hintId })}
+          <Button size="sm" aria-describedby={hintId} disabled={page.logsSending} onclick={page.openSendLogsConfirm}>
             <Send size="1.5rem" strokeWidth={1.8} />
             {page.logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
           </Button>
-        </div>
-        {#if page.logsSendResult}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
-              <span class="row-sub logs-send-id">{page.logsSendResult.id}</span>
+        {/snippet}
+        {#snippet below()}
+          {#if logsStageText}<p class="stage">{logsStageText}</p>{/if}
+          {#if page.logsSendFailure}
+            <div class="message">
+              <Notice tone="danger" compact title={page.logsSendFailure}>{msg('settings.aboutLogsSendFailedHint')}</Notice>
             </div>
-            <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={page.copySendLogsId}>
+          {/if}
+          {#if page.logsSending}
+            <div class="logs-upload-progress">
+              <ProgressBar
+                value={logsProgressPercent}
+                indeterminate={page.logsStage !== 'sending' || !page.logsProgress}
+                height={5}
+                label={msg('settings.aboutLogsLabel')}
+              />
+            </div>
+          {/if}
+        {/snippet}
+      </SettingsRow>
+      {#if page.logsSendResult}
+        {@const result = page.logsSendResult}
+        <SettingsRow label={msg('settings.aboutLogsSendResultLabel')} hint={result.id}>
+          {#snippet children({ hintId })}
+            <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" aria-describedby={hintId} onclick={page.copySendLogsId}>
               <Copy size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-          </div>
-          {#if page.logsSendResult.dropped.length > 0}
-            <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: page.logsSendResult.dropped.join(', ') })}</p>
-          {/if}
-        {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('tickets.settingsLabel')}</span>
-            <span class="row-sub">{msg('tickets.settingsHint')}</span>
-          </div>
-          <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
+          {/snippet}
+          {#snippet below()}
+            {#if result.dropped.length > 0}
+              <p class="stage">{msg('settings.aboutLogsSendDroppedNote', { files: result.dropped.join(', ') })}</p>
+            {/if}
+          {/snippet}
+        </SettingsRow>
+      {/if}
+      <SettingsRow label={msg('tickets.settingsLabel')} hint={msg('tickets.settingsHint')}>
+        {#snippet children({ hintId })}
+          <Button size="sm" aria-describedby={hintId} onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
             <LifeBuoy size="1.5rem" strokeWidth={1.8} />
             {msg('tickets.writeSupport')}
           </Button>
-        </div>
-      </div>
+        {/snippet}
+      </SettingsRow>
     </Card>
 
     <Card title={msg('settings.aboutLegalCardTitle')}>
@@ -255,68 +208,33 @@
       {:else if page.legalState === 'unavailable'}
         <Notice tone="info" compact announce={false}>{msg('settings.aboutLegalUnavailable')}</Notice>
       {:else}
-        <div class="rows">
-          {#each page.legalDocs as meta (meta.id)}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{meta.title}</span>
-              </div>
-              <Button size="sm" onclick={() => page.openLegalDoc(meta)}>{msg('common.open')}</Button>
-            </div>
-          {/each}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
-              <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
-            </div>
-            <Button size="sm" onclick={() => (page.sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
-          </div>
-        </div>
+        {#each page.legalDocs as meta (meta.id)}
+          <SettingsRow label={meta.title}>
+            {#snippet children()}
+              <Button size="sm" aria-label={msg('settings.aboutLegalOpenNamed', { title: meta.title })} onclick={() => page.openLegalDoc(meta)}>
+                {msg('common.open')}
+              </Button>
+            {/snippet}
+          </SettingsRow>
+        {/each}
+        <SettingsRow label={msg('settings.aboutSourcesNoticeLabel')} hint={msg('settings.aboutSourcesNoticeSub')}>
+          {#snippet children({ hintId })}
+            <Button
+              size="sm"
+              aria-label={msg('settings.aboutLegalOpenNamed', { title: msg('settings.aboutSourcesNoticeLabel') })}
+              aria-describedby={hintId}
+              onclick={() => (page.sourcesNoticeReviewOpen = true)}
+            >
+              {msg('common.open')}
+            </Button>
+          {/snippet}
+        </SettingsRow>
       {/if}
     </Card>
   </div>
 </div>
 
 <style>
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-  }
-
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .logs-upload-progress {
-    width: min(28rem, 100%);
-    margin-top: var(--space-2);
-  }
-
   .about-logo {
     display: flex;
     align-items: center;
@@ -326,6 +244,22 @@
 
   .about-logo h3 {
     margin-bottom: 2px;
+  }
+
+  .build,
+  .stage {
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--text-3);
+  }
+
+  .stage {
+    margin: 0;
+  }
+
+  .logs-upload-progress {
+    width: min(28rem, 100%);
+    margin-top: var(--space-2);
   }
 
   .message {

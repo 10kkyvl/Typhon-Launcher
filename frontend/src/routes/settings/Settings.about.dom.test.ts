@@ -97,8 +97,12 @@ describe('Settings: the about tab in the app', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(msg('settings.aboutLogsSendFailedHint'));
     expect(alert.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
-    const row = screen.getAllByText(msg('settings.aboutLogsSendButton'))[0].closest('.row') as HTMLElement;
-    expect(row.contains(alert)).toBe(true);
+    // Its row: the nearest block that holds the send button too, and not the save button above it.
+    const send = screen.getByRole('button', { name: msg('settings.aboutLogsSendButton') });
+    let row: HTMLElement | null = alert.parentElement;
+    while (row && !row.contains(send)) row = row.parentElement;
+    expect(row).not.toBeNull();
+    expect(row?.contains(screen.getByRole('button', { name: msg('settings.aboutLogsDownloadButton') }))).toBe(false);
   });
 
   it('reports a legal list that cannot be loaded as an error that is announced', async () => {

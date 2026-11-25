@@ -39,7 +39,8 @@ describe('Settings send-logs flow', () => {
   });
 
   it('shows the short id from a successful send', () => {
-    expect(about).toContain('page.logsSendResult.id');
+    expect(about).toContain('{@const result = page.logsSendResult}');
+    expect(about).toContain('hint={result.id}');
     expect(flow).toContain('logsSendResult = result');
   });
 
@@ -54,6 +55,6 @@ describe('Settings send-logs flow', () => {
 
   it('warns about dropped rotations when the upload had to trim the bundle', () => {
     expect(about).toContain("msg('settings.aboutLogsSendDroppedNote'");
-    expect(about).toContain('page.logsSendResult.dropped');
+    expect(about).toContain('result.dropped');
   });
 });

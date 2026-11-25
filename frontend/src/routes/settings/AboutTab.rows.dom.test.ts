@@ -65,7 +65,9 @@ import { navigate } from '../../lib/stores/router';
 import { releaseNotes, rollbackInfo, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
 import { toasts } from '../../lib/stores/toasts';
 import { user } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import { bytesLabel } from '../../lib/utils/format';
+import about from './AboutTab.svelte?raw';
 import Settings from './Settings.svelte';
 
 const APP: AppInfo = { version: '1.4.2', platform: 'windows', arch: 'amd64', devMock: false, portable: false, dataDir: '' };
@@ -470,5 +472,72 @@ describe('the about tab: support and the legal documents', () => {
     const opens = screen.getAllByRole('button', { name: new RegExp(msg('common.open')) });
     await user().click(opens[opens.length - 1]);
     expect(await screen.findByRole('dialog', { name: msg('modals.sourcesNoticeReviewTitle') })).toBeTruthy();
+  });
+});
+
+// Each control is named by its own words and described by its row's hint, the way the other tabs'
+// rows do it: a screen reader hears what the button does and the row's sentence about it.
+describe('the about tab: each control described by its row', () => {
+  it('describes the update, history, logs, support and community buttons by their rows', async () => {
+    selfUpdateStatus.set({ state: 'idle', currentVersion: '1.4.2' });
+    open();
+    await screen.findByText('Terms of use');
+    expect(description(button(msg('settings.aboutCheckButtonLabel')))).toBe(msg('settings.aboutInstalledVersion', { version: '1.4.2' }));
+    expect(description(button(msg('settings.aboutHistoryButtonLabel')))).toBe(msg('settings.aboutHistoryEmpty'));
+    expect(description(button(msg('settings.aboutLogsDownloadButton')))).toBe(msg('settings.aboutLogsSaveHint'));
+    expect(description(button(msg('settings.aboutLogsSendButton')))).toBe(msg('settings.aboutLogsSendConfirmNote'));
+    expect(description(button(msg('tickets.writeSupport')))).toBe(msg('tickets.settingsHint'));
+    expect(description(button(msg('discord.joinButton')))).toBe(msg('discord.communitySub'));
+  });
+
+  it('names each legal opener by its document, and describes the sources notice opener by its row', async () => {
+    open();
+    await screen.findByText('Terms of use');
+    for (const title of ['Terms of use', 'Privacy policy']) {
+      const opener = button(msg('settings.aboutLegalOpenNamed', { title }));
+      expect(opener.textContent?.trim()).toBe(msg('common.open'));
+    }
+    const notice = button(msg('settings.aboutLegalOpenNamed', { title: msg('settings.aboutSourcesNoticeLabel') }));
+    expect(description(notice)).toBe(msg('settings.aboutSourcesNoticeSub'));
+  });
+
+  it('describes the copy button by the archive id it copies', async () => {
+    vi.mocked(sendLogs).mockResolvedValueOnce({ id: 'AB12CD', dropped: [] });
+    open();
+    await confirmSend();
+    emit({ state: 'success' });
+    expect(description(await screen.findByRole('button', { name: msg('settings.aboutLogsSendIdCopyLabel') }))).toBe('AB12CD');
+  });
+
+  it('keeps the send stage, the failure and the progress under the send row, its hint the same', async () => {
+    vi.mocked(sendLogs).mockRejectedValueOnce(new Error('typhon:diagnostics.log_upload_network: dial tcp'));
+    open();
+    await confirmSend();
+    const alert = await screen.findByRole('alert');
+    const send = button(msg('settings.aboutLogsSendButton'));
+    expect(description(send)).toBe(msg('settings.aboutLogsSendConfirmNote'));
+    // The row holds the send button and its failure, and not the save button of the row above.
+    let row: HTMLElement | null = alert.parentElement;
+    while (row && !row.contains(send)) row = row.parentElement;
+    expect(row?.contains(button(msg('settings.aboutLogsDownloadButton')))).toBe(false);
+  });
+});
+
+// A source tripwire: the about tab builds no sentence in its markup and draws every row with the
+// shared settings row.
+describe('the about tab: markup', () => {
+  const markup = about.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '');
+  // What the markup writes itself: its catalog keys and other quoted strings left out.
+  const written = markup.replace(/<!--[\s\S]*?-->/g, '').replace(/'[^']*'/g, "''");
+  const script = /<script[^>]*>([\s\S]*?)<\/script>/.exec(about)?.[1] ?? '';
+
+  it('glues no words together: separators, dashes and product words come from the catalog', () => {
+    expect(written).not.toMatch(/·|—|CrossOver|devmock/);
+    expect(script).not.toMatch(/['`][^'`]*(·|—)[^'`]*['`]/);
+  });
+
+  it('has no local row of its own', () => {
+    expect(about).not.toMatch(/class="rows?\b|row-text|row-label|row-sub/);
+    expect((markup.match(/<SettingsRow\b/g) ?? []).length).toBeGreaterThanOrEqual(14);
   });
 });

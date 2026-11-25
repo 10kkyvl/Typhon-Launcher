@@ -9,10 +9,13 @@
     label = msg('discord.joinButton'),
     variant = 'secondary',
     size = 'sm',
+    describedby,
   }: {
     label?: string;
     variant?: 'primary' | 'secondary' | 'ghost';
     size?: 'md' | 'sm' | 'lg';
+    /** Id of the words that say what joining is for (a settings row's hint). */
+    describedby?: string;
   } = $props();
 
   async function open() {
@@ -25,7 +28,7 @@
   }
 </script>
 
-<Button {variant} {size} onclick={open}>
+<Button {variant} {size} aria-describedby={describedby} onclick={open}>
   <MessagesSquare size="1.5rem" strokeWidth={1.8} />
   {label}
 </Button>
