@@ -1229,24 +1229,32 @@ func main() {
 			launches.Receive(launchFromURL(event.Context().URL()))
 		})
 	}
+	handleLaunch := func(args []string) {
+		handleSecondLaunch(args, outsidePlayer, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
+	}
+	// A launch that reaches this launcher while it hands itself over is set
+	// aside: the successor does not repeat it. If the hand-over fails, the last
+	// one is acted on here after all.
+	selfupdateService.SetLaunchReplay(func(args []string) { runRecovered(handleLaunch, args) })
 	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		launches.Ready(func(args []string) {
-			if selfupdateService.HandoffInProgress() {
-				// The successor is taking over; a launch that reached this
-				// launcher in these seconds is not repeated there, so the
-				// window it would open is the one about to close.
-				slog.Info("second launch ignored: the launcher is handing itself over", "args", argsForLog(args))
+			if selfupdateService.HoldLaunch(args) {
+				slog.Info("second launch held: the launcher is handing itself over", "args", argsForLog(args))
 				return
 			}
-			handleSecondLaunch(args, outsidePlayer, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
+			handleLaunch(args)
 		})
 	})
 
 	if handoffMode {
 		handoffCtx, stopHandoff := context.WithCancel(context.Background())
 		var takenOver instance.Listener
+		handoffDone := make(chan struct{})
 		defer func() {
 			stopHandoff()
+			// The take-over goroutine sets takenOver; it returns once the
+			// context is cancelled, so the listener is read only after it.
+			<-handoffDone
 			if takenOver != nil {
 				if err := takenOver.Close(); err != nil {
 					slog.Warn("stop the second launch receiver", "component", "app", "error", err)
@@ -1254,6 +1262,7 @@ func main() {
 			}
 		}()
 		go func() {
+			defer close(handoffDone)
 			err := selfupdateService.CompleteHandoff(handoffCtx, func() error {
 				l, err := instance.Takeover(handoffCtx, instanceID, launches.Receive)
 				if err != nil {
