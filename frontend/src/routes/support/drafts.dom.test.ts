@@ -265,6 +265,33 @@ describe('the kept drafts themselves', () => {
     expect(keptReply(8)).toBe('For eight.');
   });
 
+  // Counted through the store's own subscribe: a write that subscribed again would leave one more
+  // live subscription for every key the player presses.
+  it('watch the account once however often the player types, and stop when nothing is kept', () => {
+    const real = currentUser.subscribe;
+    let live = 0;
+    const spy = vi.spyOn(currentUser, 'subscribe').mockImplementation((run, invalidate) => {
+      live += 1;
+      const stop = real(run, invalidate);
+      return () => {
+        live -= 1;
+        stop();
+      };
+    });
+    try {
+      for (let i = 1; i <= 5; i++) {
+        keepReply(7, `Text ${i}`);
+        keepRequest({ ...DRAFT, body: `Text ${i}` }, form);
+      }
+      expect(live).toBe(1);
+      forgetReply(7);
+      forgetRequest(form);
+      expect(live).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('forget a request only for the form that wrote it', () => {
     keepRequest(DRAFT, form);
     forgetRequest({});
