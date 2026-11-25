@@ -5,6 +5,7 @@ import type { HashProgress, Offer, Share, Stats, Transfer } from '../../lib/serv
 import { hashing, lanLoaded, lanLoadError, lanStats, offers, peers, shares, transfers } from '../../lib/stores/lan';
 import { libraryGames } from '../../lib/stores/library';
 import { settings } from '../../lib/stores/settings';
+import { resetHistory } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 
 // Fixtures of the LAN screen's dom tests. Each test file mocks the services itself (vi.mock is hoisted
@@ -91,6 +92,7 @@ export function resetScreen(): void {
   libraryGames.set([]);
   settings.set(null);
   toasts.set([]);
+  resetHistory();
 }
 
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
