@@ -54,6 +54,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.savesDirTitle': 'Save folder',
   'ui.savesMultipleCandidates': 'Several matching folders were found. Choose the one for “{title}”.',
   'ui.pickAnotherFolder': 'Choose another',
+  'ui.savesChooseFirst': 'Choose a folder in the list first',
 
   'ui.imageZoom': 'Zoom',
   'ui.imageZoomIn': 'Zoom in',

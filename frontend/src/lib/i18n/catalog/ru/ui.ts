@@ -52,6 +52,7 @@ export const ui = {
   'ui.savesMultipleCandidates':
     'Подходящих папок нашлось несколько. Выберите ту, что относится к «{title}».',
   'ui.pickAnotherFolder': 'Указать другую',
+  'ui.savesChooseFirst': 'Сначала выберите папку в списке',
 
   'ui.imageZoom': 'Масштаб',
   'ui.imageZoomIn': 'Приблизить',
