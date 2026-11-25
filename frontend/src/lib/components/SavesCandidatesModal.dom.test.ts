@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { user } from '../testing/dom';
+import { description, tabbable } from '../testing/hints';
 import SavesCandidatesModal from './SavesCandidatesModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -57,9 +58,10 @@ describe('SavesCandidatesModal', () => {
   it('a folder is chosen, then used by Select, once', async () => {
     const { dialog, onpick, keys } = open();
     const select = within(dialog).getByRole('button', { name: msg('common.select') });
-    expect(select).toHaveProperty('disabled', true);
+    expect(select.getAttribute('aria-disabled')).toBe('true');
 
     await keys.click(within(dialog).getByRole('radio', { name: LONG }));
+    expect(select.hasAttribute('aria-disabled')).toBe(false);
     expect(onpick).not.toHaveBeenCalled();
     await keys.click(select);
 
@@ -94,7 +96,26 @@ describe('SavesCandidatesModal', () => {
 
     const dialog = screen.getByRole('dialog', { name: msg('ui.savesDirTitle') });
     expect(within(dialog).getAllByRole('radio').map((row) => row.getAttribute('aria-checked'))).toEqual(['false', 'false']);
-    expect(within(dialog).getByRole('button', { name: msg('common.select') })).toHaveProperty('disabled', true);
+    expect(within(dialog).getByRole('button', { name: msg('common.select') }).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('with no folder chosen, Select stays reachable, says why it is off and uses nothing', async () => {
+    const { dialog, onpick, keys } = open();
+    const select = within(dialog).getByRole('button', { name: msg('common.select') });
+
+    expect(select).toHaveProperty('disabled', false);
+    expect(tabbable(select)).toBe(true);
+    expect(description(select)).toBe(msg('ui.savesChooseFirst'));
+
+    select.focus();
+    await keys.keyboard('{Enter}');
+    await keys.keyboard(' ');
+    await keys.click(select);
+    expect(onpick).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(select);
+
+    await keys.click(within(dialog).getByRole('radio', { name: SHORT }));
+    expect(select.hasAttribute('aria-describedby')).toBe(false);
   });
 
   it('"Choose another" hands the choice to the folder picker', async () => {

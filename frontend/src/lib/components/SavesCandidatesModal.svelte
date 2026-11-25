@@ -45,7 +45,7 @@
   {#snippet footer()}
     <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button onclick={onbrowse}>{msg('ui.pickAnotherFolder')}</Button>
-    <Button variant="primary" disabled={!chosen} onclick={() => onpick(chosen)}>{msg('common.select')}</Button>
+    <Button variant="primary" disabled={!chosen} reason={chosen ? '' : msg('ui.savesChooseFirst')} onclick={() => onpick(chosen)}>{msg('common.select')}</Button>
   {/snippet}
 </Modal>
 
