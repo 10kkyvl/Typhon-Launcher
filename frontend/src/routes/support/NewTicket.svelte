@@ -241,6 +241,7 @@
           indeterminate={upload?.state !== 'sending' || !upload.totalBytes}
           height={5}
           label={msg('settings.aboutLogsLabel')}
+          valueText={stage}
         />
       </div>
     {/if}

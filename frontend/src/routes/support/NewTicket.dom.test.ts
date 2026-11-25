@@ -219,6 +219,64 @@ describe('NewTicket: a refused request says why by its code', () => {
   });
 });
 
+describe('NewTicket: attaching logs', () => {
+  it('names the upload\'s progress and says its value in words', async () => {
+    const sent = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValue(sent.promise);
+    const { user } = await filled({ initialTopic: 'launcher' });
+    await user.click(submit());
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalled());
+
+    // A stage of unknown length is said beside the bar: ProgressBar claims no value while indeterminate.
+    emitUpload({ state: 'preparing' });
+    const bar = await screen.findByRole('progressbar', { name: msg('settings.aboutLogsLabel') });
+    expect(bar.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByText(msg('settings.aboutLogsPreparingEllipsis'))).toBeTruthy();
+    emitUpload({ state: 'sending', sentBytes: 256, totalBytes: 1024 });
+    await vi.waitFor(() => expect(bar.getAttribute('aria-valuetext')).toBe(msg('settings.aboutLogsSendingProgress', { percent: 25 })));
+    sent.resolve(ticket(16, 'Cannot sign in'));
+    await vi.waitFor(() => expect(get(route).params).toEqual({ ticket: '16' }));
+  });
+
+  it.each([
+    ['diagnostics.log_upload_too_large', 'errLogs.uploadTooLarge'],
+    ['diagnostics.log_upload_network', 'errLogs.uploadNetwork'],
+    ['support.logs_unavailable', 'errSupport.logsUnavailable'],
+  ] as const)('a failed upload (%s) keeps the form and says why', async (code, key) => {
+    vi.mocked(createTicket).mockRejectedValue(new Error(`typhon:${code}`));
+    const { user } = await filled({ initialTopic: 'launcher' });
+    await user.click(submit());
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg(key)));
+    expect(bodyField().value).toBe('  The code never arrives.  ');
+    expect(logsSwitch().getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('cancelling the consent returns focus to Send when Send opened it', async () => {
+    const { user } = await filled({ initialTopic: 'launcher' });
+    submit().focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: msg('common.cancel') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(submit()));
+  });
+
+  it('cancelling the consent returns focus to the text when the send shortcut opened it', async () => {
+    const { user } = await filled({ initialTopic: 'launcher' });
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(bodyField()));
+    expect(createTicket).not.toHaveBeenCalled();
+  });
+});
+
 describe('NewTicket: a session gone', () => {
   it('says so in the form, keeps the draft and offers the way to sign in', async () => {
     authState.set('authenticated');

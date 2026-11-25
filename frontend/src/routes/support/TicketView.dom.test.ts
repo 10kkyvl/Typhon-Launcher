@@ -11,7 +11,7 @@ import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { description } from '../../lib/testing/hints';
-import { held, LIMITS, message, thread, ticket, words } from './supportTesting';
+import { emitUpload, held, LIMITS, message, thread, ticket, words } from './supportTesting';
 import TicketView from './TicketView.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -161,6 +161,30 @@ describe('TicketView: a reply', () => {
 
     await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledWith(7, 'Still closes.', true));
     await vi.waitFor(() => expect(screen.getByRole('switch', { name: msg('tickets.attachLogs') }).getAttribute('aria-checked')).toBe('false'));
+  });
+
+  it('names the upload of the logs and says its value in words, and the consent cancelled gives focus back to the box', async () => {
+    const sent = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValue(sent.promise);
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+    await user.click(screen.getByRole('switch', { name: msg('tickets.attachLogs') }));
+    await user.click(replyBox());
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await screen.findByRole('dialog', { name: msg('tickets.logsConfirmTitle') });
+    await user.keyboard('{Escape}');
+    await vi.waitFor(() => expect(document.activeElement).toBe(replyBox()));
+    expect(replyTicket).not.toHaveBeenCalled();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledWith(7, 'Still closes.', true));
+    emitUpload({ state: 'sending', sentBytes: 768, totalBytes: 1024 });
+    const bar = await screen.findByRole('progressbar', { name: msg('settings.aboutLogsLabel') });
+    expect(bar.getAttribute('aria-valuetext')).toBe(msg('settings.aboutLogsSendingProgress', { percent: 75 }));
+    sent.resolve(message(4, 'user', 'Still closes.', '2026-11-02T09:00:00Z'));
+    await vi.waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull());
   });
 
   it('says a resolved request reopens with a reply', async () => {
