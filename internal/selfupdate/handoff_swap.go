@@ -158,13 +158,15 @@ func undoParkedExe(j handoffJournal) error {
 	return errors.Join(errs...)
 }
 
-// undoSwap reverts the swap a journal describes, from disk alone.
+// undoSwap reverts an executable swap a journal describes, from disk alone.
+// A bundle swap is not: the journal cannot say which bundle is parked. Its own
+// undo knows (bundleUndo), and a start settles it (settleBundleJournal).
 func undoSwap(j handoffJournal) error {
 	if err := checkOwnedName(j); err != nil {
 		return err
 	}
 	if j.Method == methodBundle {
-		return undoBundleSwap(j)
+		return fmt.Errorf("selfupdate: a bundle swap is not undone from its journal alone")
 	}
 	return undoParkedExe(j)
 }

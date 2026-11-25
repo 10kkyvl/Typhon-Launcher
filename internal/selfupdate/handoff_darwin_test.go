@@ -43,9 +43,12 @@ func TestBundleHandoffSwapKeepsTheOldBundleParkedAndUndoes(t *testing.T) {
 		t.Fatalf("parent holds %d entries, want the bundle and the parked one", len(entries))
 	}
 
-	// Recovery works from the journal alone.
-	if err := undoSwap(j); err != nil {
-		t.Fatalf("undoSwap() error = %v", err)
+	// The journal alone cannot say which bundle is parked.
+	if err := undoSwap(j); err == nil {
+		t.Fatal("undoSwap() undid a bundle swap from its journal alone")
+	}
+	if err := undo(); err != nil {
+		t.Fatalf("undo() error = %v", err)
 	}
 	if got := readFileString(t, exe); got != "old build" {
 		t.Fatalf("after undo executable = %q, want the old build", got)
