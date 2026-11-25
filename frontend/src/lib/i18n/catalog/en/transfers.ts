@@ -263,4 +263,22 @@ export const transfers: Record<TransfersKey, Message> = {
   // 7-A auth
   'transfers.authShowPassword': 'Show password',
   // /7-A auth
+  // 7-L lan
+  'transfers.lanLoading': 'Loading the local network…',
+  'transfers.lanLoadFailed': 'Could not read the local network state',
+  'transfers.lanSharingOffTitle': 'Local network sharing is off',
+  'transfers.lanSharingOffText':
+    'While it is off, this computer sees no games nearby and shares none of its own. It is turned on in Settings, on the General tab.',
+  'transfers.lanOpenSettings': 'Open settings',
+  'transfers.lanHostHeading': 'PC {host}',
+  'transfers.lanDownloadFor': 'Download “{title}” from {host}',
+  'transfers.lanStopSharingFor': 'Stop sharing “{title}”',
+  'transfers.lanCancelFor': 'Cancel receiving “{title}”',
+  'transfers.lanTransferProgress': 'Received {done} of {total}, {percent}%',
+  'transfers.lanCancelTitle': 'Cancel receiving “{title}”?',
+  'transfers.lanCancelText': 'Receiving stops, and the {size} received so far will be deleted.',
+  'transfers.lanCancelConfirm': 'Cancel receiving',
+  'transfers.lanCancelBusy': 'Cancelling…',
+  'transfers.lanTransferFailedToast': 'Could not receive “{title}”: {error}',
+  // /7-L lan
 };

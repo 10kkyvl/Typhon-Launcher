@@ -273,6 +273,24 @@ export const transfers = {
   // 7-A auth
   'transfers.authShowPassword': 'Показать пароль',
   // /7-A auth
+  // 7-L lan
+  'transfers.lanLoading': 'Загружаем локальную сеть…',
+  'transfers.lanLoadFailed': 'Не удалось прочитать состояние локальной сети',
+  'transfers.lanSharingOffTitle': 'Раздача по локальной сети выключена',
+  'transfers.lanSharingOffText':
+    'Пока она выключена, этот компьютер не видит игр рядом и не раздаёт свои. Её включают в настройках, на вкладке «Общие».',
+  'transfers.lanOpenSettings': 'Открыть настройки',
+  'transfers.lanHostHeading': 'ПК {host}',
+  'transfers.lanDownloadFor': 'Скачать «{title}» с ПК {host}',
+  'transfers.lanStopSharingFor': 'Перестать раздавать «{title}»',
+  'transfers.lanCancelFor': 'Отменить получение «{title}»',
+  'transfers.lanTransferProgress': 'Получено {done} из {total}, {percent}%',
+  'transfers.lanCancelTitle': 'Отменить получение «{title}»?',
+  'transfers.lanCancelText': 'Получение остановится, а уже полученные {size} будут удалены.',
+  'transfers.lanCancelConfirm': 'Отменить получение',
+  'transfers.lanCancelBusy': 'Отменяем…',
+  'transfers.lanTransferFailedToast': 'Не удалось получить «{title}»: {error}',
+  // /7-L lan
 } as const;
 
 export type TransfersKey = keyof typeof transfers;
