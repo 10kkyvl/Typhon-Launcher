@@ -31,6 +31,9 @@ type scanner struct {
 	entries       map[string]entry
 	games         []library.Game
 	gameByID      map[string]library.Game
+	// history is the titles the library keeps of removed games, read once
+	// the first group of a game without a card needs one.
+	history map[string]string
 }
 
 func (sc *scanner) warn(area string, err error) {
@@ -298,6 +301,17 @@ func (sc *scanner) group(gameID string, count int, size int64, unknown bool) Gro
 	g := GroupUsage{GameID: gameID, Count: count, SizeBytes: size, SizeUnknown: unknown}
 	if game, ok := sc.gameByID[gameID]; ok {
 		g.Title, g.InLibrary = game.Title, true
+		return g
 	}
+	if sc.history == nil {
+		sc.history = map[string]string{}
+		for _, game := range sc.s.deps.Library.GetHistoryGames() {
+			if game.Title != "" {
+				sc.history[game.ID] = game.Title
+			}
+		}
+	}
+	g.Title = sc.history[gameID]
+	g.TitleUnknown = g.Title == ""
 	return g
 }

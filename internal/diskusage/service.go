@@ -18,6 +18,7 @@ import (
 
 type libraryPort interface {
 	GetGames() []library.Game
+	GetHistoryGames() []library.Game
 	IsRunning(id string) bool
 	UpdateMeasuredSize(id, installDir string, size int64, unknown bool) (bool, error)
 }

@@ -57,13 +57,17 @@ type Leftover struct {
 	ReasonCode  string `json:"reasonCode"`
 }
 
+// GroupUsage is a game's screenshots or save snapshots. Title comes from the
+// library card, or from the record the library keeps of a removed game; when
+// nothing knows the game, Title is empty and TitleUnknown says so.
 type GroupUsage struct {
-	GameID      string `json:"gameId"`
-	Title       string `json:"title"`
-	InLibrary   bool   `json:"inLibrary"`
-	Count       int    `json:"count"`
-	SizeBytes   int64  `json:"sizeBytes"`
-	SizeUnknown bool   `json:"sizeUnknown"`
+	GameID       string `json:"gameId"`
+	Title        string `json:"title"`
+	TitleUnknown bool   `json:"titleUnknown"`
+	InLibrary    bool   `json:"inLibrary"`
+	Count        int    `json:"count"`
+	SizeBytes    int64  `json:"sizeBytes"`
+	SizeUnknown  bool   `json:"sizeUnknown"`
 }
 
 type Totals struct {

@@ -23,17 +23,24 @@ import (
 )
 
 type fakeLibrary struct {
-	mu      sync.Mutex
-	games   []library.Game
-	running map[string]bool
-	updates map[string]int64
-	updErr  error
+	mu       sync.Mutex
+	games    []library.Game
+	archived []library.Game
+	running  map[string]bool
+	updates  map[string]int64
+	updErr   error
 }
 
 func (f *fakeLibrary) GetGames() []library.Game {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]library.Game(nil), f.games...)
+}
+
+func (f *fakeLibrary) GetHistoryGames() []library.Game {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append(append([]library.Game(nil), f.games...), f.archived...)
 }
 
 func (f *fakeLibrary) IsRunning(id string) bool {
