@@ -122,12 +122,49 @@ func DisableTransitions(w *application.WebviewWindow) error {
 
 // Reveal makes a prepared window visible without a system transition. focus
 // brings it to the front; pass it only when the outgoing window was active.
+// On macOS the application is not activated here: that waits for Settle, once
+// the outgoing launcher is gone.
 func Reveal(w *application.WebviewWindow, focus bool) error {
 	if err := reveal(w); err != nil {
 		return fmt.Errorf("windowhandoff: reveal: %w", err)
 	}
-	if focus {
+	if focus && focusOnReveal {
 		w.Focus()
+	}
+	return nil
+}
+
+// The platform calls of Settle and YieldForeground; tests replace them.
+var (
+	becomeRegular = becomeRegularApp
+	activate      = activateApp
+	yieldTo       = yieldForeground
+)
+
+// Settle makes the successor an ordinary application once the outgoing
+// launcher has exited: a regular app with its own Dock tile and menu bar and,
+// when focus is set (the outgoing window was the active one), the active app
+// with w as its key window. Without focus nothing is activated, so whatever
+// the user moved to keeps the focus.
+func Settle(w *application.WebviewWindow, focus bool) error {
+	if err := becomeRegular(); err != nil {
+		return fmt.Errorf("windowhandoff: become a regular app: %w", err)
+	}
+	if !focus {
+		return nil
+	}
+	if err := activate(w); err != nil {
+		return fmt.Errorf("windowhandoff: activate: %w", err)
+	}
+	return nil
+}
+
+// YieldForeground lets the successor process pid take the activation from
+// this one after it has exited (macOS cooperative activation); a no-op
+// elsewhere and on macOS before 14.
+func YieldForeground(pid int) error {
+	if err := yieldTo(pid); err != nil {
+		return fmt.Errorf("windowhandoff: yield the foreground to %d: %w", pid, err)
 	}
 	return nil
 }

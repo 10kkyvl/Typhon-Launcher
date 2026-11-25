@@ -120,6 +120,17 @@ func reveal(w *application.WebviewWindow) error {
 	})
 }
 
+// The successor takes the focus at the reveal, while the outgoing launcher
+// still holds the foreground right it granted (allowForeground); Windows has
+// no activation policy to settle afterwards.
+const focusOnReveal = true
+
+func becomeRegularApp() error { return nil }
+
+func activateApp(*application.WebviewWindow) error { return nil }
+
+func yieldForeground(int) error { return nil }
+
 // allowForeground lets process pid call SetForegroundWindow, so the successor
 // can take focus from the outgoing launcher when the user was in it.
 func allowForeground(pid int) error {

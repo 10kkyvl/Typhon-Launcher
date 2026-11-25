@@ -104,6 +104,8 @@ type Service struct {
 	handoffSpec       *HandoffSpec // set only in a successor launcher
 	handoffFinished   bool
 	handoffOldGone    bool // the old process exited; the held-back cleanup may run
+	handoffRevealed   bool // the successor's window is on screen
+	handoffSettled    bool // the successor has become an ordinary application
 	renderOnce        sync.Once
 	renderErr         error
 }

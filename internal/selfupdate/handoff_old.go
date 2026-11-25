@@ -36,6 +36,7 @@ var (
 	// window geometry and the exit.
 	startHandoff    = startHandoffProcess
 	allowForeground = windowhandoff.AllowForeground
+	yieldForeground = windowhandoff.YieldForeground
 	captureGeometry = windowhandoff.Capture
 	quitApplication = func() {
 		if a := application.Get(); a != nil {
@@ -309,6 +310,13 @@ func (s *Service) runHandoff(ctx context.Context, plan handoffPlan, phaseStart i
 		// The successor is up and the swap is complete; the successor settles
 		// the journal itself, so this only costs the "ready" stage.
 		slog.Warn("selfupdate: record that the successor is ready", "error", err)
+	}
+	if spec.Geometry.Focused {
+		// The successor activates itself once this process has exited; from
+		// macOS 14 that succeeds only when the active app yielded to it.
+		if err := yieldForeground(proc.Pid()); err != nil {
+			slog.Warn("selfupdate: let the successor take the activation", "error", err)
+		}
 	}
 	// Quit from its own goroutine: the shutdown waits for this one.
 	go quitApplication()

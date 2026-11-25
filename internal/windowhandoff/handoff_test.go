@@ -2,8 +2,11 @@ package windowhandoff
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {
@@ -152,5 +155,58 @@ func TestPreparerHandsBackWhyPreparingFailed(t *testing.T) {
 	prepared, err := p.Try()
 	if !prepared || !errors.Is(err, ErrNoGeometry) {
 		t.Fatalf("Try = %v, %v; want the attempt reported with ErrNoGeometry", prepared, err)
+	}
+}
+
+// stubNative records the platform calls of Settle and YieldForeground.
+func stubNative(t *testing.T, regularErr error) *[]string {
+	t.Helper()
+	var calls []string
+	prevRegular, prevActivate, prevYield := becomeRegular, activate, yieldTo
+	becomeRegular = func() error { calls = append(calls, "regular"); return regularErr }
+	activate = func(*application.WebviewWindow) error { calls = append(calls, "activate"); return nil }
+	yieldTo = func(pid int) error { calls = append(calls, fmt.Sprintf("yield %d", pid)); return nil }
+	t.Cleanup(func() { becomeRegular, activate, yieldTo = prevRegular, prevActivate, prevYield })
+	return &calls
+}
+
+func TestSettleMakesTheAppRegularBeforeItTakesTheFocus(t *testing.T) {
+	calls := stubNative(t, nil)
+	if err := Settle(&application.WebviewWindow{}, true); err != nil {
+		t.Fatalf("Settle(focus) = %v", err)
+	}
+	if want := []string{"regular", "activate"}; !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("calls = %v, want %v", *calls, want)
+	}
+}
+
+func TestSettleWithoutFocusLeavesTheActiveAppAlone(t *testing.T) {
+	calls := stubNative(t, nil)
+	if err := Settle(&application.WebviewWindow{}, false); err != nil {
+		t.Fatalf("Settle(no focus) = %v", err)
+	}
+	if want := []string{"regular"}; !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("calls = %v, want %v", *calls, want)
+	}
+}
+
+func TestSettleDoesNotActivateAnAppThatIsNotRegular(t *testing.T) {
+	refused := errors.New("refused")
+	calls := stubNative(t, refused)
+	if err := Settle(&application.WebviewWindow{}, true); !errors.Is(err, refused) {
+		t.Fatalf("Settle = %v, want the refusal", err)
+	}
+	if want := []string{"regular"}; !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("calls = %v, want %v", *calls, want)
+	}
+}
+
+func TestYieldForegroundNamesTheSuccessor(t *testing.T) {
+	calls := stubNative(t, nil)
+	if err := YieldForeground(4321); err != nil {
+		t.Fatalf("YieldForeground = %v", err)
+	}
+	if want := []string{"yield 4321"}; !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("calls = %v, want %v", *calls, want)
 	}
 }

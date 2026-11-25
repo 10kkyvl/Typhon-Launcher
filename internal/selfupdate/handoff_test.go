@@ -48,10 +48,14 @@ func exists(t *testing.T, path string) bool {
 
 func silenceSeams(t *testing.T) {
 	t.Helper()
-	prevAllow, prevQuit := allowForeground, quitApplication
+	prevAllow, prevYield, prevQuit, prevSettle := allowForeground, yieldForeground, quitApplication, settleWindow
 	allowForeground = func(int) error { return nil }
+	yieldForeground = func(int) error { return nil }
 	quitApplication = func() {}
-	t.Cleanup(func() { allowForeground, quitApplication = prevAllow, prevQuit })
+	settleWindow = func(*application.WebviewWindow, bool) error { return nil }
+	t.Cleanup(func() {
+		allowForeground, yieldForeground, quitApplication, settleWindow = prevAllow, prevYield, prevQuit, prevSettle
+	})
 }
 
 func TestHandoffSpecRoundTrip(t *testing.T) {

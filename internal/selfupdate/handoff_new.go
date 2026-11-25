@@ -19,8 +19,11 @@ import (
 // this one owns the installation.
 const eventHandoffDone = "launcher:handoff_done"
 
-// revealWindow is a seam for tests.
-var revealWindow = windowhandoff.Reveal
+// Seams for tests: the reveal and the step to an ordinary application.
+var (
+	revealWindow = windowhandoff.Reveal
+	settleWindow = windowhandoff.Settle
+)
 
 // handoffSettleTimeout bounds the wait for held-back services to start.
 const handoffSettleTimeout = 30 * time.Second
@@ -80,13 +83,38 @@ func (s *Service) reveal() error {
 	if err := storage.WriteAtomic(spec.ReadyPath, []byte(spec.Nonce)); err != nil {
 		return fmt.Errorf("selfupdate: tell the old launcher the window is up: %w", err)
 	}
+	s.mu.Lock()
+	s.handoffRevealed = true
+	s.mu.Unlock()
+	s.settleIfDue()
 	return nil
+}
+
+// settleIfDue makes the successor an ordinary application, once, when both its
+// window is on screen and the old launcher is gone, whichever comes last.
+// Before the reveal there is nothing to activate, and the launch-time
+// activation policy is still being applied by the window toolkit.
+func (s *Service) settleIfDue() {
+	s.mu.Lock()
+	due := s.handoffRevealed && s.handoffOldGone && !s.handoffSettled
+	if due {
+		s.handoffSettled = true
+	}
+	spec, window := s.handoffSpec, s.handoffWindow
+	s.mu.Unlock()
+	if !due || spec == nil || window == nil {
+		return
+	}
+	if err := settleWindow(window, spec.Geometry.Focused); err != nil {
+		slog.Warn("selfupdate: make the launcher an ordinary application after the hand-off", "error", err)
+	}
 }
 
 // CompleteHandoff runs in the successor once its window is up or coming. It
 // waits for the old process to exit, takes over the single-instance role
-// through takeover, lets the held-back services start, settles the journal
-// and removes the parked old launcher.
+// through takeover, lets the held-back services start, becomes an ordinary
+// application (settleIfDue), settles the journal and removes the parked old
+// launcher.
 //
 //wails:ignore
 func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) error {
@@ -105,6 +133,10 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 		return fmt.Errorf("selfupdate: take over the single instance: %w", err)
 	}
 	handoffgate.Open()
+	s.mu.Lock()
+	s.handoffOldGone = true
+	s.mu.Unlock()
+	s.settleIfDue()
 
 	s.finishHandoff(ctx)
 	// The held-back services start in their own goroutines; the update screen
@@ -124,9 +156,6 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 // finishHandoff settles the journal after the old process is gone. Failures
 // are logged: the next start sweeps again (RecoverHandoff).
 func (s *Service) finishHandoff(ctx context.Context) {
-	s.mu.Lock()
-	s.handoffOldGone = true
-	s.mu.Unlock()
 	s.settleAfterHandoff(ctx)
 
 	oldDir := ""
