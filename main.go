@@ -1003,6 +1003,10 @@ func main() {
 			// закрытие окна: иначе крестик убивает лаунчер вместе с
 			// загрузками, а иконка в строке меню возвращать уже нечего.
 			ApplicationShouldTerminateAfterLastWindowClosed: !current.MinimizeToTray,
+			// A successor runs beside the outgoing launcher as an accessory app (no
+			// second Dock tile, no activation at launch) until windowhandoff.Settle
+			// makes it a regular one.
+			ActivationPolicy: successorActivationPolicy(handoffMode),
 		},
 	})
 
@@ -1560,4 +1564,11 @@ func windowTitleFor(ver string) string {
 		return name + " [devmock]"
 	}
 	return name + qaTitleSuffix
+}
+
+func successorActivationPolicy(successor bool) application.ActivationPolicy {
+	if successor {
+		return application.ActivationPolicyAccessory
+	}
+	return application.ActivationPolicyRegular
 }
