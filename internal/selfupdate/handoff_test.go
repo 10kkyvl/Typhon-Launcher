@@ -522,7 +522,8 @@ type handoffRig struct {
 }
 
 // newHandoffRig wires a Service whose "successor" is behave(spec, proc). The
-// service is set up as BeginHandoff leaves it: applying and busy.
+// service is built as a finished download leaves it: ready and idle, with the
+// rig's verified artifact, in a portable install (no registry is touched).
 func newHandoffRig(t *testing.T, behave func(spec HandoffSpec, proc *fakeSuccessor)) *handoffRig {
 	t.Helper()
 	silenceSeams(t)
@@ -530,10 +531,11 @@ func newHandoffRig(t *testing.T, behave func(spec HandoffSpec, proc *fakeSuccess
 	r.plan = r.disk.plan(t, newBody, sha256Hex(t, []byte(newBody)))
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
+	art := r.plan.Art
 	r.svc = &Service{
 		dir: r.disk.cfg, store: mustStore(t, r.disk.cfg), currentVersion: "1.4.0", ctx: ctx, cancel: cancel,
-		status: Status{State: StateApplying, CurrentVersion: "1.4.0", AvailableVersion: "1.5.0"},
-		busy:   true,
+		status:    Status{State: StateReady, CurrentVersion: "1.4.0", AvailableVersion: "1.5.0"},
+		readyPath: r.plan.ArtifactPath, readyArtifact: &art, portable: true,
 	}
 
 	prevStart, prevQuit, prevTimeout := startHandoff, quitApplication, handoffReadyTimeout
@@ -571,22 +573,15 @@ func (r *handoffRig) waitQuit(t *testing.T) {
 	}
 }
 
-// readyForHandoff puts the rig's service where the update screen offers the
-// update, as a finished download leaves it: ready, idle, with the rig's
-// verified artifact, on a platform that hands over an executable. Call it
-// only while no hand-over of the rig runs.
+// readyForHandoff makes BeginHandoff see a platform that hands over an
+// executable at its own name. The rig's service is already ready; a failed
+// hand-over leaves it ready again.
 func (r *handoffRig) readyForHandoff(t *testing.T) {
 	t.Helper()
 	prevMethod, prevTarget := methodFor, targetFor
 	methodFor = func(Artifact, bool) handoffMethod { return methodExeFile }
 	targetFor = func(exe string, _ handoffMethod) (string, error) { return exe, nil }
 	t.Cleanup(func() { methodFor, targetFor = prevMethod, prevTarget })
-	art := r.plan.Art
-	r.svc.busy = false
-	r.svc.status.State = StateReady
-	r.svc.readyPath = r.plan.ArtifactPath
-	r.svc.readyArtifact = &art
-	r.svc.portable = true
 }
 
 func (r *handoffRig) assertRolledBack(t *testing.T) {
@@ -725,7 +720,8 @@ func TestHandoffRollsBackWhenTheSuccessorCannotStart(t *testing.T) {
 
 func TestBeginHandoffWithAWrongHashChangesNothing(t *testing.T) {
 	r := newHandoffRig(t, func(HandoffSpec, *fakeSuccessor) { t.Error("the successor started despite a hash mismatch") })
-	r.plan.Art.SHA256 = strings.Repeat("cd", 32)
+	// The download was altered in the cache after it was verified.
+	writeTestFile(t, r.plan.ArtifactPath, []byte(strings.Repeat("x", len(newBody))))
 	r.readyForHandoff(t)
 
 	err := r.svc.BeginHandoff(1)
