@@ -128,6 +128,18 @@ describe('обновление лаунчера в списке уведомле
     expect(items[0].text).toBe('Не удалось связаться с сервером обновлений. Проверьте интернет.');
   });
 
+  it('несработавший откат бесшовного обновления — словами кода, а не фразой ОС из ошибки', async () => {
+    const { selfUpdateStatus, notifications } = await load(makeStorage());
+    selfUpdateStatus.set(
+      status({ state: 'ready', availableVersion: '1.3.0', error: 'selfupdate: exited\nrename C:\\x: Access is denied.', errorCode: 'handoff_undo_failed' }) as never,
+    );
+
+    const items = get(notifications.notifications).filter((n) => n.id.startsWith('launcher-update'));
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toMatch(/^launcher-update-error:1\.3\.0:/);
+    expect(items[0].text).toContain('прежнюю версию не получилось вернуть');
+  });
+
   it('состояние failed без текста ошибки даёт запись с запасным текстом', async () => {
     const { selfUpdateStatus, notifications } = await load(makeStorage());
     selfUpdateStatus.set(status({ state: 'failed' }) as never);

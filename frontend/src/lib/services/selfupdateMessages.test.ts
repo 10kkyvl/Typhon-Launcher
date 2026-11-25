@@ -103,6 +103,35 @@ describe('statusReason', () => {
     ).toBe('Лаунчер остался на прежней версии, обновление по-прежнему готово.');
   });
 
+  // A hand-over's own failure is what the player must act on; an OS or network phrase joined into it
+  // is one step of the undo, not the cause.
+  it.each([
+    ['handoff_undo_failed', 'selfupdate: the new launcher exited before it showed its window\nrename C:\\x: Access is denied.', 'state.selfupdateHandoffUndoFailed'],
+    ['handoff_undo_failed', 'selfupdate: put back: open /x: permission denied', 'state.selfupdateHandoffUndoFailed'],
+    ['handoff_failed', 'selfupdate: wait for the new launcher: context deadline exceeded', 'state.selfupdateHandoffFailed'],
+    ['handoff_failed', 'typhon:selfupdate.busy: selfupdate: busy\ndial tcp: connection refused', 'state.selfupdateHandoffFailed'],
+  ] as const)('says %s by its code over the phrase in %j', async (errorCode, error, key) => {
+    const { statusReason } = await import('./selfupdateMessages');
+    const { msg } = await import('../i18n');
+
+    expect(statusReason({ state: 'ready', currentVersion: '1.0.0', availableVersion: '1.1.0', error, errorCode })).toBe(msg(key));
+  });
+
+  it('keeps the cause over the stage for every other code', async () => {
+    const { statusReason } = await import('./selfupdateMessages');
+    const { msg } = await import('../i18n');
+
+    expect(statusReason({ state: 'failed', currentVersion: '1.0.0', error: 'rename C:\\x: Access is denied.', errorCode: 'apply' })).toBe(
+      msg('state.selfupdateReasonAccessDenied'),
+    );
+    expect(statusReason({ state: 'failed', currentVersion: '1.0.0', error: 'typhon:selfupdate.not_ready: x', errorCode: 'apply' })).toBe(
+      msg('state.selfupdateReasonInstallerNotFound'),
+    );
+    expect(statusReason({ state: 'ready', currentVersion: '1.0.0', error: 'context deadline exceeded', errorCode: 'manifest' })).toBe(
+      msg('state.selfupdateReasonServerTimeout'),
+    );
+  });
+
   it('falls back to the stage when the cause is unknown', async () => {
     const { statusReason } = await import('./selfupdateMessages');
 

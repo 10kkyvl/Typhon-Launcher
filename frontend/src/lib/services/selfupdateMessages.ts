@@ -132,8 +132,14 @@ export function rollbackReason(info: RollbackInfo): string {
   return key ? msg(key) : msg('state.selfupdateReasonUnknown');
 }
 
+// A hand-over's own failure is what the player acts on; the OS or network phrases Go joins into it
+// are steps of the undo, not the cause.
+const OWN_WORDS = new Set(['handoff_failed', 'handoff_undo_failed']);
+
 export function statusReason(status: SelfUpdateStatus): string {
   const raw = status.error ?? '';
   if (!raw) return '';
-  return translate(raw) || codeReasons()[status.errorCode ?? ''] || msg('state.selfupdateReasonUnknown');
+  const byCode = codeReasons()[status.errorCode ?? ''];
+  if (byCode && OWN_WORDS.has(status.errorCode ?? '')) return byCode;
+  return translate(raw) || byCode || msg('state.selfupdateReasonUnknown');
 }
