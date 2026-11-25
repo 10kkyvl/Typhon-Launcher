@@ -141,8 +141,8 @@ describe('a text field', () => {
     return [...declared(style), ...inline];
   }
 
-  it('shows the global ring on the base text field and on the sign-in and support forms', () => {
-    for (const path of ['lib/components/TextField.svelte', 'routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte']) {
+  it('shows the global ring on the base text fields and on the sign-in and support forms', () => {
+    for (const path of ['lib/components/TextField.svelte', 'lib/components/TextArea.svelte', 'routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte']) {
       const source = frontendSources[path] ?? '';
       expect(/<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '', path).not.toBe('');
       expect(ringOverrides(source), path).toEqual([]);

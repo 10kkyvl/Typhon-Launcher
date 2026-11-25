@@ -13,6 +13,7 @@
   import type { SelectOption } from '../../lib/components/select';
   import type { SegmentOption } from '../../lib/components/segmented';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import TextArea from '../../lib/components/TextArea.svelte';
   import TextField from '../../lib/components/TextField.svelte';
   import { tabPanel, type TabItem } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
@@ -100,6 +101,21 @@
   let secret = $state('fake-pass');
   let revealed = $state(false);
   let search = $state('a query to clear');
+
+  let note = $state('');
+  let message = $state('The game closes right after the logo.\nIt worked yesterday.');
+  let messageError = $state('');
+  let sentNotes = $state(0);
+  const noteCounter = {
+    max: 60,
+    text: (count: number, max: number) => `${count} of ${max}`,
+    limitText: (count: number, max: number) => (count > max ? `${count - max} characters over the limit` : `${max - count} characters left`),
+  };
+  function sendNote(event: KeyboardEvent) {
+    if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    sentNotes += 1;
+  }
 </script>
 
 <ShowcaseSection title="Fields" note="Checkboxes, switches, selects, segmented controls, tabs, search, colour and number fields. The page holds every value, as a real caller does.">
@@ -196,6 +212,14 @@
         {/snippet}
       </TextField>
     </span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Multi-line fields: a counter said near the limit and sent with Ctrl/Cmd+Enter, growing with its text, an error after Check, read-only, disabled with a reason" stack>
+    <span class="text"><TextArea label="Note" rows={3} counter={noteCounter} hint={`Sent with Ctrl/Cmd+Enter: ${sentNotes}`} bind:value={note} onkeydown={sendNote} /></span>
+    <span class="text"><TextArea label="Details" rows={3} grow={8} placeholder="What you did and what happened" error={messageError} bind:value={message} /></span>
+    <span><Button size="sm" onclick={() => (messageError = message.trim() ? '' : 'Describe the problem.')}>Check</Button></span>
+    <span class="text"><TextArea label="Sent" rows={2} value="Already sent, read-only while the answer comes." readonly /></span>
+    <span class="text"><TextArea label="Reply" rows={2} disabledReason="The request is closed." /></span>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Search fields">

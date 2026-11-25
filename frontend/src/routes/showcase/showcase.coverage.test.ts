@@ -27,6 +27,7 @@ const BASE = [
   'Tabs',
   'SearchInput',
   'TextField',
+  'TextArea',
   'HexColorField',
   'IntegerInput',
   'Notice',

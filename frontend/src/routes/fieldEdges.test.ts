@@ -26,6 +26,12 @@ const FORMS: Record<string, Allowed> = {
   'lib/components/TextField.svelte': {
     '.error': "a field message's plate over the backdrop",
   },
+  // The base multi-line field: the red edge of a bad value; its message's and its count's plates.
+  'lib/components/TextArea.svelte': {
+    '.counter': "the character count's plate over the backdrop",
+    '.counter.over': 'the count past its limit',
+    '.error': "a field message's plate over the backdrop",
+  },
   'routes/support/NewTicket.svelte': {
     '.counter': "the character count's plate over the backdrop",
     '.counter.over': 'the count past its limit',
