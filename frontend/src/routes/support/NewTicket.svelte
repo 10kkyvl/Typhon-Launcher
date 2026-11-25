@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { X } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -8,6 +8,8 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import Select from '../../lib/components/Select.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
+  import TextArea from '../../lib/components/TextArea.svelte';
+  import TextField from '../../lib/components/TextField.svelte';
   import GamePicker from '../../lib/components/profile/GamePicker.svelte';
   import { msg } from '../../lib/i18n';
   import { accountErrorField } from '../../lib/services/accountMessages';
@@ -16,7 +18,6 @@
   import { supportErrorText } from '../../lib/services/supportMessages';
   import {
     announceCreated,
-    bodyLength,
     hasErrors,
     sendNewTicket,
     validateDraft,
@@ -29,6 +30,7 @@
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
   import LogsConfirm from './LogsConfirm.svelte';
+  import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys } from './sending';
 
   let { initialTopic, initialSubject = '' }: { initialTopic: SupportTopic; initialSubject?: string } = $props();
   const uid = $props.id();
@@ -53,6 +55,16 @@
   const stage = $derived(logsStageText(upload));
 
   let form = $state<HTMLElement>();
+  let subjectField = $state<HTMLInputElement>();
+  let bodyField = $state<HTMLTextAreaElement>();
+
+  function sendOn(match: (event: KeyboardEvent) => boolean) {
+    return (event: KeyboardEvent) => {
+      if (!match(event)) return;
+      event.preventDefault();
+      void submit();
+    };
+  }
 
   // A failure stays on screen until an answer replaces it.
   async function loadLimits(): Promise<boolean> {
@@ -89,19 +101,31 @@
     pickerOpen = false;
   }
 
-  function showError(err: unknown) {
+  // A refusal about the subject or the text is said at that field, which takes focus; any other once,
+  // in the form's notice.
+  async function showError(err: unknown) {
     const field = accountErrorField(err);
     const text = supportErrorText(err, msg('errSupport.generic'));
     if (field === 'subject') errors = { ...errors, subject: text };
     else if (field === 'body') errors = { ...errors, body: text };
     else formError = text;
+    await focusInvalid();
+  }
+
+  async function focusInvalid() {
+    await tick();
+    if (errors.subject) subjectField?.focus();
+    else if (errors.body) bodyField?.focus();
   }
 
   async function submit() {
     if (sending || !limits || !isTopic(topic)) return;
     errors = validateDraft({ subject, body }, limits);
     formError = '';
-    if (hasErrors(errors)) return;
+    if (hasErrors(errors)) {
+      await focusInvalid();
+      return;
+    }
     sending = true;
     upload = null;
     try {
@@ -115,7 +139,8 @@
         open: (number) => navigate('support', { ticket: String(number) }),
       });
     } catch (err) {
-      showError(err);
+      sending = false;
+      await showError(err);
     } finally {
       sending = false;
       upload = null;
@@ -160,51 +185,37 @@
       {/if}
     </div>
 
-    <div class="field">
-      <label class="label" for="{uid}-subject">
-        {msg('tickets.subjectLabel')}
-        <span class="counter" class:over={runeCount(subject.trim()) > limits.maxSubjectRunes}>
-          {msg('tickets.counter', { count: runeCount(subject.trim()), max: limits.maxSubjectRunes })}
-        </span>
-      </label>
-      <input
-        id="{uid}-subject"
-        class="input"
-        class:invalid={!!errors.subject}
-        aria-invalid={errors.subject ? 'true' : undefined}
-        aria-describedby={errors.subject ? `${uid}-subject-error` : undefined}
-        type="text"
-        dir="auto"
-        autocomplete="off"
-        bind:value={subject}
-        disabled={sending}
-        oninput={() => (errors = { ...errors, subject: undefined })}
-      />
-      {#if errors.subject}<span class="error" id="{uid}-subject-error" role="alert">{errors.subject}</span>{/if}
-    </div>
+    <!-- While the request is on its way the fields refuse edits by being read-only: a field that turns
+         disabled drops the focus a send shortcut was pressed in. TextField has no counter, so the
+         subject's count is its hint. -->
+    <TextField
+      id="{uid}-subject"
+      label={msg('tickets.subjectLabel')}
+      autocomplete="off"
+      hint={msg('tickets.counter', { count: runeCount(subject.trim()), max: limits.maxSubjectRunes })}
+      readonly={sending}
+      error={errors.subject}
+      bind:value={subject}
+      bind:input={subjectField}
+      oninput={() => (errors = { ...errors, subject: undefined })}
+      onkeydown={sendOn(isPlainEnter)}
+    />
 
-    <div class="field">
-      <label class="label" for="{uid}-body">
-        {msg('tickets.bodyLabel')}
-        <span class="counter" class:over={bodyLength(body) > limits.maxBodyRunes}>
-          {msg('tickets.counter', { count: bodyLength(body), max: limits.maxBodyRunes })}
-        </span>
-      </label>
-      <textarea
-        id="{uid}-body"
-        class="input area"
-        class:invalid={!!errors.body}
-        aria-invalid={errors.body ? 'true' : undefined}
-        aria-describedby={errors.body ? `${uid}-body-error` : undefined}
-        rows="8"
-        dir="auto"
-        placeholder={msg('tickets.bodyPlaceholder')}
-        bind:value={body}
-        disabled={sending}
-        oninput={() => (errors = { ...errors, body: undefined })}
-      ></textarea>
-      {#if errors.body}<span class="error" id="{uid}-body-error" role="alert">{errors.body}</span>{/if}
-    </div>
+    <TextArea
+      id="{uid}-body"
+      label={msg('tickets.bodyLabel')}
+      rows={8}
+      grow={16}
+      placeholder={msg('tickets.bodyPlaceholder')}
+      counter={bodyCounter(limits.maxBodyRunes)}
+      hint={msg('tickets.sendHint', { keys: sendKeys() })}
+      readonly={sending}
+      error={errors.body}
+      bind:value={body}
+      bind:textarea={bodyField}
+      oninput={() => (errors = { ...errors, body: undefined })}
+      onkeydown={sendOn(isSendShortcut)}
+    />
 
     <AttachLogs
       bind:checked={attachLogs}
@@ -263,31 +274,6 @@
     color: var(--text-2);
   }
 
-  .counter {
-    padding: 0 var(--space-1);
-    border-radius: var(--radius-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* A field message keeps its place next to the field, on a plate of its own: the page behind it is
-     the window backdrop. */
-  .counter.over {
-    background: var(--surface-2);
-    color: var(--danger);
-  }
-
-  .input.invalid {
-    border-color: var(--danger);
-  }
-
-  .area {
-    height: auto;
-    padding: 0.9rem 1.2rem;
-    line-height: 1.55;
-    resize: vertical;
-  }
-
   .hint {
     margin: 0;
     font-size: var(--font-xs);
@@ -316,15 +302,6 @@
 
   .picker-toggle {
     display: flex;
-  }
-
-  .error {
-    align-self: flex-start;
-    padding: 0 var(--space-1);
-    border-radius: var(--radius-xs);
-    background: var(--surface-2);
-    font-size: var(--font-xs);
-    color: var(--danger);
   }
 
   .progress {

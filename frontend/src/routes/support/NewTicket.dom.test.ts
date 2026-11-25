@@ -8,6 +8,7 @@ import { navigate, resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import { emitUpload, held, LIMITS, ticket, words } from './supportTesting';
 import NewTicket from './NewTicket.svelte';
 
@@ -214,5 +215,123 @@ describe('NewTicket: a refused request says why by its code', () => {
     const alert = await screen.findByRole('alert');
     await vi.waitFor(() => expect(alert.textContent).toContain(msg('errSupport.generic')));
     expect(alert.textContent).not.toContain('something_new');
+  });
+});
+
+describe('NewTicket: the fields are the base text fields', () => {
+  it('names each field by its label alone, with the count on screen beside it', async () => {
+    await form({ initialTopic: 'account' });
+    const subject = screen.getByRole('textbox', { name: msg('tickets.subjectLabel') });
+    const body = screen.getByRole('textbox', { name: msg('tickets.bodyLabel') });
+    expect(subject.tagName).toBe('INPUT');
+    expect(body.tagName).toBe('TEXTAREA');
+    // The number's group separator is a no-break space, which the default matcher would fold.
+    const count = screen.getByText(msg('tickets.counter', { count: 0, max: LIMITS.maxBodyRunes }), { normalizer: (text) => text });
+    expect(count.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('says how the text is sent', async () => {
+    await form({ initialTopic: 'account' });
+    expect(description(bodyField())).toBe(msg('tickets.sendHint', { keys: 'Ctrl Enter' }));
+  });
+
+  it('says the body near its limit once, not on every key', async () => {
+    vi.mocked(ticketLimits).mockResolvedValue({ maxSubjectRunes: 120, maxBodyRunes: 10 });
+    const { user } = await form({ initialTopic: 'account' });
+    const live = () => [...document.querySelectorAll('[role="status"]')].map((node) => node.textContent?.trim()).filter(Boolean);
+    await user.type(bodyField(), 'abcdefgh');
+    expect(live()).toEqual([]);
+    await user.type(bodyField(), 'i');
+    expect(live()).toEqual([msg('tickets.counterNear', { count: 1 })]);
+    await user.type(bodyField(), 'jk');
+    expect(live()).toEqual([msg('tickets.counterOver', { count: 1 })]);
+  });
+});
+
+describe('NewTicket: where a refusal is said', () => {
+  it('a draft the form refuses: at each field, with focus on the first', async () => {
+    const { user } = await form({ initialTopic: 'account' });
+    await user.click(submit());
+    expect(subjectField().getAttribute('aria-invalid')).toBe('true');
+    expect(bodyField().getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(subjectField());
+  });
+
+  it.each([
+    ['ticket_invalid_subject', 'subject'],
+    ['ticket_invalid_body', 'body'],
+  ] as const)('%s from Go: at the %s field, with focus there', async (code, field) => {
+    vi.mocked(createTicket).mockRejectedValue(new AccountError(code));
+    const { user } = await filled();
+    await user.click(submit());
+    const target = field === 'subject' ? subjectField : bodyField;
+    await vi.waitFor(() => expect(target().getAttribute('aria-invalid')).toBe('true'));
+    expect(document.activeElement).toBe(target());
+    expect(screen.queryByText(msg('errSupport.generic'))).toBeNull();
+  });
+
+  it.each([['ticket_invalid_topic'], ['ticket_invalid_game'], ['ticket_invalid_client']])('%s: once, in the form', async (code) => {
+    vi.mocked(createTicket).mockRejectedValue(new AccountError(code));
+    const { user } = await filled();
+    await user.click(submit());
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent?.trim()).not.toBe(''));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(subjectField().hasAttribute('aria-invalid')).toBe(false);
+    expect(bodyField().hasAttribute('aria-invalid')).toBe(false);
+  });
+});
+
+describe('NewTicket: sending', () => {
+  it('sends with Ctrl/Cmd+Enter from the text and with Enter from the subject, once while the answer is on its way', async () => {
+    const sent = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValue(sent.promise);
+    const { user } = await filled();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+    expect(bodyField().value).toBe('  The code never arrives.  ');
+    await user.keyboard('{Meta>}{Enter}{/Meta}');
+    await user.click(subjectField());
+    await user.keyboard('{Enter}');
+
+    expect(createTicket).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: msg('tickets.submitting') }).getAttribute('aria-busy')).toBe('true');
+    sent.resolve(ticket(14, 'Cannot sign in'));
+    await vi.waitFor(() => expect(get(route).params).toEqual({ ticket: '14' }));
+  });
+
+  it('sends with Enter from the subject', async () => {
+    vi.mocked(createTicket).mockResolvedValue(ticket(15, 'Cannot sign in'));
+    const { user } = await filled();
+    await user.click(subjectField());
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the field it was sent from focused and read-only while the answer is on its way', async () => {
+    const sent = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValue(sent.promise);
+    const { user } = await filled();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(bodyField());
+    expect(bodyField().readOnly).toBe(true);
+    expect(bodyField().disabled).toBe(false);
+    expect(subjectField().readOnly).toBe(true);
+    await user.keyboard('x');
+    expect(bodyField().value).toBe('  The code never arrives.  ');
+    sent.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(bodyField().readOnly).toBe(false));
+    expect(document.activeElement).toBe(bodyField());
+  });
+
+  it('keeps a plain Enter in the text a new line', async () => {
+    const { user } = await filled();
+    await user.keyboard('{Enter}more');
+    expect(bodyField().value).toBe('  The code never arrives.  \nmore');
+    expect(createTicket).not.toHaveBeenCalled();
   });
 });

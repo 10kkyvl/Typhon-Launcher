@@ -148,7 +148,7 @@ describe('Support: field messages', () => {
     expect(alerts).toHaveLength(2);
     for (const alert of alerts) {
       expect(alert.closest('label')).toBeNull();
-      expect(document.querySelector(`[aria-describedby="${alert.id}"]`)).toBeTruthy();
+      expect(document.querySelector(`[aria-describedby~="${alert.id}"]`)).toBeTruthy();
     }
     expect(screen.getByLabelText(msg('tickets.subjectLabel'), { exact: false }).getAttribute('aria-invalid')).toBe('true');
   });
@@ -160,7 +160,8 @@ describe('Support: field messages', () => {
     const alert = screen.getByRole('alert');
     expect(alert.closest('label')).toBeNull();
     const reply = screen.getByLabelText(msg('tickets.replyLabel'), { exact: false });
-    expect(reply.getAttribute('aria-describedby')).toBe(alert.id);
+    // After its hint: the error is the last thing the reply is described by.
+    expect(reply.getAttribute('aria-describedby')?.split(' ').at(-1)).toBe(alert.id);
   });
 });
 

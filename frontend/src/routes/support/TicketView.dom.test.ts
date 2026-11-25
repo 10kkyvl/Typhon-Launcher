@@ -9,6 +9,7 @@ import { unreadReplies } from '../../lib/stores/support';
 import { toasts } from '../../lib/stores/toasts';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import { held, LIMITS, message, thread, ticket, words } from './supportTesting';
 import TicketView from './TicketView.svelte';
 
@@ -166,6 +167,92 @@ describe('TicketView: a reply', () => {
     expect(screen.getByText(msg('tickets.reopenNote'))).toBeTruthy();
     expect(screen.queryByRole('button', { name: msg('tickets.resolve') })).toBeNull();
     expect(replyButton()).toBeTruthy();
+  });
+});
+
+describe('TicketView: the reply is the base multi-line field', () => {
+  it('is named by its label alone and says how it is sent', async () => {
+    await opened();
+    const box = screen.getByRole('textbox', { name: msg('tickets.replyLabel') });
+    expect(box.tagName).toBe('TEXTAREA');
+    expect(description(box)).toBe(msg('tickets.sendHint', { keys: 'Ctrl Enter' }));
+  });
+
+  it('sends with Ctrl/Cmd+Enter, once while the answer is on its way, and stays focused and read-only meanwhile', async () => {
+    const sent = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValue(sent.promise);
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    await user.keyboard('{Meta>}{Enter}{/Meta}');
+    await user.click(screen.getByRole('button', { name: msg('tickets.replySending') }));
+
+    expect(replyTicket).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: msg('tickets.replySending') }).getAttribute('aria-busy')).toBe('true');
+    expect(replyBox().readOnly).toBe(true);
+    expect(replyBox().disabled).toBe(false);
+    sent.resolve(message(4, 'user', 'Still closes.', '2026-11-02T09:00:00Z'));
+    await vi.waitFor(() => expect(replyBox().value).toBe(''));
+  });
+
+  it('keeps a plain Enter a new line', async () => {
+    const { user } = await opened();
+    await user.type(replyBox(), 'one{Enter}two');
+    expect(replyBox().value).toBe('one\ntwo');
+    expect(replyTicket).not.toHaveBeenCalled();
+  });
+
+  it('after a reply is sent, clears the box and keeps focus in it', async () => {
+    vi.mocked(replyTicket).mockResolvedValue(message(4, 'user', 'Still closes.', '2026-11-02T09:00:00Z'));
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+
+    await vi.waitFor(() => expect(replyBox().value).toBe(''));
+    expect(document.activeElement).toBe(replyBox());
+    expect(replyBox().readOnly).toBe(false);
+  });
+
+  it('after a reply sent from the button, takes focus to the cleared box', async () => {
+    vi.mocked(replyTicket).mockResolvedValue(message(4, 'user', 'Still closes.', '2026-11-02T09:00:00Z'));
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+
+    await user.click(replyButton());
+
+    await vi.waitFor(() => expect(replyBox().value).toBe(''));
+    await vi.waitFor(() => expect(document.activeElement).toBe(replyBox()));
+  });
+
+  it('a refusal of the text: at the box, with focus there', async () => {
+    vi.mocked(replyTicket).mockRejectedValue(new AccountError('ticket_invalid_body'));
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+    await user.click(replyButton());
+
+    await vi.waitFor(() => expect(replyBox().getAttribute('aria-invalid')).toBe('true'));
+    expect(document.activeElement).toBe(replyBox());
+  });
+
+  it.each([
+    ['network_error', msg('state.accountErrorNetwork')],
+    ['ticket_limit', msg('errSupport.limit')],
+    ['something_new', msg('tickets.replyFailed')],
+  ])('%s: once, in the reply form, keeping the text and the box valid', async (code, text) => {
+    vi.mocked(replyTicket).mockRejectedValue(new AccountError(code));
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+    await user.click(replyButton());
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(text));
+    expect(alert.closest('.notice')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(replyBox().hasAttribute('aria-invalid')).toBe(false);
+    expect(replyBox().value).toBe('Still closes.');
   });
 });
 

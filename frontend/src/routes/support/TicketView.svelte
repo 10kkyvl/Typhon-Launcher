@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { ArrowLeft, Paperclip } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -7,8 +7,10 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import TextArea from '../../lib/components/TextArea.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { msg } from '../../lib/i18n';
+  import { accountErrorField } from '../../lib/services/accountMessages';
   import { onLogUploadStatus, type LogUploadStatus } from '../../lib/services/logsUpload';
   import {
     getTicket,
@@ -18,7 +20,7 @@
     type TicketThread,
   } from '../../lib/services/support';
   import { supportErrorText } from '../../lib/services/supportMessages';
-  import { bodyLength, sendReply, validateBody } from '../../lib/support/draft';
+  import { sendReply, validateBody } from '../../lib/support/draft';
   import { unreadGrew } from '../../lib/support/unread';
   import { logsStageText, uploadPercent } from '../../lib/support/progress';
   import { statusView, topicLabel } from '../../lib/support/topics';
@@ -28,6 +30,7 @@
   import { dateTime } from '../../lib/utils/format';
   import AttachLogs from './AttachLogs.svelte';
   import LogsConfirm from './LogsConfirm.svelte';
+  import { bodyCounter, isSendShortcut, sendKeys } from './sending';
 
   let { number }: { number: number } = $props();
   const uid = $props.id();
@@ -39,6 +42,7 @@
   let limitsFailure = $state('');
   let reply = $state('');
   let replyError = $state('');
+  let replyFailure = $state('');
   let attachLogs = $state(false);
   let sending = $state(false);
   let upload = $state<LogUploadStatus | null>(null);
@@ -55,6 +59,7 @@
 
   let head = $state<HTMLElement>();
   let replyBox = $state<HTMLElement>();
+  let replyField = $state<HTMLTextAreaElement>();
 
   // A failure stays on screen until an answer replaces it: a refresh that starts does not clear it.
   async function load(): Promise<boolean> {
@@ -137,10 +142,24 @@
     return Number.isNaN(value.getTime()) ? '' : dateTime(value);
   }
 
+  function sendOnShortcut(event: KeyboardEvent) {
+    if (!isSendShortcut(event)) return;
+    event.preventDefault();
+    void submitReply();
+  }
+
+  // A refusal of the text is said at the box, which takes focus; any other once, in the reply form.
   async function submitReply() {
     if (sending || !limits) return;
+    replyFailure = '';
     replyError = validateBody(reply, limits);
-    if (replyError) return;
+    if (replyError) {
+      await tick();
+      replyField?.focus();
+      return;
+    }
+    // Focus in the reply form at the press (the box or Reply) goes to the cleared box once it is sent.
+    const fromForm = Boolean(replyBox?.contains(document.activeElement));
     sending = true;
     upload = null;
     try {
@@ -148,11 +167,24 @@
       if (!outcome.sent) return;
       reply = '';
       attachLogs = false;
+      sending = false;
       toast(msg('tickets.replySent'), 'success');
+      if (fromForm) {
+        await tick();
+        replyField?.focus();
+      }
       refreshPending = false;
       await load();
     } catch (err) {
-      replyError = supportErrorText(err, msg('tickets.replyFailed'));
+      sending = false;
+      const text = supportErrorText(err, msg('tickets.replyFailed'));
+      if (accountErrorField(err) === 'body') {
+        replyError = text;
+        await tick();
+        replyField?.focus();
+      } else {
+        replyFailure = text;
+      }
     } finally {
       sending = false;
       upload = null;
@@ -237,30 +269,29 @@
         {limitsFailure}
       </Notice>
     {:else if limits}
-      <div class="field">
-        <label class="label" for="{uid}-reply">
-          {msg('tickets.replyLabel')}
-          <span class="counter" class:over={bodyLength(reply) > limits.maxBodyRunes}>
-            {msg('tickets.counter', { count: bodyLength(reply), max: limits.maxBodyRunes })}
-          </span>
-        </label>
-        <textarea
-          id="{uid}-reply"
-          class="input area"
-          class:invalid={!!replyError}
-          aria-invalid={replyError ? 'true' : undefined}
-          aria-describedby={replyError ? `${uid}-reply-error` : undefined}
-          rows="5"
-          dir="auto"
-          placeholder={msg('tickets.replyPlaceholder')}
-          bind:value={reply}
-          disabled={sending}
-          oninput={() => (replyError = '')}
-        ></textarea>
-        {#if replyError}<span class="error" id="{uid}-reply-error" role="alert">{replyError}</span>{/if}
-      </div>
+      <!-- Read-only, not disabled, while the reply is on its way: the box keeps the focus a send
+           shortcut was pressed in. -->
+      <TextArea
+        id="{uid}-reply"
+        label={msg('tickets.replyLabel')}
+        rows={5}
+        grow={12}
+        placeholder={msg('tickets.replyPlaceholder')}
+        counter={bodyCounter(limits.maxBodyRunes)}
+        hint={msg('tickets.sendHint', { keys: sendKeys() })}
+        readonly={sending}
+        error={replyError}
+        bind:value={reply}
+        bind:textarea={replyField}
+        oninput={() => (replyError = '')}
+        onkeydown={sendOnShortcut}
+      />
 
       <AttachLogs bind:checked={attachLogs} disabled={sending} />
+
+      {#if replyFailure}
+        <Notice tone="danger" compact>{replyFailure}</Notice>
+      {/if}
 
       {#if sending && stage}
         <div class="progress">
@@ -409,55 +440,6 @@
     font-size: var(--font-xs);
     line-height: 1.45;
     color: var(--text-3);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .label {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.8rem;
-    font-size: var(--font-xs);
-    color: var(--text-2);
-  }
-
-  .counter {
-    padding: 0 var(--space-1);
-    border-radius: var(--radius-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* A field message keeps its place next to the field, on a plate of its own: the page behind it is
-     the window backdrop. */
-  .counter.over {
-    background: var(--surface-2);
-    color: var(--danger);
-  }
-
-  .area {
-    height: auto;
-    padding: 0.9rem 1.2rem;
-    line-height: 1.55;
-    resize: vertical;
-  }
-
-  .input.invalid {
-    border-color: var(--danger);
-  }
-
-  .error {
-    align-self: flex-start;
-    padding: 0 var(--space-1);
-    border-radius: var(--radius-xs);
-    background: var(--surface-2);
-    font-size: var(--font-xs);
-    color: var(--danger);
   }
 
   .progress {

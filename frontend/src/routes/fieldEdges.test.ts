@@ -32,19 +32,6 @@ const FORMS: Record<string, Allowed> = {
     '.counter.over': 'the count past its limit',
     '.error': "a field message's plate over the backdrop",
   },
-  'routes/support/NewTicket.svelte': {
-    '.counter': "the character count's plate over the backdrop",
-    '.counter.over': 'the count past its limit',
-    '.chosen': 'the chosen game, a row with its clear button',
-    '.error': "a field message's plate over the backdrop",
-  },
-  'routes/support/TicketView.svelte': {
-    '.bubble': 'a message of the thread',
-    '.bubble.mine': "the user's own message",
-    '.counter': "the character count's plate over the backdrop",
-    '.counter.over': 'the count past its limit',
-    '.error': "a field message's plate over the backdrop",
-  },
 };
 
 const squeeze = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -176,14 +163,14 @@ describe("the base text field's and the raw forms' fields", () => {
   });
 });
 
-// Forms moved onto the base field: they draw no field of their own, and a component's scoped rule cannot
-// reach the field inside TextField except through `:global`, which they do not use.
-const ON_TEXT_FIELD = ['routes/auth/AuthScreen.svelte'];
+// Forms moved onto the base fields: they draw no field of their own, and a component's scoped rule
+// cannot reach the field inside TextField or TextArea except through `:global`, which they do not use.
+const ON_TEXT_FIELD = ['routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte'];
 
-describe('the forms on the base text field', () => {
-  it.each(ON_TEXT_FIELD)('%s draws its fields through TextField and reaches into none', (path) => {
+describe('the forms on the base text fields', () => {
+  it.each(ON_TEXT_FIELD)('%s draws its fields through TextField or TextArea and reaches into none', (path) => {
     const source = frontendSources[path] ?? '';
-    expect(source, path).toMatch(/<TextField\b/);
+    expect(source, path).toMatch(/<Text(Field|Area)\b/);
     expect(fieldTags(source), path).toEqual([]);
     expect(/<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '', path).not.toMatch(/:global/);
   });

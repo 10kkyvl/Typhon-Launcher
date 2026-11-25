@@ -547,7 +547,8 @@ describe('tripwire: a field counter at its limit', () => {
   });
 
   it('sits on a plate', () => {
-    expect(states.length).toBeGreaterThanOrEqual(5);
+    // The support forms count through the base TextArea now: its one rule stands for both.
+    expect(states.length).toBeGreaterThanOrEqual(4);
     expect(states.filter((s) => !plateOf(s.body)).map((s) => s.rule)).toEqual([]);
   });
 

@@ -42,10 +42,10 @@ afterEach(() => {
 });
 
 // An invalid field says so (aria-invalid, which the global ring paints in the danger colour) and is
-// described by its message, and stops saying so once it is edited.
+// described by its message, last, after its hint; and stops saying so once it is edited.
 function expectInvalid(field: HTMLElement, message: string) {
   expect(field.getAttribute('aria-invalid')).toBe('true');
-  expect(description(field)).toBe(message);
+  expect(description(field).endsWith(message)).toBe(true);
 }
 
 describe('NewTicket: an empty draft', () => {
@@ -65,7 +65,7 @@ describe('NewTicket: an empty draft', () => {
 
     await user.type(subject as HTMLInputElement, 'Crash');
     expect((subject as HTMLInputElement).hasAttribute('aria-invalid')).toBe(false);
-    expect((subject as HTMLInputElement).hasAttribute('aria-describedby')).toBe(false);
+    expect(description(subject as HTMLInputElement)).not.toContain(msg('tickets.errSubjectRequired'));
   });
 });
 

@@ -337,7 +337,9 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'routes/support/TicketList.svelte': [['danger', true]],
+  // The request failed to load; the limits of a reply did; a reply was refused for a reason other than its text.
   'routes/support/TicketView.svelte': [
+    ['danger', true],
     ['danger', true],
     ['danger', true],
   ],
