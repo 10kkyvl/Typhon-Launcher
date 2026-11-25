@@ -17,7 +17,7 @@
   import { isExternal, isLaunchable } from '../../lib/library/external';
   import { gameArt } from '../../lib/stores/metadata';
   import { gameContextMenu } from '../../lib/stores/gameMenu';
-  import { activeMove, openMoveGame } from '../../lib/stores/relocate';
+  import { activeMoves, holdingMove, openMoveGame } from '../../lib/stores/relocate';
   import { toast } from '../../lib/stores/toasts';
   import { updatesByGame } from '../../lib/stores/updates';
   import { brokenStatus } from '../../lib/game/compat';
@@ -86,8 +86,7 @@
 
   // A move of this game, or of the whole library, is running: Go refuses another move and a removal.
   function moving(game: LibraryGame): boolean {
-    const job = $activeMove;
-    return job !== null && (job.scope === 'library' || job.gameId === game.id);
+    return holdingMove($activeMoves, game.id) !== null;
   }
 
   // Go moves neither an emulated game nor one of another launcher (library.CheckRelocatable,

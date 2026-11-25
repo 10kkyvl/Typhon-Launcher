@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
+import type { MoveJob } from '../services/relocate';
 
 const getStorageInfo = vi.fn();
 const settings = writable<{ libraryPath: string; gamesPath?: string } | null>({ libraryPath: 'D:\Games' });
 type Game = { id: string; installDir: string; sizeBytes: number; sizeUnknown?: boolean; title?: string };
 const installedGames = writable<Game[]>([]);
-const activeMove = writable<{ id: string } | null>(null);
 
 vi.mock('../services/system', () => ({ getStorageInfo }));
+vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('../services/relocate', () => ({ listMoves: vi.fn(async () => []) }));
 vi.mock('./settings', () => ({ settings }));
 vi.mock('./library', () => ({ installedGames }));
-vi.mock('./relocate', () => ({ activeMove }));
 
 const info = { path: 'D:\Games', volume: 'D:', filesystem: 'NTFS', totalBytes: 100, freeBytes: 40, usedBytes: 60 };
 
@@ -19,11 +20,17 @@ async function load() {
   return await import('./storage');
 }
 
+// The move list the storage store reads, from the same module instance `load` gave it.
+async function moveList() {
+  return (await import('./relocate')).moves;
+}
+
+const move = (id: string, gameId: string, stage: MoveJob['stage'] = 'copy') => ({ id, scope: 'game', stage, gameId }) as MoveJob;
+
 beforeEach(() => {
   vi.clearAllMocks();
   settings.set({ libraryPath: 'D:\Games' });
   installedGames.set([]);
-  activeMove.set(null);
 });
 
 describe('library storage', () => {
@@ -104,6 +111,7 @@ describe('following the library storage', () => {
     getStorageInfo.mockResolvedValue(info);
     installedGames.set([game]);
     const store = await load();
+    const moves = await moveList();
 
     const stop = store.followStorage();
     expect(getStorageInfo).toHaveBeenCalledTimes(1);
@@ -118,16 +126,35 @@ describe('following the library storage', () => {
     expect(getStorageInfo).toHaveBeenCalledTimes(3);
     settings.set({ libraryPath: 'F:\\Library' });
     expect(getStorageInfo).toHaveBeenCalledTimes(4);
-    activeMove.set({ id: 'm1' });
+    moves.set([move('m1', 'g1')]);
     expect(getStorageInfo).toHaveBeenCalledTimes(4);
-    activeMove.set(null);
+    moves.set([move('m1', 'g1', 'done')]);
     expect(getStorageInfo).toHaveBeenCalledTimes(5);
 
     stop();
     installedGames.set([game]);
-    activeMove.set({ id: 'm2' });
-    activeMove.set(null);
+    moves.set([move('m2', 'g1')]);
+    moves.set([move('m2', 'g1', 'done')]);
     expect(getStorageInfo).toHaveBeenCalledTimes(5);
+    await vi.waitFor(() => expect(get(store.storageInfo)).toEqual(info));
+  });
+
+  it('reads again when any of two moves ends, not only the first listed, and not on their progress', async () => {
+    getStorageInfo.mockResolvedValue(info);
+    const store = await load();
+    const moves = await moveList();
+    moves.set([move('a', 'g1'), move('b', 'g2')]);
+    const stop = store.followStorage();
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+
+    moves.set([move('a', 'g1', 'verify'), move('b', 'g2', 'verify')]);
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+    moves.set([move('a', 'g1'), move('b', 'g2', 'done')]);
+    expect(getStorageInfo).toHaveBeenCalledTimes(2);
+    moves.set([move('a', 'g1', 'cancelled'), move('b', 'g2', 'done')]);
+    expect(getStorageInfo).toHaveBeenCalledTimes(3);
+
+    stop();
     await vi.waitFor(() => expect(get(store.storageInfo)).toEqual(info));
   });
 });

@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { getStorageInfo, type StorageInfo } from '../services/system';
 import { installedGames } from './library';
-import { activeMove } from './relocate';
+import { activeMoves } from './relocate';
 import { settings } from './settings';
 
 export const storageInfo = writable<StorageInfo | null>(null);
@@ -31,13 +31,13 @@ export async function refreshStorage() {
 /**
  * Keeps the numbers true while a screen shows them: reads them now, then again when the library
  * folder changes (the one Go measures), when an installed game comes, goes, moves or is measured,
- * and when a move ends. A game that only changes otherwise (played, renamed) reads nothing. Answers
+ * and when any move ends. A game that only changes otherwise (played, renamed) reads nothing. Answers
  * the disposer.
  */
 export function followStorage(): () => void {
   let path: string | undefined;
   let games: string | undefined;
-  let moving = false;
+  let moving = new Set<string>();
   const offs = [
     settings.subscribe((value) => {
       const next = value?.libraryPath ?? '';
@@ -49,9 +49,10 @@ export function followStorage(): () => void {
       if (games !== undefined && next !== games) void refreshStorage();
       games = next;
     }),
-    activeMove.subscribe((job) => {
-      if (moving && !job) void refreshStorage();
-      moving = job !== null;
+    activeMoves.subscribe((jobs) => {
+      const next = new Set(jobs.map((job) => job.id));
+      if ([...moving].some((id) => !next.has(id))) void refreshStorage();
+      moving = next;
     }),
   ];
   void refreshStorage();

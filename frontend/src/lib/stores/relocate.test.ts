@@ -113,6 +113,31 @@ describe('move jobs', () => {
     expect(get(store.activeMove)?.id).toBe('fresh');
   });
 
+  it('lists every move not finished, in order: Go runs a move of one game beside a move of another', async () => {
+    seeded = [job({ id: 'a', gameId: 'g1' }), job({ id: 'old', stage: 'done' }), job({ id: 'b', gameId: 'g2', stage: 'verify' })];
+    const { store } = await load();
+
+    expect(get(store.activeMoves).map((one) => one.id)).toEqual(['a', 'b']);
+
+    handlers['move:completed']({ data: job({ id: 'a', gameId: 'g1', stage: 'done' }) });
+    expect(get(store.activeMoves).map((one) => one.id)).toEqual(['b']);
+    handlers['move:failed']({ data: job({ id: 'b', gameId: 'g2', stage: 'failed' }) });
+    expect(get(store.activeMoves)).toEqual([]);
+  });
+
+  it('names the move that holds a game: its own, or one of the whole library, else none', async () => {
+    const { store } = await load();
+    const own = job({ id: 'a', gameId: 'g1' });
+    const other = job({ id: 'b', gameId: 'g2' });
+    const library = job({ id: 'lib', scope: 'library', gameId: '', title: '' });
+
+    expect(store.holdingMove([other, own], 'g1')).toBe(own);
+    expect(store.holdingMove([other], 'g1')).toBeNull();
+    expect(store.holdingMove([], 'g1')).toBeNull();
+    expect(store.holdingMove([other, library], 'g1')).toBe(library);
+    expect(store.holdingMove([own, library], 'g1')).toBe(library);
+  });
+
   it('keeps a cancelled job in the list and stays silent', async () => {
     seeded = [job()];
     const { store, toast } = await load();

@@ -248,6 +248,23 @@ describe('Installed: Move in the row’s menu', () => {
     }
   });
 
+  it('with two games being moved, each row says so and has Move and both removals off, not only the first listed', async () => {
+    moves.set([
+      { id: 'm1', scope: 'game', stage: 'copy', gameId: 'g-hades', title: 'Hades' } as unknown as MoveJob,
+      { id: 'm2', scope: 'game', stage: 'copy', gameId: 'g-celeste', title: 'Celeste' } as unknown as MoveJob,
+    ]);
+    const { user } = renderDom(Installed);
+
+    for (const [id, title] of [['g-hades', 'Hades'], ['g-celeste', 'Celeste']] as const) {
+      expect(row(id).textContent, title).toContain(msg('installed.moving'));
+      await user.click(menu(title));
+      for (const key of ['games.actionMove', 'games.actionUninstall', 'games.actionRemoveLibrary'] as const) {
+        expect((item(key) as HTMLElement).getAttribute('aria-disabled'), `${title} ${key}`).toBe('true');
+      }
+      await user.keyboard('{Escape}');
+    }
+  });
+
   it('while the whole library is being moved, every row says so and has Move and both removals off with the reason', async () => {
     moves.set([{ id: 'm1', scope: 'library', stage: 'copy', gameId: '', title: '' } as unknown as MoveJob]);
     const { user } = renderDom(Installed);

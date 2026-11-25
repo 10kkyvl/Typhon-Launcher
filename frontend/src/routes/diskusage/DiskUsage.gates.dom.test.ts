@@ -84,6 +84,16 @@ describe('DiskUsage: a game being moved', () => {
     }
   });
 
+  it('with two games being moved, holds each of them, not only the first listed', async () => {
+    moves.set([job({ id: 'm1', gameId: 'g-hades' }), job({ id: 'm2', gameId: 'g-celeste', title: 'Celeste' })]);
+    await shown();
+    for (const title of ['Hades', 'Celeste']) {
+      for (const name of ['diskusage.move', 'diskusage.remove'] as const) {
+        expect(gate(title, name), `${title} ${name}`).toEqual({ off: true, why: msg('diskusage.blockedMoving') });
+      }
+    }
+  });
+
   it('while the library is moved, holds every game, saying why', async () => {
     moves.set([job({ scope: 'library', gameId: undefined, title: '' })]);
     await shown();

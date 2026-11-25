@@ -16,6 +16,17 @@ export const activeMove = derived(
   ($moves) => $moves.find((job) => !terminalStages.includes(job.stage)) ?? null,
 );
 
+/** Every move not finished yet, in the list's order: Go runs a move of one game beside a move of another. */
+export const activeMoves = derived(moves, ($moves) => $moves.filter((job) => !terminalStages.includes(job.stage)));
+
+/**
+ * The move among `jobs` that holds the game: one of the whole library first, else the game's own;
+ * null when none does. Go refuses the game's move and removal meanwhile.
+ */
+export function holdingMove(jobs: readonly MoveJob[], gameId: string): MoveJob | null {
+  return jobs.find((job) => job.scope === 'library') ?? jobs.find((job) => job.gameId === gameId) ?? null;
+}
+
 export interface MoveTarget {
   gameId: string;
   title: string;

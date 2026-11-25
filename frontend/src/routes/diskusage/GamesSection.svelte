@@ -10,7 +10,7 @@
   import { isEmulated } from '../../lib/library/emulation';
   import type { GameUsage } from '../../lib/services/diskusage';
   import { libraryGamesById } from '../../lib/stores/library';
-  import { activeMove } from '../../lib/stores/relocate';
+  import { activeMoves, holdingMove } from '../../lib/stores/relocate';
   import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
@@ -59,8 +59,9 @@
     </DropdownMenu>
   {/snippet}
   {#each games as game (game.id)}
+    {@const hold = holdingMove($activeMoves, game.id)}
     {@const gates = gameGates(game, {
-      moving: $activeMove?.scope === 'library' ? 'library' : $activeMove?.gameId === game.id ? 'game' : null,
+      moving: hold ? hold.scope : null,
       emulated: isEmulated($libraryGamesById.get(game.id)),
     })}
     <UsageRow
