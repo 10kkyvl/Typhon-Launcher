@@ -19,9 +19,11 @@ func (s *Service) Busy(gameID string) bool {
 	return false
 }
 
-// WorkRunning reports whether an install, a removal or a pre-elevated broker
-// is running now: the work the launcher's shutdown would wait for or cut
-// short. The seamless self-update asks it before it hands the launcher over.
+// WorkRunning reports whether an install or a removal is running now: the
+// work the launcher's shutdown would wait for or cut short. The self-update
+// asks it before it quits the launcher. A pre-elevated broker counts only
+// while it runs an installer, and then through that install's job: an idle
+// one waits out a whole download and stops within seconds at shutdown.
 //
 //wails:ignore
 func (s *Service) WorkRunning() bool {
@@ -29,11 +31,6 @@ func (s *Service) WorkRunning() bool {
 	defer s.mu.Unlock()
 	if len(s.jobs) > 0 || s.removing > 0 {
 		return true
-	}
-	for _, b := range s.brokers {
-		if !b.dead {
-			return true
-		}
 	}
 	for _, item := range s.items {
 		if transient(item.Status) {

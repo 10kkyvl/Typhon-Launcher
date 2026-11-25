@@ -77,19 +77,66 @@ func TestWorkRunningWhileAGameIsRemoved(t *testing.T) {
 	}
 }
 
-func TestWorkRunningWhileABrokerLives(t *testing.T) {
-	s, _, _ := newTestService(t)
+// raiseBroker starts the pre-elevated broker of download d1 and waits for it.
+func raiseBroker(t *testing.T, s *Service) *fakeProc {
+	t.Helper()
 	_, procs := fakeElevation(t)
 	s.HandleDownloadStarted(startedDownload(t, s))
-	var proc *fakeProc
 	select {
-	case proc = <-procs:
+	case proc := <-procs:
+		return proc
 	case <-time.After(5 * time.Second):
 		t.Fatal("the broker did not start")
+		return nil
+	}
+}
+
+// A broker raised ahead of an install lives for the whole download (up to
+// brokerMaxLifetime) and stops within seconds at shutdown: while it waits
+// for a job it is not work that keeps the launcher from updating.
+func TestAnIdleBrokerIsNotWork(t *testing.T) {
+	s, _, _ := newTestService(t)
+	raiseBroker(t, s)
+	if s.brokerFor("d1") == nil {
+		t.Fatal("setup: the broker is not registered")
+	}
+	if s.WorkRunning() {
+		t.Fatal("WorkRunning() = true for a broker that runs no job")
+	}
+}
+
+// A broker that runs an installer is the install's job: the shutdown waits
+// for that installer.
+func TestWorkRunningWhileABrokerRunsAnInstaller(t *testing.T) {
+	s, downloads, _ := newTestService(t)
+	raiseBroker(t, s)
+	root := t.TempDir()
+	mkFile(t, filepath.Join(root, "Game", "setup.exe"), 4096)
+	downloads.add("d1", "Game", root)
+	s.roots = []string{t.TempDir()}
+	release := make(chan struct{})
+	entered := make(chan bool, 1)
+	s.runner = &fakeRunner{act: func(spec runSpec) {
+		entered <- spec.Broker != nil
+		<-release
+	}}
+	item, err := s.Start("d1", StartOptions{})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	select {
+	case viaBroker := <-entered:
+		if !viaBroker {
+			close(release)
+			t.Fatal("setup: the installer did not go to the broker")
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the installer did not start")
 	}
 	if !s.WorkRunning() {
-		t.Fatal("WorkRunning() = false while a pre-elevated broker lives")
+		close(release)
+		t.Fatal("WorkRunning() = false while the broker runs an installer")
 	}
-	proc.close()
-	waitFor(t, "the broker's exit to be noticed", func() bool { return !s.WorkRunning() })
+	close(release)
+	s.waitJobDone(t, item.ID)
 }
