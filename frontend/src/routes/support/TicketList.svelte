@@ -7,6 +7,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { msg } from '../../lib/i18n';
   import { openStatusPage } from '../../lib/services/account';
   import { listTickets, type Ticket } from '../../lib/services/support';
@@ -20,6 +21,7 @@
   import { relativeDate } from '../../lib/utils/format';
   import { sessionGone } from './sending';
 
+  const uid = $props.id();
   let tickets = $state<Ticket[]>([]);
   let next = $state('');
   let loading = $state(true);
@@ -132,11 +134,11 @@
   async function showMore() {
     const from = tickets.length;
     const hand = focusHandOff();
-    if (await more()) void hand(() => list?.querySelectorAll<HTMLElement>('button.row')[from]);
+    if (await more()) void hand(() => list?.querySelectorAll<HTMLElement>('[data-ticket-open]')[from]);
   }
 
   function retryFocus(): HTMLElement | undefined {
-    return firstNew < 0 ? undefined : list?.querySelectorAll<HTMLElement>('button.row')[firstNew];
+    return firstNew < 0 ? undefined : list?.querySelectorAll<HTMLElement>('[data-ticket-open]')[firstNew];
   }
 
   onMount(() => {
@@ -218,21 +220,25 @@
   <ul class="list" bind:this={list}>
     {#each tickets as item (item.number)}
       {@const status = statusView(item.status)}
-      <li>
-        <button class="row" class:unread={item.unread} onclick={() => open(item)}>
-          <span class="dot" class:on={item.unread} role={item.unread ? 'img' : undefined} aria-label={item.unread ? msg('tickets.unreadMark') : undefined}></span>
-          <span class="main">
-            <span class="subject" dir="auto">{item.subject}</span>
-            <span class="meta">
-              <span class="ref">{item.ref}</span>
-              <span>{topicLabel(item.topic)}</span>
-              <span>{msg('tickets.updated', { when: relativeDate(item.updatedAt) })}</span>
-            </span>
+      {@const about = `${uid}-${item.number}`}
+      <!-- The subject opens the request, as a title opens its item in the other lists; the rest of the
+           row is what the link is described by. The unread mark is in the link, so it is said with it. -->
+      <li class="row" class:unread={item.unread}>
+        <span class="main">
+          <span class="subject">
+            <TextLink tone="plain" truncate data-ticket-open aria-describedby="{about}-meta{status ? ` ${about}-status` : ''}" onclick={() => open(item)}>
+              <span class="dot" class:on={item.unread} role={item.unread ? 'img' : undefined} aria-label={item.unread ? msg('tickets.unreadMark') : undefined}></span>{' '}<span class="subject-text" dir="auto">{item.subject}</span>
+            </TextLink>
           </span>
-          {#if status}
-            <StatusBadge kind={status.kind} label={status.label} />
-          {/if}
-        </button>
+          <span class="meta" id="{about}-meta">
+            <span class="ref">{item.ref}</span>
+            <span>{topicLabel(item.topic)}</span>
+            <span>{msg('tickets.updated', { when: relativeDate(item.updatedAt) })}</span>
+          </span>
+        </span>
+        {#if status}
+          <span id="{about}-status"><StatusBadge kind={status.kind} label={status.label} /></span>
+        {/if}
       </li>
     {/each}
   </ul>
@@ -263,28 +269,21 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    width: 100%;
     padding: var(--space-3) var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-2);
-    text-align: left;
-    transition:
-      background var(--dur) var(--ease),
-      border-color var(--dur) var(--ease);
   }
 
-  .row:hover {
-    background: var(--hover);
-    border-color: var(--border-strong);
-  }
-
+  /* Before the subject in every row, lit only on an unread one, so the subjects line up. */
   .dot {
-    flex-shrink: 0;
+    display: inline-block;
     width: 0.9rem;
     height: 0.9rem;
+    margin-inline-end: var(--space-1);
     border-radius: 50%;
     background: transparent;
+    vertical-align: middle;
   }
 
   .dot.on {
@@ -299,10 +298,10 @@
     gap: var(--space-1);
   }
 
+  /* The link cuts the subject inside its own box: this line gives it the width the row leaves. */
   .subject {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: flex;
+    min-width: 0;
     font-size: var(--font-md);
     font-weight: 500;
     color: var(--text);

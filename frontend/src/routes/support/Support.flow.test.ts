@@ -28,7 +28,7 @@ describe('support screens render user text as text', () => {
   });
 
   it('gives the subject the same direction handling in the list and the header', () => {
-    expect(ticketList).toMatch(/<span class="subject" dir="auto">\{item\.subject\}<\/span>/);
+    expect(ticketList).toMatch(/<span class="subject-text" dir="auto">\{item\.subject\}<\/span>/);
     expect(ticketView).toMatch(/<h1 dir="auto" tabindex="-1">\{ticket\.subject\}<\/h1>/);
   });
 

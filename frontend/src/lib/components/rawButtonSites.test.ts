@@ -13,7 +13,7 @@ import { frontendSources } from '../testing/sources';
  */
 
 type Kind =
-  | 'row' // a row or a card that opens what it shows (a game, a profile, a ticket, a dialog)
+  | 'row' // a row or a card that opens what it shows (a game, a profile, a dialog)
   | 'nav item' // the sidebar's navigation
   | 'radio tile' // one choice of a radio group, drawn as a tile or a swatch (roving.ts)
   | 'list option' // one pick from a list of candidates in a dialog or a panel
@@ -88,7 +88,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/profile/ProfilePlaying.svelte': { open: 'row' },
   'routes/settings/AccentPicker.svelte': { swatch: 'radio tile' },
   'routes/settings/ThemeTiles.svelte': { preset: 'radio tile' },
-  'routes/support/TicketList.svelte': { row: 'row' },
   'routes/user/GameRow.svelte': { row: 'row' },
   'routes/user/UserActivity.svelte': { row: 'row' },
   'routes/user/UserMutual.svelte': { person: 'row' },

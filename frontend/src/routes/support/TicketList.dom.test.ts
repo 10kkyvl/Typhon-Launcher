@@ -10,7 +10,8 @@ import { resetHistory, route } from '../../lib/stores/router';
 import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
-import { page, ticket, words } from '../../lib/testing/supportTesting';
+import { description } from '../../lib/testing/hints';
+import { page, ticket } from '../../lib/testing/supportTesting';
 import TicketList from './TicketList.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -47,14 +48,20 @@ const row = (subject: string) => screen.getByRole('button', { name: new RegExp(s
 describe('TicketList: the requests, one row each', () => {
   it('names each row by its subject and says its reference, topic, last change and status', async () => {
     renderDom(TicketList);
-    const open = await screen.findByRole('button', { name: /Game will not start/ });
+    const open = await screen.findByRole('button', { name: 'Game will not start' });
 
-    expect(words(open)).toContain('T-3');
-    expect(words(open)).toContain(msg('tickets.topicLaunch'));
-    expect(words(open)).toContain(msg('tickets.updated', { when: msg('format.today') }));
-    expect(words(open)).toContain(msg('tickets.statusOpen'));
-    expect(words(row('Download stuck'))).toContain(msg('tickets.statusWaitingUser'));
-    expect(words(row('Cannot sign in'))).toContain(msg('tickets.statusResolved'));
+    expect(description(open)).toBe(`T-3 ${msg('tickets.topicLaunch')} ${msg('tickets.updated', { when: msg('format.today') })} ${msg('tickets.statusOpen')}`);
+    expect(screen.getByRole('button', { name: `${msg('tickets.unreadMark')} Download stuck at 99%` })).toBe(row('Download stuck'));
+    expect(description(row('Download stuck'))).toContain(msg('tickets.statusWaitingUser'));
+    expect(description(row('Cannot sign in'))).toContain(msg('tickets.statusResolved'));
+  });
+
+  // Rows open what they show the way the other lists' rows do: by the title, drawn with the base link.
+  it('opens a request from its subject, a base link, not from a hand-made button', async () => {
+    renderDom(TicketList);
+    const open = await screen.findByRole('button', { name: 'Game will not start' });
+    expect(open.classList.contains('text-link')).toBe(true);
+    expect(within(screen.getByRole('list')).getAllByRole('button')).toHaveLength(3);
   });
 
   it('marks only a request support has answered since it was read', async () => {
