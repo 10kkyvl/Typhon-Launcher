@@ -16,14 +16,21 @@ const FIXTURES = String.raw`\(await import\('[^']*\/supportTesting'\)\)`;
 
 /**
  * The module is mocked once, by exactly the factory of the fixtures and nothing around it: a spread, an
- * Object.assign or a second vi.mock after it could put one real function back over the whole mock.
- * `\1` is the factory's own parameter, the original module.
+ * Object.assign, a second vi.mock or vi.doMock after it (or an unmock) could put one real function back
+ * over the whole mock, and vi.importActual hands the test the real module. `\1` is the factory's own
+ * parameter, the original module.
  */
 function only(path: string, call: string): (source: string) => boolean {
-  const any = new RegExp(String.raw`vi\.mock\('[^']*${path}'`, 'g');
+  const any = new RegExp(String.raw`vi\.(?:mock|doMock|unmock|doUnmock)\(\s*'[^']*${path}'`, 'g');
   const exact = new RegExp(String.raw`^vi\.mock\('[^']*${path}', async \((\w*)\) => ${FIXTURES}\.${call}\);$`, 'm');
-  return (source) => (source.match(any) ?? []).length === 1 && exact.test(source);
+  const actual = new RegExp(String.raw`importActual\b[^(]*\(\s*'[^']*${path}'`);
+  return (source) => (source.match(any) ?? []).length === 1 && exact.test(source) && !actual.test(source);
 }
+
+// A mock runs what the test writes in place, never a function handed over by reference (the real one
+// taken from vi.importActual), and no module is taken whole by a path the guard cannot read.
+const BY_REFERENCE = /\.mockImplementation(?:Once)?\(\s*(?!async\b|function\b|\(|[\w$]+\s*=>|vi\.fn\b)/;
+const ACTUAL_BY_NAME = /importActual(?:<[^>]*>)?\(\s*(?!['"`])/;
 
 const NEEDED: [string, (source: string) => boolean][] = [
   ['the whole support service', only(String.raw`lib\/services\/support`, String.raw`supportService\(await \1\(\)\)`)],
@@ -33,6 +40,7 @@ const NEEDED: [string, (source: string) => boolean][] = [
   ['the diagnostics binding', only(String.raw`bindings\/typhon\/internal\/diagnostics`, String.raw`fakeService\(await \1\(\), 'diagnostics'\)`)],
   ['the account binding', only(String.raw`bindings\/typhon\/internal\/account`, String.raw`fakeService\(await \1\(\), 'account'\)`)],
   ['no call reached a binding', (source) => /expect\(calls\)\.toEqual\(\[\]\)/.test(source)],
+  ['no real function behind a mock', (source) => !BY_REFERENCE.test(source) && !ACTUAL_BY_NAME.test(source)],
 ];
 
 const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source)).map(([what]) => what);
@@ -62,6 +70,49 @@ describe('tests that mount a support screen', () => {
     }
     expect(missing(`vi.mock('../../lib/services/account', async (original) => ({ ...${fixtures}.accountOpeners(await original()), logout: vi.fn() }));`)).toContain('the account openers');
     expect(missing(`vi.mock('../../lib/services/logsUpload', async () => ({ ...${fixtures}.logsUpload(), sendLogs: vi.fn() }));`)).toContain('the log upload');
+  });
+
+  // A file that passes every check above, and the six modules it mocks.
+  const fixtures = "(await import('../../lib/testing/supportTesting'))";
+  const MODULES: [what: string, path: string][] = [
+    ['the whole support service', '../../lib/services/support'],
+    ['the log upload', '../../lib/services/logsUpload'],
+    ['the account openers', '../../lib/services/account'],
+    ['the support binding', '../../../bindings/typhon/internal/support'],
+    ['the diagnostics binding', '../../../bindings/typhon/internal/diagnostics'],
+    ['the account binding', '../../../bindings/typhon/internal/account'],
+  ];
+  const sound = [
+    `vi.mock('../../lib/services/support', async (original) => ${fixtures}.supportService(await original()));`,
+    `vi.mock('../../lib/services/logsUpload', async () => ${fixtures}.logsUpload());`,
+    `vi.mock('../../lib/services/account', async (original) => ${fixtures}.accountOpeners(await original()));`,
+    `vi.mock('../../../bindings/typhon/internal/support', async (original) => ${fixtures}.fakeService(await original(), 'support'));`,
+    `vi.mock('../../../bindings/typhon/internal/diagnostics', async (original) => ${fixtures}.fakeService(await original(), 'diagnostics'));`,
+    `vi.mock('../../../bindings/typhon/internal/account', async (original) => ${fixtures}.fakeService(await original(), 'account'));`,
+    'vi.mocked(getTicket).mockImplementation(async (number: number) => thread(ticket(number, `Request ${number}`), []));',
+    'expect(calls).toEqual([]);',
+  ].join('\n');
+
+  it('take a sound file as sound', () => {
+    expect(missing(sound)).toEqual([]);
+  });
+
+  it.each(MODULES)('refuse a vi.doMock that mocks %s again', (what, path) => {
+    expect(missing(`${sound}\nvi.doMock('${path}', async (original) => await original());`)).toContain(what);
+  });
+
+  it.each(MODULES)('refuse a vi.importActual of %s', (what, path) => {
+    expect(missing(`${sound}\nconst real = await vi.importActual<typeof import('${path}')>('${path}');`)).toContain(what);
+  });
+
+  it('refuse a mock given a real function to run, by reference rather than written in the test', () => {
+    for (const line of [
+      'vi.mocked(getTicket).mockImplementation(real.getTicket);',
+      'vi.mocked(createTicket).mockImplementationOnce(actual.createTicket);',
+      "const path = '../../lib/services/support';\nconst real = await vi.importActual(path);",
+    ]) {
+      expect(missing(`${sound}\n${line}`), line).toContain('no real function behind a mock');
+    }
   });
 
   it('mock the whole support service, the log upload and the account openers, and fake the bindings', () => {
