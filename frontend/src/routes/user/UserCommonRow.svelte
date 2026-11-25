@@ -9,7 +9,14 @@
     game,
     name,
     oninvite,
-  }: { game: CommonGame; name: string; oninvite?: (game: CommonGame) => void } = $props();
+    offline = false,
+  }: {
+    game: CommonGame;
+    name: string;
+    oninvite?: (game: CommonGame) => void;
+    /** The invitation opens the chat, which needs the server: held, saying why. */
+    offline?: boolean;
+  } = $props();
 </script>
 
 <div class="item">
@@ -20,7 +27,7 @@
     tag={bothPlayedRecently(game) ? msg('social.userCommonBothRecent') : ''}
   />
   {#if oninvite}
-    <Button size="sm" onclick={() => oninvite(game)}>{msg('social.userCommonInvite')}</Button>
+    <Button size="sm" disabled={offline} reason={offline ? msg('social.userActionsNeedConnection') : ''} onclick={() => oninvite(game)}>{msg('social.userCommonInvite')}</Button>
   {/if}
 </div>
 

@@ -12,11 +12,14 @@
     name,
     username,
     oninvite,
+    offline = false,
   }: {
     common: CommonGames;
     name: string;
     username: string;
     oninvite?: (game: CommonGame) => void;
+    /** Invite waits, saying why: it opens the chat, which needs the server. */
+    offline?: boolean;
   } = $props();
 
   const rows = $derived(common.games.slice(0, 6));
@@ -27,7 +30,7 @@
   <p class="count">{commonGamesTitle(common.count)}</p>
   <div class="list">
     {#each rows as game (game.igdbId)}
-      <UserCommonRow {game} {name} {oninvite} />
+      <UserCommonRow {game} {name} {oninvite} {offline} />
     {/each}
   </div>
   {#if common.count > rows.length}
@@ -37,7 +40,7 @@
   {/if}
 </Card>
 
-<UserCommonModal bind:open={all} {username} {name} {oninvite} />
+<UserCommonModal bind:open={all} {username} {name} {oninvite} {offline} />
 
 <style>
   .count {

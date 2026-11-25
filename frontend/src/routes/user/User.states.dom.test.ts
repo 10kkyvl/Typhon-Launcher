@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
 import type { Settings } from '../../lib/services/settings';
-import { profile as fetchProfile, sendRequest, type SendResult } from '../../lib/services/social';
+import { profile as fetchProfile, sendRequest, type CommonGame, type SendResult } from '../../lib/services/social';
+import { openChat } from '../../lib/stores/messaging';
 import { resetHistory } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
@@ -12,7 +13,7 @@ import { renderDom } from '../../lib/testing/dom';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { description } from '../../lib/testing/hints';
 import UserProfile from './UserProfile.svelte';
-import { player } from './userTesting';
+import { draftStorage, player } from './userTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./userTesting')).fakeService(await original(), 'social'));
@@ -30,6 +31,7 @@ afterEach(() => {
   expect(calls).toEqual([]);
   vi.mocked(fetchProfile).mockReset();
   vi.mocked(sendRequest).mockReset();
+  vi.mocked(openChat).mockReset();
   settings.set(null);
   document.body.replaceChildren();
   authState.set('bootstrapping');
@@ -116,6 +118,26 @@ describe("a user's page: offline", () => {
     const more = screen.getByRole('button', { name: msg('social.moreLabel') });
     expect(more.getAttribute('aria-disabled')).toBe('true');
     expect(description(more)).toBe(msg('social.userActionsNeedConnection'));
+  });
+
+  it("on a friend's page Write and Invite say why they wait, and a press opens no chat and writes no draft", async () => {
+    authState.set('offline');
+    const drafts = draftStorage();
+    const game = { igdbId: 7, title: 'Hades', coverUrl: '', viewerOwned: true, targetOwned: true } as CommonGame;
+    vi.mocked(fetchProfile).mockResolvedValue(player({ relation: 'friend', common: { count: 1, games: [game] } }));
+    const { user } = renderDom(UserProfile, { username: 'ann' });
+    await screen.findByText('@ann', { selector: '.username' });
+
+    for (const name of [msg('social.chatWrite'), msg('social.userCommonInvite')]) {
+      const control = screen.getByRole('button', { name });
+      expect(control.getAttribute('aria-disabled'), name).toBe('true');
+      expect(description(control), name).toBe(msg('social.userActionsNeedConnection'));
+      await user.click(control);
+      control.focus();
+      await user.keyboard('{Enter}');
+    }
+    expect(vi.mocked(openChat)).not.toHaveBeenCalled();
+    expect([...drafts.values()]).toEqual([]);
   });
 
   it('a request from the player: Accept and Decline each say why they wait', async () => {

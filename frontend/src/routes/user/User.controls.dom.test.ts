@@ -16,6 +16,7 @@ import { resetHistory, route } from '../../lib/stores/router';
 import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
+import { description } from '../../lib/testing/hints';
 import GameRow from './GameRow.svelte';
 import UserCommonModal from './UserCommonModal.svelte';
 import UserMutual from './UserMutual.svelte';
@@ -308,6 +309,18 @@ describe("a user's page: all the games in common", () => {
     expect(rowOf('Hades')).toBeTruthy();
     await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
     expect(region.textContent).toContain(msg('social.userCommonFailed'));
+  });
+
+  it('offline, Invite in the dialog says why it waits and a press invites nobody', async () => {
+    vi.mocked(userCommon).mockResolvedValue({ games: [common(1, 'Hades')], next: '' });
+    const oninvite = vi.fn();
+    const { user } = renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann', oninvite, offline: true });
+    const invite = await screen.findByRole('button', { name: msg('social.userCommonInvite') });
+
+    expect(invite.getAttribute('aria-disabled')).toBe('true');
+    expect(description(invite)).toBe(msg('social.userActionsNeedConnection'));
+    await user.click(invite);
+    expect(oninvite).not.toHaveBeenCalled();
   });
 
   it('"Show more" is busy while its page loads, keeps its words and the focus', async () => {

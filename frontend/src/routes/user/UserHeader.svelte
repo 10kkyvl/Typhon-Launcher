@@ -25,7 +25,7 @@
     profile: PublicProfile;
     /** The action that is running: its control is busy and the others wait. */
     busy: string;
-    /** The launcher is offline: the actions that need the server say so and wait. */
+    /** The launcher is offline: the actions that need the server (Write too: the chat does) say so and wait. */
     offline?: boolean;
     onaction: (id: string) => void;
     onmessage?: () => void;
@@ -96,7 +96,7 @@
         <div class="head-actions">
           {#if profile.relation === 'friend'}
             <StatusBadge kind="success" label={relationLabel('friend')} />
-            {#if onmessage}<Button variant="primary" data-relation-control={anchor('write')} onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
+            {#if onmessage}<Button variant="primary" disabled={offline} reason={held} data-relation-control={anchor('write')} onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ props })}
                 <IconButton {...props} label={msg('social.moreLabel')} disabled={offline} reason={held} data-relation-control={anchor('menu')}>

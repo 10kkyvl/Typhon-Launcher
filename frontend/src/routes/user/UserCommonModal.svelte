@@ -16,11 +16,13 @@
     username,
     name,
     oninvite,
+    offline = false,
   }: {
     open?: boolean;
     username: string;
     name: string;
     oninvite?: (game: CommonGame) => void;
+    offline?: boolean;
   } = $props();
 
   let games = $state<CommonGame[]>([]);
@@ -110,7 +112,7 @@
       {#if games.length > 0}
         <div class="list" bind:this={list}>
           {#each games as game (game.igdbId)}
-            <UserCommonRow {game} {name} {oninvite} />
+            <UserCommonRow {game} {name} {oninvite} {offline} />
           {/each}
         </div>
       {/if}

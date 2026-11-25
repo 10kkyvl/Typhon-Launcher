@@ -359,6 +359,7 @@
                 {common}
                 {name}
                 username={data.username}
+                offline={$isOffline}
                 oninvite={data.relation === 'friend' ? (game) => inviteToPlay(data!, game.title) : undefined}
               />
             {/if}
