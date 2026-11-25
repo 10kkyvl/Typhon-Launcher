@@ -194,6 +194,25 @@ describe.each(KINDS.map((k) => [k.name, k] as const))('DiskUsage: the question o
     expect(document.activeElement).toBe(within(rowOf(kind.section, 'Celeste')).getByRole('button', { name: msg('diskusage.deleteAll') }));
   });
 
+  it('keeps a refusal in view when its own rescan finds the group gone, and its Retry then sends nothing', async () => {
+    vi.mocked(scanUsage)
+      .mockResolvedValueOnce(withGroups(kind, [group('g-h', 'Hades', 12, { sizeBytes: 2 * GB }), group('g-c', 'Celeste', 3, { sizeBytes: GB })]))
+      .mockResolvedValue(withGroups(kind, [group('g-c', 'Celeste', 3, { sizeBytes: GB })]));
+    vi.mocked(kind.service).mockRejectedValue(new Error('typhon:diskusage.not_scanned: x'));
+    const { user, dialog } = await openFor(kind, 'Hades');
+
+    await user.click(within(dialog).getByRole('button', { name: msg(kind.confirm) }));
+    await vi.waitFor(() => expect(within(dialog).getByRole('alert').textContent?.trim()).toBe(msg('errInstall.diskusageNotScanned')));
+    await settle();
+    expect(screen.getByRole('dialog', { name: msg(kind.title) })).toBe(dialog);
+
+    await user.click(within(dialog).getByRole('button', { name: msg('common.retry') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(kind.service).mock.calls).toEqual([['g-h']]);
+    expect(toast).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(within(rowOf(kind.section, 'Celeste')).getByRole('button', { name: msg('diskusage.deleteAll') }));
+  });
+
   it('after a partial delete asks with what is left, and Retry deletes that', async () => {
     vi.mocked(scanUsage)
       .mockResolvedValueOnce(withGroups(kind, [group('g-h', 'Hades', 12, { sizeBytes: 2 * GB })]))

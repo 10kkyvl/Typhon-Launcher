@@ -8,7 +8,7 @@ import type { LibraryGame } from '../../lib/services/library';
 import { libraryGames, libraryLoaded } from '../../lib/stores/library';
 import { renderDom } from '../../lib/testing/dom';
 import DiskUsage from './DiskUsage.svelte';
-import { game, leftover, report, rowOf } from './diskUsageTesting';
+import { game, group, leftover, report, rowOf } from './diskUsageTesting';
 
 // Where focus goes when the row that holds it, or the row a dialog returns to, leaves or loses its
 // control: a refused delete whose row stays without Delete, a rescan the page did not start, the
@@ -121,6 +121,22 @@ describe('DiskUsage: focus when a rescan the page did not start drops the focuse
     libraryChanges();
     await settle();
     expect(document.activeElement).toBe(deleteOf(B));
+  });
+
+  it('keeps to the row’s own section: the row above it there, not a row of the section below', async () => {
+    const shots = report({ screenshots: [group('g-h', 'Hades', 4)] }).screenshots;
+    vi.mocked(scanUsage)
+      .mockResolvedValueOnce(report({ leftovers: [partial(A, { sizeBytes: 3 }), partial(B, { sizeBytes: 2 })], screenshots: shots }))
+      .mockResolvedValueOnce(report({ leftovers: [partial(A, { sizeBytes: 3 })], screenshots: shots }));
+    renderDom(DiskUsage);
+    await screen.findByText(B);
+    await settle();
+    deleteOf(B).focus();
+
+    libraryChanges();
+    await settle();
+    expect(screen.queryByText(B)).toBeNull();
+    expect(document.activeElement).toBe(deleteOf(A));
   });
 
   it('goes to the first control left in the section when no row of it has one', async () => {
