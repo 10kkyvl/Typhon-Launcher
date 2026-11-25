@@ -339,6 +339,31 @@ describe('the general tab: rows that depend on the platform', () => {
     expect(screen.queryByText(msg('settings.extlibWindowsOnly'))).toBeNull();
   });
 
+  // Go registers the startup entry on any build that asks; only the app facts say this one is portable.
+  it('holds launch on startup, with its saved state, while the app facts are pending', () => {
+    vi.mocked(getAppInfo).mockReturnValue(new Promise(() => {}));
+    open({ launchOnStartup: true });
+    const startup = sw('settings.generalLaunchOnStartupLabel');
+    expect(startup.hasAttribute('disabled')).toBe(true);
+    expect(startup.getAttribute('aria-checked')).toBe('true');
+    expect(description(startup)).toBe(said('common.loading', 'settings.generalLaunchOnStartupSub'));
+  });
+
+  it('holds launch on startup when the app facts could not be read, saying so', async () => {
+    vi.mocked(getAppInfo).mockRejectedValue(new Error('app info down'));
+    open();
+    const startup = sw('settings.generalLaunchOnStartupLabel');
+    await waitFor(() => expect(description(startup)).toBe(said('settings.aboutSystemFailed', 'settings.generalLaunchOnStartupSub')));
+    expect(startup.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('lets launch on startup be switched once the app facts say the build is installed', async () => {
+    open();
+    const startup = sw('settings.generalLaunchOnStartupLabel');
+    await waitFor(() => expect(startup.hasAttribute('disabled')).toBe(false));
+    expect(description(startup)).toBe(msg('settings.generalLaunchOnStartupSub'));
+  });
+
   it('on a Mac: no Windows row, and the import off because it needs Windows', async () => {
     vi.mocked(getAppInfo).mockResolvedValue({ ...APP, platform: 'darwin' });
     open();
@@ -568,8 +593,8 @@ describe('the settings page: its first reads', () => {
     await waitFor(() => expect(listLegalDocuments).toHaveBeenCalledOnce());
     expect(getWineStatus).toHaveBeenCalledOnce();
     expect(console.warn).toHaveBeenCalledWith(expect.any(String), down);
-    // The unknown platform keeps the launch switch on offer, as before the read.
-    expect(sw('settings.generalLaunchOnStartupLabel').hasAttribute('disabled')).toBe(false);
+    // A build that cannot say whether it is portable holds the launch switch.
+    expect(sw('settings.generalLaunchOnStartupLabel').hasAttribute('disabled')).toBe(true);
     await user().click(screen.getByRole('tab', { name: msg('settings.aboutTab') }));
     expect(await screen.findByText('Terms of use')).toBeTruthy();
   });

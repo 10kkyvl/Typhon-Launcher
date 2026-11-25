@@ -38,6 +38,12 @@
   }
 
   const portable = $derived(page.appInfo?.portable ?? false);
+  // Go registers the startup entry for any build that asks, and only the app facts say this one is
+  // portable: until they arrive the switch shows its saved state and waits.
+  const startupReason = $derived.by(() => {
+    if (page.appInfo === null) return page.appInfoFailed ? msg('settings.aboutSystemFailed') : msg('common.loading');
+    return portable ? msg('settings.generalLaunchOnStartupPortable') : undefined;
+  });
 
   async function setLaunchOnStartup(value: boolean) {
     await updateSettingsReporting({ launchOnStartup: value }, (err) => {
@@ -94,7 +100,7 @@
       <SettingsRow
         label={msg('settings.generalLaunchOnStartupLabel')}
         hint={msg('settings.generalLaunchOnStartupSub')}
-        disabledReason={portable ? msg('settings.generalLaunchOnStartupPortable') : undefined}
+        disabledReason={startupReason}
       >
         {#snippet children({ labelId, hintId, disabled })}
           <Toggle
