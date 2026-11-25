@@ -57,7 +57,9 @@
   <PageHeader title={msg('settings.pageTitle')} />
 
   <div class="tabs-wrap">
-    <Tabs {tabs} idPrefix={uid} label={msg('settings.pageTitle')} divider={false} bind:value={tab} />
+    <div class="tabs-plate">
+      <Tabs {tabs} idPrefix={uid} label={msg('settings.pageTitle')} divider={false} bind:value={tab} />
+    </div>
   </div>
 
   <div class="settings-page">
@@ -115,14 +117,18 @@
 </Page>
 
 <style>
-  /* Stuck over the scrolled settings, the tabs are an island like the top bar's. */
   .tabs-wrap {
     position: sticky;
     top: 0;
     z-index: var(--z-sticky);
     margin: var(--space-2) 0 var(--space-6);
+  }
+
+  /* Stuck over the scrolled cards, the strip is a card of its own: an opaque plate, so the words
+     scrolled under it do not show through it. */
+  .tabs-plate {
     padding: 0 var(--space-4);
-    background: var(--island-fill);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
   }

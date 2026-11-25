@@ -205,6 +205,9 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
   'routes/history/HistoryDay.svelte': ["the plate of a day's list", '.row.failed .mark', '.row.failed .detail'],
   'routes/sources/Sources.svelte': ['the plate of the list the rows of SourceRow.svelte sit on'],
+  // No status text of its own: the settings tab strip sticks over the scrolled cards, whose words
+  // must not show through it.
+  'routes/settings/Settings.svelte': ['the plate of the tab strip, held opaque over the scrolled cards'],
   'routes/sources/SourceRow.svelte': [
     'the plate of the list in Sources.svelte (.list, held opaque there); the error and health marks are icons in a row of it',
     '.source-error',
@@ -264,6 +267,7 @@ const LOCAL_SURFACE: Record<string, string> = {
   'routes/profile/Profile.svelte': '.topbar',
   'routes/history/HistoryDay.svelte': '.rows',
   'routes/sources/Sources.svelte': '.list',
+  'routes/settings/Settings.svelte': '.tabs-plate',
   'routes/downloads/FailedList.svelte': '.row',
   'lib/components/TopbarSearch.svelte': '.results',
   'lib/components/profile/BlockSettings.svelte': '.settings',
