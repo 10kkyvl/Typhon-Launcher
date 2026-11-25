@@ -188,6 +188,8 @@ export const ui: Record<UiKey, Message> = {
   'ui.launcherWillRestartShort':
     'The launcher will close, install the update, and restart itself. This takes less than a minute.',
   'ui.handoffNote': 'The launcher stays open. This takes a few seconds.',
+  'ui.handoffWaitingNote':
+    'The previous version is still finishing its work, such as an install in progress. The update continues as soon as it is done.',
   'ui.handoffFailedTitle': 'Updating without a restart did not work',
   'ui.updateWithRestart': 'Update with a restart',
   'ui.launcherUpdatedTo': 'Launcher updated to {version}',
