@@ -3,6 +3,8 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
   import type { GroupUsage } from '../../lib/services/diskusage';
+  import { libraryGamesById } from '../../lib/stores/library';
+  import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
@@ -40,14 +42,23 @@
 </script>
 
 <UsageSection
+  id={usageSectionIds[kind]}
   title={msg(words.title)}
+  count={groups.length}
   hint={msg(words.hint)}
   total={total(totalBytes, groups.some((s) => s.sizeUnknown))}
   empty={groups.length === 0}
   emptyText={msg(words.empty)}
 >
   {#each groups as group (group.gameId)}
-    <UsageRow title={group.title} path={msg(words.count, { count: group.count })} size={size(group)}>
+    <UsageRow
+      key="{kind}:{group.gameId}"
+      title={group.title}
+      gameId={$libraryGamesById.has(group.gameId) ? group.gameId : null}
+      path={msg(words.count, { count: group.count })}
+      isPath={false}
+      size={size(group)}
+    >
       {#snippet badges()}
         {#if !group.inLibrary}
           <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />

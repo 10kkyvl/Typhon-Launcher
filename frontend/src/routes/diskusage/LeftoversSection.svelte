@@ -3,6 +3,7 @@
   import { leftoverKindKey, reasonLabel } from '../../lib/diskusage/usage';
   import { msg } from '../../lib/i18n';
   import type { Leftover } from '../../lib/services/diskusage';
+  import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
@@ -21,7 +22,9 @@
 </script>
 
 <UsageSection
+  id={usageSectionIds.leftovers}
   title={msg('diskusage.leftoversTitle')}
+  count={leftovers.length}
   hint={msg('diskusage.leftoversHint')}
   total={total(totalBytes, leftovers.some((l) => l.sizeUnknown))}
   empty={leftovers.length === 0}
@@ -29,9 +32,9 @@
 >
   {#each leftovers as leftover (leftover.path)}
     <UsageRow
+      key="leftovers:{leftover.path}"
       title={msg(leftoverKindKey(leftover.kind))}
       path={leftover.path}
-      pathTitle={leftover.path}
       reason={leftover.deletable ? null : reasonLabel(leftover.reasonCode)}
       size={size(leftover)}
     >

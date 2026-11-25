@@ -4,6 +4,7 @@
   import { downloadBlocked, reasonLabel } from '../../lib/diskusage/usage';
   import { msg } from '../../lib/i18n';
   import type { DownloadUsage } from '../../lib/services/diskusage';
+  import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
@@ -22,7 +23,9 @@
 </script>
 
 <UsageSection
+  id={usageSectionIds.downloads}
   title={msg('diskusage.downloadsTitle')}
+  count={downloads.length}
   hint={msg('diskusage.downloadsHint')}
   total={total(totalBytes, downloads.some((d) => d.sizeUnknown))}
   empty={downloads.length === 0}
@@ -31,10 +34,10 @@
   {#each downloads as download (download.id)}
     {@const blocked = downloadBlocked(download)}
     <UsageRow
+      key="downloads:{download.id}"
       title={download.name}
       path={download.root}
-      pathTitle={download.root}
-      reason={blocked ? reasonLabel(download.reasonCode) :download.seeding ? msg('diskusage.reason.seeding') : null}
+      reason={blocked ? reasonLabel(download.reasonCode) : download.seeding ? msg('diskusage.reason.seeding') : null}
       size={size(download)}
     >
       {#snippet badges()}

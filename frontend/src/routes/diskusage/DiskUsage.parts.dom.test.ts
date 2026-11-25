@@ -83,7 +83,9 @@ const report = {
   scannedAt: '2026-11-12T00:00:00Z',
 } as Report;
 
-const section = (title: string) => screen.getByRole('heading', { level: 2, name: title }).closest('section') as HTMLElement;
+// A section's heading says its title, then the count of its rows.
+const section = (title: string) =>
+  screen.getAllByRole('heading', { level: 2 }).find((h) => (h.textContent ?? '').trim().startsWith(title))?.closest('section') as HTMLElement;
 const rowTitles = (title: string) => [...section(title).querySelectorAll('.row .title')].map((el) => el.textContent);
 
 beforeEach(() => {
@@ -103,7 +105,7 @@ afterEach(() => {
 
 async function shown() {
   const view = renderDom(DiskUsage);
-  await screen.findByRole('heading', { level: 2, name: msg('diskusage.gamesTitle') });
+  await screen.findByText('Celeste torrent');
   return view;
 }
 

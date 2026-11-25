@@ -8,6 +8,8 @@
   import { openMoveGame } from '../../lib/game/actions/move';
   import { msg } from '../../lib/i18n';
   import type { GameUsage } from '../../lib/services/diskusage';
+  import { libraryGamesById } from '../../lib/stores/library';
+  import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
@@ -33,7 +35,13 @@
   } = $props();
 </script>
 
-<UsageSection title={msg('diskusage.gamesTitle')} hint={msg('diskusage.gamesHint')} total={total(totalBytes, games.some((g) => g.sizeUnknown))}>
+<UsageSection
+  id={usageSectionIds.games}
+  title={msg('diskusage.gamesTitle')}
+  count={games.length}
+  hint={msg('diskusage.gamesHint')}
+  total={total(totalBytes, games.some((g) => g.sizeUnknown))}
+>
   {#snippet tools()}
     <DropdownMenu
       items={(['size', 'played'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}
@@ -50,7 +58,14 @@
   {#each games as game (game.id)}
     {@const blocked = gameBlockedKey(game)}
     {@const manage = canManageGame(game)}
-    <UsageRow title={game.title} path={game.installDir} pathTitle={game.installDir} played={ageText(ageOf(game.lastPlayed, now))} size={size(game)}>
+    <UsageRow
+      key="games:{game.id}"
+      title={game.title}
+      gameId={$libraryGamesById.has(game.id) ? game.id : null}
+      path={game.installDir}
+      played={ageText(ageOf(game.lastPlayed, now))}
+      size={size(game)}
+    >
       {#snippet badges()}
         {#if game.external}
           <StatusBadge kind="neutral" label={msg('diskusage.external')} plain />

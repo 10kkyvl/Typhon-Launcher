@@ -1,21 +1,29 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
 
-  // One row of a section: what it is and where, why it cannot go, its marks, its size and its actions.
+  // One row of a section, an item of its list: what it is (a game of the library leads to its page),
+  // where (a path shown whole, wrapping), why it cannot go, its marks, its size and its actions.
   let {
+    key,
     title,
+    gameId,
     path,
-    pathTitle,
+    isPath = true,
     reason,
     badges,
     played,
     size,
     actions,
   }: {
+    /** The row's id within the page, for the focus rule: `<section>:<item>`. */
+    key: string;
     title: string;
+    /** The library game the title names: the title then leads to its page. */
+    gameId?: string | null;
+    /** The path, or for a group the line that counts its files (`isPath` false). */
     path: string;
-    /** The path again as the hint of its line; none when the line is not a path. */
-    pathTitle?: string;
+    isPath?: boolean;
     /**
      * The line under the path: rows that can have one pass it, or null while there is none; rows that
      * never have one leave it out.
@@ -25,18 +33,18 @@
     /** When the game was last played; only rows of games have it. */
     played?: string;
     size: string;
-    actions: Snippet;
+    actions?: Snippet;
   } = $props();
 </script>
 
 <!-- Spaces between the parts are written out: a part that is absent leaves no space behind. -->
-<div class="row"
+<li class="row" data-usage-row={key}
   ><div class="main"
-    ><span class="title">{title}</span>{' '}<span class="path" title={pathTitle}>{path}</span
+    ><span class="title"><GameLink id={gameId} name={title} /></span>{' '}<span class="path" class:words={!isPath}>{path}</span
     >{#if reason !== undefined}{' '}{#if reason !== null}<span class="reason">{reason}</span>{/if}{/if}</div
   >{#if badges}{' '}<div class="badges">{@render badges()}</div>{/if}{#if played !== undefined}{' '}<span class="played"
       >{played}</span
-    >{/if}{' '}<span class="size">{size}</span>{' '}<div class="actions">{@render actions()}</div></div
+    >{/if}{' '}<span class="size">{size}</span>{' '}<div class="actions">{@render actions?.()}</div></li
 >
 
 <style>
@@ -54,24 +62,25 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
   .title {
     font-size: var(--font-md);
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
+  /* A path is shown whole: it wraps at any character rather than being cut. */
   .path {
     font-size: var(--font-xs);
     color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+  }
+
+  .path.words {
+    font-size: var(--font-sm);
   }
 
   .reason {
@@ -87,14 +96,14 @@
   }
 
   .played {
-    width: 15rem;
+    width: 12rem;
     flex-shrink: 0;
     font-size: var(--font-sm);
     color: var(--text-2);
   }
 
   .size {
-    width: 14rem;
+    width: 10rem;
     flex-shrink: 0;
     text-align: right;
     font-size: var(--font-sm);
@@ -104,6 +113,7 @@
 
   .actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-2);

@@ -1,10 +1,15 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
 
-  // One section of the page: its heading, hint and total, then its rows or a line saying it has none.
+  // One section of the page: its heading with the count of its rows, its total and tools, its hint,
+  // then its rows as a list or a line saying it has none. The heading's id names the section; the
+  // summary's meter and the focus rule find the section by it.
   let {
+    id,
     title,
+    count,
     hint,
     total,
     tools,
@@ -12,38 +17,34 @@
     emptyText = '',
     children,
   }: {
+    id: string;
     title: string;
+    count: number;
     hint: string;
     total: string;
-    /** Controls beside the total; they and the total then share one group. */
+    /** Controls beside the total. */
     tools?: Snippet;
     empty?: boolean;
     emptyText?: string;
+    /** The rows: UsageRow items. */
     children: Snippet;
   } = $props();
 </script>
 
-<section>
-  <div class="section-head">
-    <div>
-      <h2>{title}</h2>
-      <p class="muted">{hint}</p>
-    </div>
-    {#if tools}
-      <div class="section-tools">
-        <span class="section-total">{total}</span>
-        {@render tools()}
-      </div>
-    {:else}
+<section aria-labelledby={id} data-usage-section={id}>
+  <SectionHeader {id} {title} {count}>
+    {#snippet actions()}
       <span class="section-total">{total}</span>
-    {/if}
-  </div>
+      {@render tools?.()}
+    {/snippet}
+  </SectionHeader>
+  <p class="hint">{hint}</p>
   {#if empty}
     <EmptyState size="inline" title={emptyText} />
   {:else}
-    <div class="list">
+    <ul class="list">
       {@render children()}
-    </div>
+    </ul>
   {/if}
 </section>
 
@@ -52,30 +53,10 @@
     margin-top: var(--space-8);
   }
 
-  h2 {
-    font-size: var(--font-lg);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-  }
-
-  .muted {
-    margin-top: 0.3rem;
+  .hint {
+    margin: 0 0 var(--space-3);
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .section-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-3);
-  }
-
-  .section-tools {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
   }
 
   .section-total {
@@ -89,5 +70,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 </style>
