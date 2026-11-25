@@ -10,6 +10,7 @@ import { user } from '../../lib/testing/dom';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
 import Sources from './Sources.svelte';
 import row from './SourceRow.svelte?raw';
+import page from './Sources.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -228,3 +229,24 @@ describe('Sources: what its text links hold', () => {
   });
 });
 
+// R7: the screen's spacing comes from the scale, and no window width hides a part of a row: the
+// smallest window (1100 px) shows the counts too. Read from the source: jsdom lays nothing out.
+describe('Sources: its stylesheets', () => {
+  const sheets = { Sources: styleOf(page, 'Sources'), SourceRow: styleOf(row, 'SourceRow') };
+
+  it('R7: space parts with the spacing scale only', () => {
+    const off = Object.entries(sheets).flatMap(([name, css]) =>
+      [...css.matchAll(/(?:^|[;{\s])((?:gap|row-gap|column-gap|padding|margin)(?:-[a-z]+)?)\s*:\s*([^;}]+)/g)]
+        .filter(([, , value]) => value.trim().split(/\s+/).some((part) => part !== '0' && part !== 'auto' && !/^var\(--space-\d+\)$/.test(part)))
+        .map(([, prop, value]) => `${name}: ${prop}: ${value.trim()}`),
+    );
+    expect(off).toEqual([]);
+  });
+
+  it('R7: holds no rule by window width, and hides nothing', () => {
+    for (const [name, css] of Object.entries(sheets)) {
+      expect(css, name).not.toMatch(/@media/);
+      expect(css, name).not.toMatch(/display\s*:\s*none/);
+    }
+  });
+});
