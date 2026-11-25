@@ -103,5 +103,9 @@ export const tickets = {
   'tickets.thread': 'Messages',
   'tickets.messageTime': '{date} at {time}',
   'tickets.signInAgain': 'Sign in again',
+  'tickets.requestNotSentKept': 'The request “{subject}” was not sent. Its text is back in the new request form.',
+  'tickets.requestNotSentNewer': 'The request “{subject}” was not sent. The new request form keeps the text written after it.',
+  'tickets.replyNotSentKept': 'Your reply in “{subject}” was not sent. Its text is back in the reply box.',
+  'tickets.replyNotSentNewer': 'Your reply in “{subject}” was not sent. The reply box keeps the text written after it.',
   // /7-P support
 } as const;
