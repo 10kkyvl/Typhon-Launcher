@@ -11,7 +11,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { LIMITS, message, thread, ticket } from '../../lib/testing/supportTesting';
-import { forgetReply, forgetRequest, keepReply, keepRequest, keptReply, keptRequest, onRequestBack, returnReply, returnRequest, type RequestDraft } from './drafts';
+import { forgetReply, forgetRequest, keepReply, keepRequest, keptReply, keptRequest, onReplyBack, onRequestBack, returnReply, returnRequest, type RequestDraft } from './drafts';
 import NewTicket from './NewTicket.svelte';
 import TicketView from './TicketView.svelte';
 
@@ -275,24 +275,34 @@ describe('the kept drafts themselves', () => {
     const heard: RequestDraft[] = [];
     const off = onRequestBack((back) => heard.push(back));
     try {
-      expect(returnRequest(DRAFT, form)).toBe(true);
+      expect(returnRequest(DRAFT, form, me)).toBe(true);
       expect(keptRequest()).toEqual(DRAFT);
       const newer = { ...DRAFT, subject: 'Written after' };
       keepRequest(newer, {});
-      expect(returnRequest(DRAFT, form)).toBe(false);
+      expect(returnRequest(DRAFT, form, me)).toBe(false);
       expect(keptRequest()).toEqual(newer);
       expect(heard).toEqual([DRAFT]);
     } finally {
       off();
     }
     keepReply(7, 'Written after');
-    expect([returnReply(7, 'Failed'), keptReply(7)]).toEqual([false, 'Written after']);
-    expect([returnReply(8, 'Failed'), keptReply(8)]).toEqual([true, 'Failed']);
+    expect([returnReply(7, 'Failed', me), keptReply(7)]).toEqual([false, 'Written after']);
+    expect([returnReply(8, 'Failed', me), keptReply(8)]).toEqual([true, 'Failed']);
   });
 
-  it('take nothing back for a guest', () => {
-    as(null);
-    expect([returnRequest(DRAFT, form), returnReply(7, 'Failed')]).toEqual([false, false]);
+  it('take nothing back for a guest, nor for an account other than the one the send started under', () => {
+    const heard: unknown[] = [];
+    const off = [onRequestBack((back) => heard.push(back)), onReplyBack((...back) => heard.push(back))];
+    try {
+      as(null);
+      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me)]).toEqual([false, false]);
+      as(`${me}-other`);
+      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me), keptRequest(), keptReply(7)]).toEqual([false, false, null, '']);
+      expect([returnRequest(DRAFT, form, null), returnReply(7, 'Failed', null)]).toEqual([false, false]);
+      expect(heard).toEqual([]);
+    } finally {
+      for (const stop of off) stop();
+    }
     as(me);
     expect([keptRequest(), keptReply(7)]).toEqual([null, '']);
   });

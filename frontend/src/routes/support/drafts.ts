@@ -37,6 +37,11 @@ function owner(): string | null {
   return get(currentUser)?.id || null;
 }
 
+/** The account signed in now. A send notes it when it starts: its late answer acts only for it. */
+export function account(): string | null {
+  return owner();
+}
+
 function forget() {
   kept = null;
   stopWatching?.();
@@ -116,10 +121,12 @@ export function onRequestBack(listener: (draft: RequestDraft) => void): () => vo
 }
 
 /**
- * A send of `draft` from `by` failed: it is kept again, unless something newer is kept by now. Answers
- * whether it was.
+ * A send of `draft` from `by`, started under the account `from`, failed: it is kept again, unless
+ * something newer is kept by now or another account (or no one) is signed in. Answers whether it was.
  */
-export function returnRequest(draft: RequestDraft, by: Writer): boolean {
+export function returnRequest(draft: RequestDraft, by: Writer, from: string | null): boolean {
+  // The text is lost with its account's session rather than given to whoever signed in since.
+  if (!from || owner() !== from) return false;
   if (mine()?.request) return false;
   const into = writable();
   if (!into) return false;
@@ -156,8 +163,13 @@ export function onReplyBack(listener: (ticket: number, text: string) => void): (
   return () => replyBack.delete(listener);
 }
 
-/** A send of a reply failed: it is kept again, unless a newer reply is kept in that request by now. */
-export function returnReply(ticket: number, text: string): boolean {
+/**
+ * A send of a reply, started under the account `from`, failed: it is kept again, unless a newer reply is
+ * kept in that request by now or another account (or no one) is signed in.
+ */
+export function returnReply(ticket: number, text: string, from: string | null): boolean {
+  // The text is lost with its account's session rather than given to whoever signed in since.
+  if (!from || owner() !== from) return false;
   if (keptReply(ticket)) return false;
   const into = writable();
   if (!into) return false;

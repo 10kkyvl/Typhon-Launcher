@@ -30,7 +30,7 @@
   import { handleSessionLost } from '../../lib/stores/user';
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
-  import { forgetRequest, keepRequest, keptRequest, onRequestBack, returnRequest, type RequestDraft, type Writer } from './drafts';
+  import { account, forgetRequest, keepRequest, keptRequest, onRequestBack, returnRequest, type RequestDraft, type Writer } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
@@ -218,25 +218,30 @@
     upload = null;
     const sent: RequestDraft = { topic, game: game ? { ...game } : null, subject, body, attachLogs, logsTouched };
     let started = false;
+    let who: string | null = null;
     try {
       const outcome = await sendNewTicket(
         { topic, subject, body, gameIgdbId: game?.igdbId ?? null, attachLogs },
         () => confirm.ask(),
         () => {
           started = true;
+          who = account();
           forgetRequest(me);
         },
       );
       if (!outcome.sent) return;
+      // An answer that comes after another account signed in shows that account nothing of this request.
+      if (account() !== who) return;
       forgetRequest(me);
       announceCreated(outcome.value, onScreen, {
         notify: (text) => toast(text, 'success'),
         open: (number) => navigate('support', { ticket: String(number) }),
       });
     } catch (err) {
-      const back = started && returnRequest(sent, me);
-      if (!onScreen) {
-        if (started) toast(msg(back ? 'tickets.requestNotSentKept' : 'tickets.requestNotSentNewer', { subject: sent.subject.trim() }), 'danger');
+      const changed = started && account() !== who;
+      const back = started && !changed && returnRequest(sent, me, who);
+      if (!onScreen || changed) {
+        if (started && !changed) toast(msg(back ? 'tickets.requestNotSentKept' : 'tickets.requestNotSentNewer', { subject: sent.subject.trim() }), 'danger');
         return;
       }
       sending = false;

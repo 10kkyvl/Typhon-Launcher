@@ -30,7 +30,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
   import AttachLogs from './AttachLogs.svelte';
-  import { forgetReply, keepReply, keptReply, onReplyBack, returnReply } from './drafts';
+  import { account, forgetReply, keepReply, keptReply, onReplyBack, returnReply } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { messageWhen } from './messageTime';
   import { bodyCounter, isSendShortcut, sendKeys, sessionGone } from './sending';
@@ -188,12 +188,16 @@
     const text = reply;
     const about = ticket?.subject ?? '';
     let started = false;
+    let who: string | null = null;
     try {
       const outcome = await sendReply(number, text, attachLogs, () => confirm.ask(), () => {
         started = true;
+        who = account();
         forgetReply(number);
       });
       if (!outcome.sent) return;
+      // An answer that comes after another account signed in shows that account nothing of this reply.
+      if (account() !== who) return;
       reply = '';
       attachLogs = false;
       sending = false;
@@ -206,9 +210,10 @@
       refreshPending = false;
       await load();
     } catch (err) {
-      const back = started && returnReply(number, text);
-      if (!onScreen) {
-        if (started) toast(msg(back ? 'tickets.replyNotSentKept' : 'tickets.replyNotSentNewer', { subject: about }), 'danger');
+      const changed = started && account() !== who;
+      const back = started && !changed && returnReply(number, text, who);
+      if (!onScreen || changed) {
+        if (started && !changed) toast(msg(back ? 'tickets.replyNotSentKept' : 'tickets.replyNotSentNewer', { subject: about }), 'danger');
         return;
       }
       sending = false;
