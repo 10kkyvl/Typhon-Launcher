@@ -66,20 +66,38 @@ async function meter() {
 const entries = (legend: HTMLElement) =>
   [...legend.querySelectorAll(':scope > li:not(.total)')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
 
+const SEGMENTS = [
+  `${msg('diskusage.gamesTitle')} ${msg('common.meterAtLeast', { size: bytesSize(40 * GB) })}`,
+  `${msg('diskusage.screenshotsTitle')} ${bytesSize(2 * GB)}`,
+  `${msg('diskusage.snapshotsTitle')} ${bytesSize(GB)}`,
+  `${msg('diskusage.segmentDownloads')} ${bytesSize(10 * GB)}`,
+  `${msg('diskusage.segmentReclaim')} ${bytesSize(3 * GB)}`,
+  `${msg('diskusage.segmentKept')} ${bytesSize(5 * GB)}`,
+];
+
+const diskLine = (info: StorageInfo) => msg('diskusage.libraryDisk', { volume: info.volume, free: bytesSize(info.freeBytes), total: bytesSize(info.totalBytes) });
+
 describe('DiskUsage: the summary meter', () => {
-  it('draws each kind of the launcher’s files once, against the library disk with its free space', async () => {
+  // The launcher's files lie on every drive; the library disk is one of them. The meter draws the
+  // files against their own total, and the disk is said apart from it.
+  it('draws each kind of the launcher’s files once, against their own total, and says the library disk on a line of its own', async () => {
     const { bar, legend } = await meter();
-    expect(bar.getAttribute('aria-label')).toContain(msg('diskusage.meterVolume', { volume: 'C:' }));
-    expect(entries(legend)).toEqual([
-      `${msg('diskusage.gamesTitle')} ${msg('common.meterAtLeast', { size: bytesSize(40 * GB) })}`,
-      `${msg('diskusage.screenshotsTitle')} ${bytesSize(2 * GB)}`,
-      `${msg('diskusage.snapshotsTitle')} ${bytesSize(GB)}`,
-      `${msg('diskusage.segmentDownloads')} ${bytesSize(10 * GB)}`,
-      `${msg('diskusage.segmentReclaim')} ${bytesSize(3 * GB)}`,
-      `${msg('diskusage.segmentKept')} ${bytesSize(5 * GB)}`,
-      `${msg('common.meterOther')} ${msg('common.meterAtMost', { size: bytesSize(100 * GB - 61 * GB - 20 * GB) })}`,
-      `${msg('common.meterFree')} ${bytesSize(20 * GB)}`,
-    ]);
+    expect(bar.getAttribute('aria-label')).toContain(msg('diskusage.meterLauncher'));
+    expect(entries(legend).slice(0, SEGMENTS.length)).toEqual(SEGMENTS);
+    expect(entries(legend).join(' ')).not.toContain(msg('common.meterOther'));
+    expect(entries(legend).join(' ')).not.toContain(msg('common.meterRest'));
+    expect(entries(legend).join(' ')).not.toContain(bytesSize(20 * GB));
+    expect(legend.querySelector('.total')?.textContent?.trim()).toBe(msg('common.meterTotal', { total: bytesSize(61 * GB) }));
+    expect(screen.getByText(diskLine(disk))).toBeTruthy();
+    expect(screen.queryByText(msg('diskusage.freeUnknown'))).toBeNull();
+  });
+
+  it('does not draw the files of every drive against a library disk smaller than they are', async () => {
+    const small: StorageInfo = { ...disk, totalBytes: 50 * GB, freeBytes: 5 * GB, usedBytes: 45 * GB };
+    storageInfo.set(small);
+    const { bar } = await meter();
+    expect(bar.getAttribute('aria-label')).not.toContain(msg('common.meterOverflow'));
+    expect(screen.getByText(diskLine(small))).toBeTruthy();
   });
 
   it('says Go’s totals under the meter in words, at least where a size is not measured', async () => {
@@ -95,12 +113,14 @@ describe('DiskUsage: the summary meter', () => {
     expect(refreshStorage).toHaveBeenCalled();
   });
 
-  it('without a measured disk, draws the launcher’s files alone and says the free space is not measured', async () => {
+  it('without a measured disk, draws the launcher’s files the same and says the free space is not measured', async () => {
     storageInfo.set(null);
     const { bar, legend } = await meter();
     expect(bar.getAttribute('aria-label')).toContain(msg('diskusage.meterLauncher'));
+    expect(entries(legend).slice(0, SEGMENTS.length)).toEqual(SEGMENTS);
     expect(entries(legend)).not.toContain(expect.stringContaining(msg('common.meterOther')));
     expect(screen.getByText(msg('diskusage.freeUnknown'))).toBeTruthy();
+    expect(document.querySelector('.summary')?.textContent).not.toContain(msg('diskusage.libraryDisk', { volume: '', free: '', total: '' }).split(':')[0]);
   });
 
   it('leads a picked segment to its section’s heading', async () => {

@@ -151,7 +151,6 @@ export const diskusage = {
   'diskusage.segmentDownloads': 'Загрузки',
   'diskusage.segmentReclaim': 'Остатки, которые можно удалить',
   'diskusage.segmentKept': 'Остатки, которые удалить нельзя',
-  'diskusage.meterVolume': 'Диск {volume}',
   'diskusage.meterLauncher': 'Файлы лаунчера',
   'diskusage.freeUnknown': 'Свободное место на диске библиотеки не измерено',
   'diskusage.libraryDisk': 'Диск библиотеки {volume}: свободно {free} из {total}',

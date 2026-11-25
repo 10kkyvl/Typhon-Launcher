@@ -29,6 +29,7 @@
   import LeftoversSection from './LeftoversSection.svelte';
   import UsageWarnings from './UsageWarnings.svelte';
   import { total } from './usageSizes';
+  import { bytesSize } from '../../lib/utils/format';
 
   const page = createDiskUsagePage();
   let sort = $state<GameSort>('size');
@@ -166,11 +167,13 @@
   {:else}
     <Card>
       <div class="summary">
+        <!-- The launcher's files lie on every drive, so they are drawn against their own total, with no
+             free space and no other files beside them; the library disk is said on a line of its own. -->
         <DiskMeter
           segments={summarySegments(page.report)}
-          total={disk ? disk.totalBytes : page.report.totals.totalBytes}
-          free={disk ? disk.freeBytes : null}
-          label={disk ? msg('diskusage.meterVolume', { volume: disk.volume || disk.path }) : msg('diskusage.meterLauncher')}
+          total={page.report.totals.totalBytes}
+          free={null}
+          label={msg('diskusage.meterLauncher')}
           onpick={pickSection}
         />
         <!-- Go's totals in words: the same numbers the meter draws, summed by Go, not by the page. -->
@@ -187,7 +190,9 @@
         {#if page.report.totals.unknownSizes}
           <p class="note">{msg('diskusage.unknownNote', { count: unknownCount })}</p>
         {/if}
-        {#if !disk}
+        {#if disk}
+          <p class="note">{msg('diskusage.libraryDisk', { volume: disk.volume || disk.path, free: bytesSize(disk.freeBytes), total: bytesSize(disk.totalBytes) })}</p>
+        {:else}
           <p class="note">{msg('diskusage.freeUnknown')}</p>
         {/if}
       </div>

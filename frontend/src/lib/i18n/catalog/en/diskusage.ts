@@ -137,7 +137,6 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.segmentDownloads': 'Downloads',
   'diskusage.segmentReclaim': 'Leftovers that can be deleted',
   'diskusage.segmentKept': 'Leftovers that cannot be deleted',
-  'diskusage.meterVolume': 'Disk {volume}',
   'diskusage.meterLauncher': 'Launcher files',
   'diskusage.freeUnknown': 'Free space on the library disk was not measured',
   'diskusage.libraryDisk': 'Library disk {volume}: {free} free of {total}',
