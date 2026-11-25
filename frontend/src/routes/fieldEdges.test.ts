@@ -26,11 +26,6 @@ const FORMS: Record<string, Allowed> = {
   'lib/components/TextField.svelte': {
     '.error': "a field message's plate over the backdrop",
   },
-  'routes/auth/AuthScreen.svelte': {
-    '.auth': 'the page the screen paints itself',
-    '.panel': 'the card the form sits in',
-    '.guest-divider::before, .guest-divider::after': 'the rule either side of "or"',
-  },
   'routes/support/NewTicket.svelte': {
     '.counter': "the character count's plate over the backdrop",
     '.counter.over': 'the count past its limit',
@@ -172,6 +167,19 @@ describe("the base text field's and the raw forms' fields", () => {
   it.each(Object.entries(FORMS))('%s lists no rule that is gone', (path, allowed) => {
     const present = new Set(rules(frontendSources[path] ?? '').map(([selector]) => selector));
     expect(Object.keys(allowed).filter((selector) => !present.has(selector)), path).toEqual([]);
+  });
+});
+
+// Forms moved onto the base field: they draw no field of their own, and a component's scoped rule cannot
+// reach the field inside TextField except through `:global`, which they do not use.
+const ON_TEXT_FIELD = ['routes/auth/AuthScreen.svelte'];
+
+describe('the forms on the base text field', () => {
+  it.each(ON_TEXT_FIELD)('%s draws its fields through TextField and reaches into none', (path) => {
+    const source = frontendSources[path] ?? '';
+    expect(source, path).toMatch(/<TextField\b/);
+    expect(fieldTags(source), path).toEqual([]);
+    expect(/<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '', path).not.toMatch(/:global/);
   });
 });
 

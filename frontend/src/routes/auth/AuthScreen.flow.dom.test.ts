@@ -297,3 +297,93 @@ describe('AuthScreen: the account server out of reach', () => {
     expect(get(authState)).toBe('unavailable');
   });
 });
+
+describe('AuthScreen: a password the user can see', () => {
+  const reveal = () => screen.getByRole('button', { name: msg('transfers.authShowPassword') });
+
+  it('is hidden at first, shown and hidden again by a named toggle that says its state, with the same autocomplete', async () => {
+    const { container, user } = screenIn('login');
+    const password = () => container.querySelector<HTMLInputElement>('input[autocomplete="current-password"]');
+    expect(password()?.type).toBe('password');
+    expect(reveal().getAttribute('aria-pressed')).toBe('false');
+
+    await user.click(reveal());
+    expect(reveal().getAttribute('aria-pressed')).toBe('true');
+    expect(password()?.type).toBe('text');
+    expect(screen.getByLabelText(msg('transfers.authPasswordLabel'))).toBe(password());
+
+    await user.click(reveal());
+    expect(password()?.type).toBe('password');
+  });
+
+  it('keeps the new-password autocomplete on the sign-up form while shown, and is hidden again after a switch', async () => {
+    const { user } = screenIn('register');
+    await user.click(reveal());
+    const password = field(msg('transfers.authPasswordLabel'));
+    expect(password.type).toBe('text');
+    expect(password.getAttribute('autocomplete')).toBe('new-password');
+
+    await user.click(screen.getByRole('button', { name: msg('transfers.authSignInAction') }));
+    expect(field(msg('transfers.authPasswordLabel')).type).toBe('password');
+    expect(reveal().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('comes after the password field in the Tab order', async () => {
+    const { user } = screenIn('login');
+    field(msg('transfers.authPasswordLabel')).focus();
+    await user.tab();
+    expect(document.activeElement).toBe(reveal());
+  });
+});
+
+describe('AuthScreen: where a refusal sends focus', () => {
+  it('moves focus from the pressed button to the field the refusal is about', async () => {
+    account.Register.mockRejectedValue(new Error('username_taken'));
+    const { user } = screenIn('register');
+    await user.type(field(msg('common.email')), 'player@example.test');
+    await user.type(field(msg('transfers.authUsernameLabel')), 'player_one');
+    await user.type(field(msg('transfers.authDisplayNameLabel')), 'Player One');
+    await user.type(field(msg('transfers.authPasswordLabel')), 'fake-pass-2');
+    await user.click(screen.getByRole('button', { name: msg('transfers.authCreateAccount') }));
+
+    const username = field(msg('transfers.authUsernameLabel'));
+    await vi.waitFor(() => expect(username.getAttribute('aria-invalid')).toBe('true'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(username));
+  });
+
+  it('moves focus from the field Enter was pressed in to the field the refusal is about', async () => {
+    account.Login.mockRejectedValue(new Error('invalid_username'));
+    const { user } = screenIn('login');
+    await user.type(field(msg('transfers.authIdentifierLabel')), 'x');
+    await user.type(field(msg('transfers.authPasswordLabel')), 'fake-pass-1{Enter}');
+
+    const login = field(msg('transfers.authIdentifierLabel'));
+    await vi.waitFor(() => expect(login.getAttribute('aria-invalid')).toBe('true'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(login));
+  });
+
+  it('says a refusal about a field the sign-in form does not have in the form, never nowhere', async () => {
+    account.Login.mockRejectedValue(new Error('invalid_email'));
+    const { container, user } = screenIn('login');
+    await user.type(field(msg('transfers.authIdentifierLabel')), 'player@');
+    await user.type(field(msg('transfers.authPasswordLabel')), 'fake-pass-1');
+    const submit = screen.getByRole('button', { name: msg('transfers.authSignInAction') });
+    await user.click(submit);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('state.accountErrorInvalidEmail'));
+    expect(alert.closest('.notice')?.getAttribute('data-tone')).toBe('danger');
+    expect(container.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0);
+    expect(document.activeElement).toBe(submit);
+  });
+
+  it('says a code the screen has no words for as its plain failure', async () => {
+    account.Login.mockRejectedValue(new Error('account_muted'));
+    const { user } = screenIn('login');
+    await user.type(field(msg('transfers.authIdentifierLabel')), 'player_one');
+    await user.type(field(msg('transfers.authPasswordLabel')), 'fake-pass-1{Enter}');
+
+    expect((await screen.findByRole('alert')).textContent?.trim()).toBe(msg('transfers.authGenericError'));
+  });
+});
+

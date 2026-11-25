@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { Eye, EyeOff } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import TextField from '../../lib/components/TextField.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { openForgotPassword, openSupportSite } from '../../lib/services/account';
@@ -11,7 +15,15 @@
 
   const uid = $props.id();
 
-  type FieldErrors = Partial<Record<'email' | 'username' | 'displayName' | 'password' | 'general', string>>;
+  type Field = 'email' | 'username' | 'displayName' | 'password';
+  type FieldErrors = Partial<Record<Field | 'general', string>>;
+
+  // The fields each form has, first to last: a refusal about one of them is said at it, any other in
+  // the form. On the sign-in form the login field takes what the server says about a username.
+  const FIELDS: Record<'login' | 'register', Field[]> = {
+    login: ['username', 'password'],
+    register: ['email', 'username', 'displayName', 'password'],
+  };
 
   let email = $state('');
   let username = $state('');
@@ -19,6 +31,7 @@
   let password = $state('');
   let identifier = $state('');
   let errors = $state<FieldErrors>({});
+  let revealed = $state(false);
   // Each request shows on its own button; either one holds the whole form.
   let submitting = $state(false);
   let guesting = $state(false);
@@ -27,6 +40,8 @@
   const isRegister = $derived($authView === 'register');
   const offline = $derived($authState === 'unavailable');
 
+  const fieldId = (field: Field) => (field === 'username' && !isRegister ? `${uid}-identifier` : `${uid}-${field}`);
+
   // The pressed link goes with the form it was under: focus it held moves to the first field of the
   // new one.
   function switchView(view: 'login' | 'register') {
@@ -34,23 +49,24 @@
     const hand = focusHandOff();
     errors = {};
     password = '';
+    revealed = false;
     authView.set(view);
     void hand(() => document.getElementById(view === 'register' ? `${uid}-email` : `${uid}-identifier`));
   }
 
-  function applyError(err: unknown) {
-    const field = accountErrorField(err);
+  // Focus goes to the field the refusal is about; a refusal of the whole form leaves it on the button
+  // or in the field Enter was pressed in.
+  async function applyError(err: unknown) {
+    const named = accountErrorField(err);
+    const field = FIELDS[isRegister ? 'register' : 'login'].find((shown) => shown === named);
     const message = accountErrorText(err, msg('transfers.authGenericError'));
-    switch (field) {
-      case 'email':
-      case 'username':
-      case 'displayName':
-      case 'password':
-        errors = { [field]: message };
-        return;
-      default:
-        errors = { general: message };
+    if (!field) {
+      errors = { general: message };
+      return;
     }
+    errors = { [field]: message };
+    await tick();
+    document.getElementById(fieldId(field))?.focus();
   }
 
   async function submitRegister() {
@@ -60,7 +76,7 @@
     try {
       await signUp({ email, username, displayName, password });
     } catch (err) {
-      applyError(err);
+      await applyError(err);
     } finally {
       submitting = false;
     }
@@ -73,7 +89,7 @@
     try {
       await signIn({ emailOrUsername: identifier, password });
     } catch (err) {
-      applyError(err);
+      await applyError(err);
     } finally {
       submitting = false;
     }
@@ -140,93 +156,64 @@
            turns disabled loses the focus Enter was pressed in. -->
       <form class="form" onsubmit={onSubmit} aria-busy={busy || undefined}>
         {#if isRegister}
-          <div class="field">
-            <label class="label" for="{uid}-email">{msg('common.email')}</label>
-            <input
-              id="{uid}-email"
-              class="input"
-              class:invalid={!!errors.email}
-              aria-invalid={errors.email ? 'true' : undefined}
-              aria-describedby={errors.email ? `${uid}-email-error` : undefined}
-              type="email"
-              autocomplete="email"
-              required
-              bind:value={email}
-              readonly={busy}
-            />
-            {#if errors.email}<span class="error" id="{uid}-email-error" role="alert">{errors.email}</span>{/if}
-          </div>
-
-          <div class="field">
-            <label class="label" for="{uid}-username">{msg('transfers.authUsernameLabel')}</label>
-            <input
-              id="{uid}-username"
-              class="input"
-              class:invalid={!!errors.username}
-              aria-invalid={errors.username ? 'true' : undefined}
-              aria-describedby={errors.username ? `${uid}-username-error` : undefined}
-              type="text"
-              maxlength="24"
-              autocomplete="username"
-              required
-              bind:value={username}
-              readonly={busy}
-            />
-            {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
-          </div>
-
-          <div class="field">
-            <label class="label" for="{uid}-displayName">{msg('transfers.authDisplayNameLabel')}</label>
-            <input
-              id="{uid}-displayName"
-              class="input"
-              class:invalid={!!errors.displayName}
-              aria-invalid={errors.displayName ? 'true' : undefined}
-              aria-describedby={errors.displayName ? `${uid}-displayName-error` : undefined}
-              type="text"
-              maxlength="32"
-              autocomplete="nickname"
-              required
-              bind:value={displayName}
-              readonly={busy}
-            />
-            {#if errors.displayName}<span class="error" id="{uid}-displayName-error" role="alert">{errors.displayName}</span>{/if}
-          </div>
+          <TextField
+            id={fieldId('email')}
+            label={msg('common.email')}
+            type="email"
+            autocomplete="email"
+            required
+            readonly={busy}
+            error={errors.email}
+            bind:value={email}
+          />
+          <TextField
+            id={fieldId('username')}
+            label={msg('transfers.authUsernameLabel')}
+            maxlength={24}
+            autocomplete="username"
+            required
+            readonly={busy}
+            error={errors.username}
+            bind:value={username}
+          />
+          <TextField
+            id={fieldId('displayName')}
+            label={msg('transfers.authDisplayNameLabel')}
+            maxlength={32}
+            autocomplete="nickname"
+            required
+            readonly={busy}
+            error={errors.displayName}
+            bind:value={displayName}
+          />
         {:else}
-          <div class="field">
-            <label class="label" for="{uid}-identifier">{msg('transfers.authIdentifierLabel')}</label>
-            <input
-              id="{uid}-identifier"
-              class="input"
-              class:invalid={!!errors.username}
-              aria-invalid={errors.username ? 'true' : undefined}
-              aria-describedby={errors.username ? `${uid}-username-error` : undefined}
-              type="text"
-              autocomplete="username"
-              required
-              bind:value={identifier}
-              readonly={busy}
-            />
-            {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
-          </div>
+          <TextField
+            id={fieldId('username')}
+            label={msg('transfers.authIdentifierLabel')}
+            autocomplete="username"
+            required
+            readonly={busy}
+            error={errors.username}
+            bind:value={identifier}
+          />
         {/if}
 
-        <div class="field">
-          <label class="label" for="{uid}-password">{msg('transfers.authPasswordLabel')}</label>
-          <input
-            id="{uid}-password"
-            class="input"
-            class:invalid={!!errors.password}
-            aria-invalid={errors.password ? 'true' : undefined}
-            aria-describedby={errors.password ? `${uid}-password-error` : undefined}
-            type="password"
-            autocomplete={isRegister ? 'new-password' : 'current-password'}
-            required
-            bind:value={password}
-            readonly={busy}
-          />
-          {#if errors.password}<span class="error" id="{uid}-password-error" role="alert">{errors.password}</span>{/if}
-        </div>
+        <TextField
+          id={fieldId('password')}
+          label={msg('transfers.authPasswordLabel')}
+          type={revealed ? 'text' : 'password'}
+          autocomplete={isRegister ? 'new-password' : 'current-password'}
+          required
+          readonly={busy}
+          error={errors.password}
+          bind:value={password}
+        >
+          {#snippet trailing()}
+            <IconButton size="sm" label={msg('transfers.authShowPassword')} pressed={revealed} onclick={() => (revealed = !revealed)}>
+              {#if revealed}<EyeOff size="1.6rem" strokeWidth={1.8} />{:else}<Eye size="1.6rem" strokeWidth={1.8} />{/if}
+            </IconButton>
+          {/snippet}
+        </TextField>
 
         {#if !isRegister}
           <div class="forgot">
@@ -355,26 +342,6 @@
     flex-direction: column;
     gap: var(--space-3);
     margin-top: var(--space-5);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .label {
-    font-size: var(--font-xs);
-    color: var(--text-2);
-  }
-
-  .input.invalid {
-    border-color: var(--danger);
-  }
-
-  .error {
-    font-size: var(--font-xs);
-    color: var(--danger);
   }
 
   .submit {
