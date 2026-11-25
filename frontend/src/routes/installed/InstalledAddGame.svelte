@@ -1,14 +1,23 @@
 <script lang="ts">
   import Button from '../../lib/components/Button.svelte';
   import Modal from '../../lib/components/Modal.svelte';
-  import { addGame, selectExecutable } from '../../lib/services/library';
+  import { addGame, selectExecutable, type LibraryGame } from '../../lib/services/library';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
   import { libraryErrorText } from './installedGame';
 
   // The dialog that adds a game by its executable. `uid` is the page's id prefix: the executable
-  // field's label points at an id made from it.
-  let { uid }: { uid: string } = $props();
+  // field's label points at an id made from it. `onadded` hears of the game before the dialog closes,
+  // so `returnFocus` can find it when the dialog's opener has gone.
+  let {
+    uid,
+    returnFocus,
+    onadded,
+  }: {
+    uid: string;
+    returnFocus?: () => HTMLElement | null | undefined;
+    onadded?: (game: LibraryGame) => void;
+  } = $props();
 
   let addOpen = $state(false);
   let newExecutable = $state('');
@@ -45,6 +54,7 @@
     try {
       const game = await addGame(newExecutable.trim(), newTitle.trim());
       toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
+      onadded?.(game);
       addOpen = false;
     } catch (err) {
       toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');
@@ -54,7 +64,7 @@
   }
 </script>
 
-<Modal dismissible={!adding} bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
+<Modal dismissible={!adding} bind:open={addOpen} title={msg('games.installedAddGameModalTitle')} {returnFocus}>
   <div class="form">
     <!-- Browse stands beside the field, outside its label: the field is named by the label alone. -->
     <div class="field">
