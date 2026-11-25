@@ -9,7 +9,7 @@ let handoff: HandoffInfo | null = null;
 const seenAtMount: { platform?: string; controls?: string }[] = [];
 const bootAtMount: (string | null)[] = [];
 // The boot colour index.html puts in <head>; `removed` once main.ts drops it.
-const boot = { textContent: 'html, body { background: #090d17; }', removed: false, remove: () => (boot.removed = true) };
+const boot = { textContent: 'html, body { background: #0e0f11; }', removed: false, remove: () => (boot.removed = true) };
 
 vi.mock('@fontsource-variable/onest', () => ({}));
 vi.mock('@fontsource-variable/jetbrains-mono', () => ({}));
@@ -63,7 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   overlay = false;
   handoff = null;
-  boot.textContent = 'html, body { background: #090d17; }';
+  boot.textContent = 'html, body { background: #0e0f11; }';
   boot.removed = false;
   info = async () => ({ platform: 'windows' }) as AppInfo;
 });
@@ -71,7 +71,7 @@ beforeEach(() => {
 describe('the boot colour', () => {
   it('in an ordinary start, stands until the app is mounted, then goes', async () => {
     await start();
-    expect(bootAtMount[0]).toContain('#090d17');
+    expect(bootAtMount[0]).toContain('#0e0f11');
     expect(boot.removed).toBe(true);
   });
 
@@ -87,7 +87,7 @@ describe('the boot colour', () => {
   it('never takes a colour that is not one', async () => {
     handoff = { active: true, phaseStart: 1, version: '1.5.0', background: 'red; } body { display: none', waiting: false };
     await start();
-    expect(bootAtMount[0]).toContain('#090d17');
+    expect(bootAtMount[0]).toContain('#0e0f11');
   });
 });
 

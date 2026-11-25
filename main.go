@@ -1011,7 +1011,7 @@ func main() {
 	})
 
 	// The dark theme's --bg; a successor opens in the outgoing window's theme.
-	windowBackground := application.NewRGB(9, 13, 23)
+	windowBackground := application.NewRGB(14, 15, 17)
 	if handoffMode {
 		r, g, b := handoffSpec.BackgroundRGB()
 		windowBackground = application.NewRGB(r, g, b)
