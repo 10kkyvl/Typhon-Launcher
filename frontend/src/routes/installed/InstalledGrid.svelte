@@ -16,9 +16,20 @@
   import { msg } from '../../lib/i18n';
   import { coverFor, play, sizeLabel, stop, updateLabel } from './installedGame';
 
-  // The grid view: one cover per game with Play or Stop over it. `uid` is the page's id prefix: a
+  // The grid view: one cover per game with Play or Stop over it, one control that follows the game's
+  // state, run through the page's `act` (busy until Go answers). `uid` is the page's id prefix: a
   // cover's button is described by its card's title through an id made from it.
-  let { games, uid }: { games: LibraryGame[]; uid: string } = $props();
+  let {
+    games,
+    uid,
+    busy,
+    act,
+  }: {
+    games: LibraryGame[];
+    uid: string;
+    busy: (id: string) => boolean;
+    act: (id: string, run: () => Promise<void>) => void;
+  } = $props();
 </script>
 
 <div class="grid">
@@ -40,16 +51,21 @@
             </span>
           {/if}
         </button>
-        {#if running}
-          <span class="card-play running">
-            <IconButton variant="primary" size="sm" label={msg('games.installedStopButton')} aria-describedby="{uid}-{game.id}-title" onclick={() => stop(game)}>
-              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
-            </IconButton>
-          </span>
-        {:else if isLaunchable(game) && !$missingImages.has(game.id)}
-          <span class="card-play">
-            <IconButton variant="primary" size="sm" label={msg('games.play')} aria-describedby="{uid}-{game.id}-title" onclick={() => play(game)}>
-              <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+        {#if running || (isLaunchable(game) && !$missingImages.has(game.id))}
+          <span class="card-play" class:running>
+            <IconButton
+              variant="primary"
+              size="sm"
+              label={running ? msg('games.installedStopButton') : msg('games.play')}
+              aria-describedby="{uid}-{game.id}-title"
+              busy={busy(game.id)}
+              onclick={() => act(game.id, () => (running ? stop(game) : play(game)))}
+            >
+              {#if running}
+                <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+              {:else}
+                <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+              {/if}
             </IconButton>
           </span>
         {/if}

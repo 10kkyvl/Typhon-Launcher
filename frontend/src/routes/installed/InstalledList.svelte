@@ -5,6 +5,7 @@
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import type { MenuItem } from '../../lib/components/menu';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { selectGameExecutable, setExecutable, type LibraryGame } from '../../lib/services/library';
   import { openGameFolder } from '../../lib/services/settings';
@@ -15,6 +16,7 @@
   import { isExternal, isLaunchable } from '../../lib/library/external';
   import { gameArt } from '../../lib/stores/metadata';
   import { gameContextMenu } from '../../lib/stores/gameMenu';
+  import { activeMove, openMoveGame } from '../../lib/stores/relocate';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { updatesByGame } from '../../lib/stores/updates';
@@ -25,14 +27,19 @@
   import { heroFor, libraryErrorText, play, sizeLabel, stop, updateLabel } from './installedGame';
 
   // The list view: one row per game with its status, its main action, its folder and its menu.
-  // Removing a game is asked of the page, which owns the dialog.
+  // Removing a game is asked of the page, which owns the dialog. The main action is one control
+  // whose words and deed follow the game's state, run through the page's `act` (busy until Go answers).
   let {
     games,
     compat,
+    busy,
+    act,
     onremove,
   }: {
     games: LibraryGame[];
     compat: Map<string, CompatStatus>;
+    busy: (id: string) => boolean;
+    act: (id: string, run: () => Promise<void>) => void;
     onremove: (game: LibraryGame, mode: 'disk' | 'library') => void;
   } = $props();
 
@@ -70,33 +77,36 @@
       await openInstallDir(game);
     } else if (action === 'executable') {
       await chooseExecutable(game);
+    } else if (action === 'move') {
+      openMoveGame(game.id);
     } else if (action === 'uninstall' || action === 'remove') {
       onremove(game, action === 'uninstall' ? 'disk' : 'library');
     }
   }
 
-  const menuItems = [
-    { id: 'folder', label: msg('games.openFolder') },
-    { id: 'executable', label: msg('games.installedChooseExeLabel') },
-    { id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true },
-    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
-  ];
+  // A move of this game, or of the whole library, is running: Go refuses another move and a removal.
+  function moving(game: LibraryGame): boolean {
+    const job = $activeMove;
+    return job !== null && (job.scope === 'library' || job.gameId === game.id);
+  }
 
-  const emulatedMenuItems = [
-    { id: 'folder', label: msg('games.openFolder') },
-    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
-  ];
-
-  const imageMenuItems = [
-    { id: 'folder', label: msg('games.openFolder') },
-    { id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true },
-    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
-  ];
-
-  const externalMenuItems = [
-    { id: 'folder', label: msg('games.openFolder') },
-    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
-  ];
+  // Go moves neither an emulated game nor one of another launcher (library.CheckRelocatable,
+  // relocate.gameSource), nor a running one; the game menu offers Move by the same rule.
+  function menuItems(game: LibraryGame, running: boolean): MenuItem[] {
+    const own = !isExternal(game) && !isEmulated(game);
+    const items: MenuItem[] = [{ id: 'folder', label: msg('games.openFolder') }];
+    if (own) items.push({ id: 'executable', label: msg('games.installedChooseExeLabel') });
+    if (own && !running) items.push({ id: 'move', label: msg('games.actionMove') });
+    const disk = own || isInstalledImage(game);
+    if (disk) items.push({ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true });
+    items.push({ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !disk });
+    if (!moving(game)) return items;
+    return items.map((item) =>
+      item.id === 'move' || item.id === 'uninstall' || item.id === 'remove'
+        ? { ...item, disabled: true, label: msg('installed.menuMoving', { action: item.label }) }
+        : item,
+    );
+  }
 
   async function chooseExecutable(game: LibraryGame) {
     try {
@@ -113,8 +123,18 @@
     }
   }
 
+  type Main = { kind: 'stop' | 'image' | 'file' | 'play'; label: string; run: () => Promise<void> };
+
+  function mainAction(game: LibraryGame, running: boolean): Main {
+    if (running) return { kind: 'stop', label: msg('games.installedStopButton'), run: () => stop(game) };
+    if ($missingImages.has(game.id)) return { kind: 'image', label: msg('emul.pickImage'), run: () => chooseImage(game) };
+    if (!isLaunchable(game)) return { kind: 'file', label: msg('games.installedSetExeButton'), run: () => chooseExecutable(game) };
+    return { kind: 'play', label: msg('games.play'), run: () => play(game) };
+  }
+
   function statusKind(game: LibraryGame, running: boolean, updateKind?: string): 'success' | 'warning' | 'accent' | 'neutral' {
     if (running) return 'accent';
+    if (moving(game)) return 'accent';
     if ($missingImages.has(game.id)) return 'warning';
     if (!isLaunchable(game)) return 'warning';
     if (updateKind === 'update') return 'warning';
@@ -124,6 +144,7 @@
 
   function statusLabel(game: LibraryGame, running: boolean) {
     if (running) return msg('games.runningLabel');
+    if (moving(game)) return msg('installed.moving');
     if ($missingImages.has(game.id)) return msg('emul.imageMissing');
     if (!isLaunchable(game)) return msg('games.installedNeedsExeLabel');
     return relativeDate(game.lastPlayed);
@@ -135,6 +156,7 @@
     {@const running = $runningGames.has(game.id)}
     {@const update = $updatesByGame.get(game.id)?.availability}
     {@const updateText = updateLabel(update)}
+    {@const main = mainAction(game, running)}
     <div class="row" role="presentation" data-game-row={game.id} {@attach gameContextMenu(game.id)}>
       <button class="game" onclick={() => navigate('game', { id: game.id })}>
         <div class="thumb" aria-hidden="true">
@@ -168,32 +190,21 @@
         {/if}
       </div>
       <div class="actions">
-        {#if running}
-          <Button size="sm" onclick={() => stop(game)}>
+        <Button size="sm" variant={main.kind === 'play' || main.kind === 'stop' ? 'play' : 'secondary'} busy={busy(game.id)} onclick={() => act(game.id, main.run)}>
+          {#if main.kind === 'stop'}
             <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
-            {msg('games.installedStopButton')}
-          </Button>
-        {:else if $missingImages.has(game.id)}
-          <Button size="sm" onclick={() => chooseImage(game)}>
-            <FolderOpen size="1.3rem" strokeWidth={1.8} />
-            {msg('emul.pickImage')}
-          </Button>
-        {:else if !isLaunchable(game)}
-          <Button size="sm" onclick={() => chooseExecutable(game)}>
-            <FolderOpen size="1.3rem" strokeWidth={1.8} />
-            {msg('games.installedSetExeButton')}
-          </Button>
-        {:else}
-          <Button variant="primary" size="sm" onclick={() => play(game)}>
+          {:else if main.kind === 'play'}
             <Gamepad2 size="1.3rem" strokeWidth={2} />
-            {msg('games.play')}
-          </Button>
-        {/if}
+          {:else}
+            <FolderOpen size="1.3rem" strokeWidth={1.8} />
+          {/if}
+          {main.label}
+        </Button>
         <Button size="sm" onclick={() => openInstallDir(game)}>
           <FolderOpen size="1.3rem" strokeWidth={1.8} />
           {msg('games.openFolder')}
         </Button>
-        <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
+        <DropdownMenu items={menuItems(game, running)} onselect={(id) => onMenu(game, id)}>
           {#snippet trigger({ props })}
             <IconButton {...props} label={msg('games.installedMenuFor', { title: game.title })} size="sm">
               <EllipsisVertical size="1.6rem" strokeWidth={1.8} />

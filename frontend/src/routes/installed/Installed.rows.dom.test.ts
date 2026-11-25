@@ -188,7 +188,7 @@ describe('Installed list: the row menu of each kind', () => {
   const items = () => screen.getAllByRole('menuitem').map((item) => item.textContent?.trim());
 
   it.each([
-    ['a game', normal, ['games.openFolder', 'games.installedChooseExeLabel', 'games.actionUninstall', 'games.actionRemoveLibrary']],
+    ['a game', normal, ['games.openFolder', 'games.installedChooseExeLabel', 'games.actionMove', 'games.actionUninstall', 'games.actionRemoveLibrary']],
     ['an emulated game', emulated, ['games.openFolder', 'games.actionRemoveLibrary']],
     ['an installed disc image', image, ['games.openFolder', 'games.actionUninstall', 'games.actionRemoveLibrary']],
     ['a game of another launcher', external, ['games.openFolder', 'games.actionRemoveLibrary']],

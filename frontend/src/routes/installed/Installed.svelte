@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import Page from '../../lib/components/Page.svelte';
   import { Gamepad2, Plus, RefreshCw, Search } from '@lucide/svelte';
   import AddImageModal from '../../lib/components/AddImageModal.svelte';
@@ -10,7 +11,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { focusableIn, focusQuietly } from '../../lib/layers/focus';
   import { inWails } from '../../lib/services/backend';
-  import type { LibraryGame } from '../../lib/services/library';
+  import { launchesInFlight, type LibraryGame } from '../../lib/services/library';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, libraryLoaded, libraryLoadError, loadLibrary, runningGames } from '../../lib/stores/library';
@@ -35,6 +36,21 @@
   let sort = $state<Sort>('recent');
 
   onMount(followStorage);
+
+  // A row's action (Play, Stop, choosing its image or its file) waits on Go: its control is busy and
+  // a second press sends nothing. A launch another screen started counts too.
+  const pressed = new SvelteSet<string>();
+  const busy = (id: string) => pressed.has(id) || $launchesInFlight.has(id);
+
+  async function act(id: string, run: () => Promise<void>) {
+    if (busy(id)) return;
+    pressed.add(id);
+    try {
+      await run();
+    } finally {
+      pressed.delete(id);
+    }
+  }
 
   // Журнал совместимости набирается сам из исходов запусков. Перечитываем его
   // при каждой смене состава запущенных игр: сессия только что закончилась —
@@ -223,9 +239,9 @@
         {/snippet}
       </EmptyState>
     {:else if $installedView === 'list'}
-      <InstalledList games={filteredGames} {compat} onremove={askRemove} />
+      <InstalledList games={filteredGames} {compat} {busy} {act} onremove={askRemove} />
     {:else}
-      <InstalledGrid games={filteredGames} {uid} />
+      <InstalledGrid games={filteredGames} {uid} {busy} {act} />
     {/if}
   </div>
 

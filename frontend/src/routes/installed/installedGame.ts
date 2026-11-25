@@ -5,6 +5,7 @@ import { bytesSize } from '../../lib/utils/format';
 import { errorCode, hasMessage, msg } from '../../lib/i18n';
 
 // What the parts of the Installed screen share about one game: its words, its pictures, Play and Stop.
+// Play and Stop never throw: a failure is said in the catalogue's words for its code.
 
 export function libraryErrorText(err: unknown, fallback: string): string {
   const code = errorCode(err);
@@ -41,7 +42,7 @@ export async function play(game: LibraryGame) {
 export async function stop(game: LibraryGame) {
   try {
     await stopGame(game.id);
-  } catch {
-    toast(msg('games.errorStopFailed'), 'danger');
+  } catch (err) {
+    toast(libraryErrorText(err, msg('games.errorStopFailed')), 'danger');
   }
 }
