@@ -1253,6 +1253,10 @@ func main() {
 
 	if handoffMode {
 		handoffCtx, stopHandoff := context.WithCancel(context.Background())
+		// However the successor is quit (tray, the window, the session ending),
+		// the wait for the old launcher ends before the services stop: left
+		// running, it could ask to quit a main loop that is already ending.
+		wails.OnShutdown(stopHandoff)
 		var takenOver instance.Listener
 		handoffDone := make(chan struct{})
 		defer func() {
