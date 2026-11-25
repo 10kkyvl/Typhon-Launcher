@@ -5,6 +5,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.no_install_dir': 'The game has no install directory set',
   'library.installation_changed': 'The game folder or executable changed during the update. Please try again',
   'library.game_not_found': 'Game not found',
+  'library.state_unreadable': 'The library files could not be read, so the change was not saved. Restart the launcher',
   'library.no_canonical_id': 'No catalog game id given',
   'library.no_catalog_title': 'No game title given',
   'library.too_many_favorites': 'Favorites limit reached',

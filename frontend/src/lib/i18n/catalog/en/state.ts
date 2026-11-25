@@ -210,7 +210,9 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonHandoffUnsupported': 'Updating without a restart is not available here.',
   'state.selfupdateReasonHandoffPending': 'The previous update has not finished. Restart the launcher to complete it, then update again.',
   'state.selfupdateReasonNotWaiting': 'The launcher is no longer waiting for the previous version: there is no need to close it.',
-  'state.selfupdateHandoffUndoFailed': 'The update failed and the previous version could not be put back. Close the launcher: it restores it on exit or on the next start.',
+  'state.selfupdateReasonWorkRunning':
+    'A game is being installed, removed, moved or updated. Wait for it to finish or cancel it, then update the launcher.',
+  'state.selfupdateHandoffUndoFailed': 'The update could not be finished without a restart. Close the launcher and start it again: it will settle the update.',
 
   'state.stateSaveFailed': 'Could not save state to disk: {message}',
 

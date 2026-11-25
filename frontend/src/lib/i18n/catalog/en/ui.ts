@@ -113,7 +113,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.versionAvailable': 'Version {version} is available',
   'ui.restartLauncherTitle': 'Restart the launcher?',
   'ui.restartLauncherWarning':
-    'Typhon Launcher will install update {version} and restart on the new version; its window may close for a moment. Unfinished downloads and installs will continue after the restart.',
+    'Typhon Launcher will install update {version} and restart on the new version; its window may close for a moment. Unfinished downloads will continue after the restart.',
 
   'ui.updateAvailable': 'Update available',
   'ui.updateAvailableHint': 'A newer version of the installed game is out.',
@@ -189,7 +189,7 @@ export const ui: Record<UiKey, Message> = {
     'The launcher will close, install the update, and restart itself. This takes less than a minute.',
   'ui.handoffNote': 'The launcher stays open. This takes a few seconds.',
   'ui.handoffWaitingNote':
-    'The previous version is still finishing its work, such as an install in progress. The update continues as soon as it is done.',
+    'The previous version is still finishing its work. The update continues as soon as it is done.',
   'ui.handoffCloseLauncher': 'Close the launcher',
   'ui.handoffFailedTitle': 'Updating without a restart did not work',
   'ui.updateWithRestart': 'Update with a restart',
