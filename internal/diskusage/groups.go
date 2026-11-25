@@ -143,6 +143,7 @@ func (s *Service) deleteGroup(ctx context.Context, key groupKey, del func(id str
 	if err != nil {
 		return GroupDelete{}, err
 	}
+	s.stopWalk(errWalkStale)
 	answers := make(map[string]answer, len(set))
 	for i, id := range set {
 		if ctx.Err() != nil {

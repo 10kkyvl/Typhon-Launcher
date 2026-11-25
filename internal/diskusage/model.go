@@ -119,6 +119,7 @@ var (
 	errNotDeletable  = uierr.New("diskusage.not_deletable", "этот объект удалять нельзя")
 	errUnsafePath    = uierr.New("diskusage.unsafe_path", "путь ведёт за пределы папок лаунчера или является ссылкой")
 	errEmptyGameID   = uierr.New("diskusage.no_game", "не указана игра")
+	errScanCancelled = uierr.New("diskusage.scan_cancelled", "подсчёт места отменён")
 	errMissingPort   = errors.New("diskusage: every dependency is required")
 	errNoSettingsSrc = errors.New("diskusage: settings source is required")
 )

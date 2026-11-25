@@ -97,7 +97,10 @@ type Service struct {
 	report  *Report
 	entries map[string]entry
 	sets    map[groupKey][]string
+	walk    *walk
 
+	// opMu orders the deletes among themselves; a walk waits for the one
+	// under way before it starts and is stopped by any that starts after.
 	opMu sync.Mutex
 }
 

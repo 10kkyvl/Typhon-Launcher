@@ -110,6 +110,7 @@ func (s *Service) DeleteLeftover(ctx context.Context, path string) error {
 	if owner.remove != nil {
 		remove = owner.remove
 	}
+	s.stopWalk(errWalkStale)
 	if err := remove(); err != nil {
 		return fmt.Errorf("delete %s: %w", found.Path, err)
 	}
@@ -135,6 +136,7 @@ func (s *Service) DeleteDownloadData(ctx context.Context, id string) error {
 	if err := s.deps.Installs.CheckDownloadDeletable(d); err != nil {
 		return err
 	}
+	s.stopWalk(errWalkStale)
 	delErr := s.deps.Downloads.DeleteData(id)
 	if _, getErr := s.deps.Downloads.Get(id); errors.Is(getErr, download.ErrNotFound) {
 		s.dropDownload(id)

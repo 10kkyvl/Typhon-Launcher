@@ -41,18 +41,12 @@ func (sc *scanner) warn(area string, err error) {
 	sc.report.Warnings = append(sc.report.Warnings, Warning{Area: area, Message: err.Error()})
 }
 
-// Scan measures everything once and keeps the result for Cached. It is the
-// only place that walks the disk; the deletions work from its report and ask
-// the owners again before they touch anything.
-func (s *Service) Scan(ctx context.Context) (Report, error) {
-	ctx, end, err := s.begin(ctx)
-	if err != nil {
-		return Report{}, err
-	}
-	defer end()
-	s.opMu.Lock()
-	defer s.opMu.Unlock()
-
+// walkDisk measures everything once. It is the only place that walks the
+// disk; the deletions work from its report and ask the owners again before
+// they touch anything. The report is dated when the walk starts: it shows the
+// disk as it was no earlier than that.
+func (s *Service) walkDisk(ctx context.Context) (*scanner, error) {
+	startedAt := time.Now()
 	cfg := s.deps.Settings()
 	games := s.deps.Library.GetGames()
 	sc := &scanner{
@@ -80,23 +74,16 @@ func (s *Service) Scan(ctx context.Context) (Report, error) {
 	steps := []func() error{sc.scanGames, sc.scanDownloads, sc.scanLeftovers, sc.scanScreenshots, sc.scanSnapshots}
 	for _, step := range steps {
 		if err := step(); err != nil {
-			return Report{}, err
+			return nil, err
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return Report{}, err
+		return nil, err
 	}
-	sc.report.ScannedAt = time.Now()
+	sc.report.ScannedAt = startedAt
 	sc.sort()
 	sc.report.recount()
-
-	s.mu.Lock()
-	stored := sc.report.clone()
-	s.report = &stored
-	s.entries = sc.entries
-	s.sets = sc.sets
-	s.mu.Unlock()
-	return sc.report.clone(), nil
+	return sc, nil
 }
 
 func (sc *scanner) sort() {
