@@ -46,13 +46,55 @@ describe('SavesCandidatesModal', () => {
     expect(reachable(dialog, LONG)).toBe(true);
   });
 
-  it('a press on a folder uses it', async () => {
+  it('offers the folders as one choice named by the question, each path written out whole with no native title', () => {
+    const { dialog } = open();
+    const group = within(dialog).getByRole('radiogroup', { name: msg('ui.savesMultipleCandidates', { title: 'Hades' }) });
+    expect(within(group).getAllByRole('radio').map((row) => row.getAttribute('aria-checked'))).toEqual(['false', 'false']);
+    expect(within(group).getByRole('radio', { name: LONG })).toBeTruthy();
+    expect(dialog.querySelectorAll('[title]')).toHaveLength(0);
+  });
+
+  it('a folder is chosen, then used by Select, once', async () => {
     const { dialog, onpick, keys } = open();
+    const select = within(dialog).getByRole('button', { name: msg('common.select') });
+    expect(select).toHaveProperty('disabled', true);
 
-    await keys.click(within(dialog).getByRole('button', { name: SHORT }));
+    await keys.click(within(dialog).getByRole('radio', { name: LONG }));
+    expect(onpick).not.toHaveBeenCalled();
+    await keys.click(select);
 
-    expect(onpick).toHaveBeenCalledWith(SHORT);
+    expect(onpick).toHaveBeenCalledWith(LONG);
     expect(onpick).toHaveBeenCalledTimes(1);
+  });
+
+  // An arrow chooses in a radio group: were a choice a use, walking the list would set the folder.
+  it('arrows walk the folders and use none of them until Select', async () => {
+    const { dialog, onpick, keys } = open();
+    const first = within(dialog).getByRole('radio', { name: SHORT });
+    first.focus();
+
+    await keys.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}');
+
+    expect(onpick).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(within(dialog).getByRole('radio', { name: LONG }));
+    await keys.click(within(dialog).getByRole('button', { name: msg('common.select') }));
+    expect(onpick).toHaveBeenCalledWith(LONG);
+  });
+
+  // The game menu and the saves view keep the dialog mounted between openings.
+  it('opens again with no folder chosen', async () => {
+    const onpick = vi.fn();
+    const props = { title: 'Hades', candidates: [SHORT, LONG], onpick, onbrowse: vi.fn() };
+    const { rerender } = render(SavesCandidatesModal, { target: app, props: { ...props, open: true } });
+    const keys = user();
+    await keys.click(within(screen.getByRole('dialog')).getByRole('radio', { name: LONG }));
+
+    await rerender({ ...props, open: false });
+    await rerender({ ...props, open: true });
+
+    const dialog = screen.getByRole('dialog', { name: msg('ui.savesDirTitle') });
+    expect(within(dialog).getAllByRole('radio').map((row) => row.getAttribute('aria-checked'))).toEqual(['false', 'false']);
+    expect(within(dialog).getByRole('button', { name: msg('common.select') })).toHaveProperty('disabled', true);
   });
 
   it('"Choose another" hands the choice to the folder picker', async () => {

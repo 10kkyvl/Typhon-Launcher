@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Tooltip from './Tooltip.svelte';
+  import { untrack } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
-  import { truncateMiddle } from '../utils/format';
+  import OptionList from './OptionList.svelte';
   import { msg } from '../i18n';
 
   let {
@@ -21,24 +21,31 @@
     /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
     returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
+  const uid = $props.id();
+
+  // A choice, not a use: an arrow chooses in a radio group, so walking the list must not set the
+  // folder. Select uses the chosen one.
+  let chosen = $state('');
+  const options = $derived(candidates.map((candidate) => ({ id: candidate, title: candidate })));
+
+  // The dialog stays mounted between openings (the game menu, the saves view): each one starts with
+  // no folder chosen.
+  $effect(() => {
+    const isOpen = open;
+    void candidates;
+    untrack(() => {
+      if (!isOpen || !candidates.includes(chosen)) chosen = '';
+    });
+  });
 </script>
 
 <Modal bind:open title={msg('ui.savesDirTitle')} width="52rem" {returnFocus}>
-  <p class="hint">{msg('ui.savesMultipleCandidates', { title })}</p>
-  <div class="candidates">
-    {#each candidates as candidate (candidate)}
-      <Tooltip text={candidate}>
-        <button class="candidate" onclick={() => onpick(candidate)}>
-          {truncateMiddle(candidate, 70)}
-        </button>
-      </Tooltip>
-    {/each}
-  </div>
+  <p class="hint" id="{uid}-question">{msg('ui.savesMultipleCandidates', { title })}</p>
+  <OptionList labelledby="{uid}-question" {options} bind:value={chosen} />
   {#snippet footer()}
     <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" onclick={onbrowse}>
-      {msg('ui.pickAnotherFolder')}
-    </Button>
+    <Button onclick={onbrowse}>{msg('ui.pickAnotherFolder')}</Button>
+    <Button variant="primary" disabled={!chosen} onclick={() => onpick(chosen)}>{msg('common.select')}</Button>
   {/snippet}
 </Modal>
 
@@ -47,30 +54,5 @@
     margin-bottom: var(--space-4);
     font-size: var(--font-sm);
     color: var(--text-2);
-  }
-
-  .candidates {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .candidate {
-    padding: 0.9rem 1.1rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    text-align: left;
-    transition:
-      background var(--dur-fast) var(--ease),
-      border-color var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
-  }
-
-  .candidate:hover {
-    background: var(--hover-strong);
-    border-color: var(--border-strong);
-    color: var(--text);
   }
 </style>

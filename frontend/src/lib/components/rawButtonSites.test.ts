@@ -60,7 +60,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/NotificationsPanel.svelte': { notification: 'row' },
   'lib/components/ReleaseMatchModal.svelte': { candidate: 'radio tile' },
   'lib/components/RemoveGameModal.svelte': { mode: 'radio tile' },
-  'lib/components/SavesCandidatesModal.svelte': { candidate: 'list option' },
   'lib/components/Sidebar.svelte': { 'nav-item': 'nav item' },
   'lib/components/SidebarStatus.svelte': { item: 'row' },
   'lib/components/SourceDetailsModal.svelte': { row: 'row' },
