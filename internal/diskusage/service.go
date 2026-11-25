@@ -96,6 +96,7 @@ type Service struct {
 	wg      sync.WaitGroup
 	report  *Report
 	entries map[string]entry
+	sets    map[groupKey][]string
 
 	opMu sync.Mutex
 }
@@ -109,7 +110,7 @@ func NewService(deps Deps) (*Service, error) {
 		deps.Relocations == nil || deps.Updates == nil || deps.Screenshots == nil || deps.Snapshots == nil {
 		return nil, errMissingPort
 	}
-	return &Service{deps: deps, entries: map[string]entry{}}, nil
+	return &Service{deps: deps, entries: map[string]entry{}, sets: map[groupKey][]string{}}, nil
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {

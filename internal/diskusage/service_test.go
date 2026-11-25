@@ -20,6 +20,7 @@ import (
 	"typhon/internal/savebackup"
 	"typhon/internal/screenshots"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 )
 
 type fakeLibrary struct {
@@ -251,6 +252,7 @@ type fakeShots struct {
 	shots   map[string][]screenshots.Shot
 	err     error
 	failDel map[string]error
+	listErr error
 }
 
 func (f *fakeShots) Usage(context.Context) ([]screenshots.Usage, error) { return f.usage, f.err }
@@ -258,6 +260,9 @@ func (f *fakeShots) Usage(context.Context) ([]screenshots.Usage, error) { return
 func (f *fakeShots) List(gameID string) ([]screenshots.Shot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return append([]screenshots.Shot(nil), f.shots[gameID]...), nil
 }
 
@@ -278,10 +283,11 @@ func (f *fakeShots) Delete(gameID, name string) error {
 }
 
 type fakeSnaps struct {
-	mu    sync.Mutex
-	usage []savebackup.Usage
-	snaps map[string][]savebackup.Snapshot
-	err   error
+	mu      sync.Mutex
+	usage   []savebackup.Usage
+	snaps   map[string][]savebackup.Snapshot
+	err     error
+	failDel map[string]error
 }
 
 func (f *fakeSnaps) Usage(context.Context) ([]savebackup.Usage, error) { return f.usage, f.err }
@@ -298,11 +304,14 @@ func (f *fakeSnaps) Delete(gameID, id string) error {
 	list := f.snaps[gameID]
 	for i, s := range list {
 		if s.ID == id {
+			if err := f.failDel[id]; err != nil {
+				return err
+			}
 			f.snaps[gameID] = append(list[:i], list[i+1:]...)
 			return nil
 		}
 	}
-	return errors.New("not found")
+	return uierr.New("savebackup.snapshot_not_found", "резервная копия не найдена")
 }
 
 type rig struct {
@@ -329,7 +338,7 @@ func newRig(t *testing.T) *rig {
 		rel:       &fakeRelocations{},
 		upd:       &fakeUpdates{paths: map[string]bool{}},
 		shots:     &fakeShots{shots: map[string][]screenshots.Shot{}, failDel: map[string]error{}},
-		snaps:     &fakeSnaps{snaps: map[string][]savebackup.Snapshot{}},
+		snaps:     &fakeSnaps{snaps: map[string][]savebackup.Snapshot{}, failDel: map[string]error{}},
 		games:     filepath.Join(base, "games"),
 		downloads: filepath.Join(base, "downloads"),
 	}
@@ -761,7 +770,10 @@ func TestScanGroups(t *testing.T) {
 	r := newRig(t)
 	r.addGame(t, "a", 1)
 	r.shots.usage = []screenshots.Usage{{GameID: "a", Count: 2, SizeBytes: 20}, {GameID: "removed", Count: 1, SizeBytes: 5}}
+	r.shots.shots["a"] = []screenshots.Shot{{Name: "1.png", Size: 10}, {Name: "2.png", Size: 10}}
+	r.shots.shots["removed"] = []screenshots.Shot{{Name: "3.png", Size: 5}}
 	r.snaps.usage = []savebackup.Usage{{GameID: "a", Count: 3, SizeBytes: 300, SizeUnknown: true}}
+	r.snaps.snaps["a"] = []savebackup.Snapshot{{ID: "s1", SizeBytes: 100}, {ID: "s2", SizeBytes: 200}, {ID: "s3", Broken: true}}
 	rep, err := r.svc.Scan(context.Background())
 	if err != nil {
 		t.Fatal(err)

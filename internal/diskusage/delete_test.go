@@ -249,7 +249,7 @@ func TestDeleteScreenshots(t *testing.T) {
 	}
 	t.Run("deletes all", func(t *testing.T) {
 		r := setup(t)
-		if err := r.svc.DeleteScreenshots(context.Background(), "g1"); err != nil {
+		if _, err := r.svc.DeleteScreenshots(context.Background(), "g1"); err != nil {
 			t.Fatal(err)
 		}
 		if len(r.shots.shots["g1"]) != 0 || len(r.svc.Cached().Screenshots) != 0 {
@@ -259,8 +259,12 @@ func TestDeleteScreenshots(t *testing.T) {
 	t.Run("one failure is reported and the rest is counted", func(t *testing.T) {
 		r := setup(t)
 		r.shots.failDel["b.png"] = errors.New("in use")
-		if err := r.svc.DeleteScreenshots(context.Background(), "g1"); err == nil {
-			t.Fatal("want the failure")
+		got, err := r.svc.DeleteScreenshots(context.Background(), "g1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Failed != 1 || got.Deleted != 1 || got.Code != DeletePartial {
+			t.Fatalf("DeleteScreenshots = %+v, want the failure counted", got)
 		}
 		groups := r.svc.Cached().Screenshots
 		if len(groups) != 1 || groups[0].Count != 1 || groups[0].SizeBytes != 20 {
@@ -269,7 +273,7 @@ func TestDeleteScreenshots(t *testing.T) {
 	})
 	t.Run("empty game id", func(t *testing.T) {
 		r := setup(t)
-		if err := r.svc.DeleteScreenshots(context.Background(), ""); !errors.Is(err, errEmptyGameID) {
+		if _, err := r.svc.DeleteScreenshots(context.Background(), ""); !errors.Is(err, errEmptyGameID) {
 			t.Fatalf("DeleteScreenshots = %v, want errEmptyGameID", err)
 		}
 	})
@@ -277,7 +281,7 @@ func TestDeleteScreenshots(t *testing.T) {
 		r := setup(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		if err := r.svc.DeleteScreenshots(ctx, "g1"); !errors.Is(err, context.Canceled) {
+		if _, err := r.svc.DeleteScreenshots(ctx, "g1"); !errors.Is(err, context.Canceled) {
 			t.Fatalf("DeleteScreenshots = %v, want context.Canceled", err)
 		}
 		if len(r.shots.shots["g1"]) != 2 {
@@ -298,7 +302,7 @@ func TestDeleteSnapshots(t *testing.T) {
 	}
 	t.Run("deletes all", func(t *testing.T) {
 		r := setup(t)
-		if err := r.svc.DeleteSnapshots(context.Background(), "g1"); err != nil {
+		if _, err := r.svc.DeleteSnapshots(context.Background(), "g1"); err != nil {
 			t.Fatal(err)
 		}
 		if len(r.snaps.snaps["g1"]) != 0 || len(r.svc.Cached().Snapshots) != 0 || r.svc.Cached().Totals.SnapshotsBytes != 0 {
@@ -307,7 +311,7 @@ func TestDeleteSnapshots(t *testing.T) {
 	})
 	t.Run("empty game id", func(t *testing.T) {
 		r := setup(t)
-		if err := r.svc.DeleteSnapshots(context.Background(), ""); !errors.Is(err, errEmptyGameID) {
+		if _, err := r.svc.DeleteSnapshots(context.Background(), ""); !errors.Is(err, errEmptyGameID) {
 			t.Fatalf("DeleteSnapshots = %v, want errEmptyGameID", err)
 		}
 	})
@@ -315,7 +319,7 @@ func TestDeleteSnapshots(t *testing.T) {
 		r := setup(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		if err := r.svc.DeleteSnapshots(ctx, "g1"); !errors.Is(err, context.Canceled) {
+		if _, err := r.svc.DeleteSnapshots(ctx, "g1"); !errors.Is(err, context.Canceled) {
 			t.Fatalf("DeleteSnapshots = %v, want context.Canceled", err)
 		}
 		if len(r.snaps.snaps["g1"]) != 2 {

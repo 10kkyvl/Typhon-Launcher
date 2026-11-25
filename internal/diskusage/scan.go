@@ -34,6 +34,7 @@ type scanner struct {
 	// history is the titles the library keeps of removed games, read once
 	// the first group of a game without a card needs one.
 	history map[string]string
+	sets    map[groupKey][]string
 }
 
 func (sc *scanner) warn(area string, err error) {
@@ -60,6 +61,7 @@ func (s *Service) Scan(ctx context.Context) (Report, error) {
 		gamesRoots:    cfg.GamesRoots(),
 		downloadsPath: cfg.DownloadsPath,
 		entries:       map[string]entry{},
+		sets:          map[groupKey][]string{},
 		games:         games,
 		gameByID:      make(map[string]library.Game, len(games)),
 		report: Report{
@@ -92,6 +94,7 @@ func (s *Service) Scan(ctx context.Context) (Report, error) {
 	stored := sc.report.clone()
 	s.report = &stored
 	s.entries = sc.entries
+	s.sets = sc.sets
 	s.mu.Unlock()
 	return sc.report.clone(), nil
 }
@@ -277,7 +280,12 @@ func (sc *scanner) scanScreenshots() error {
 		return nil
 	}
 	for _, u := range usage {
-		sc.report.Screenshots = append(sc.report.Screenshots, sc.group(u.GameID, u.Count, u.SizeBytes, u.SizeUnknown))
+		if err := sc.ctx.Err(); err != nil {
+			return err
+		}
+		shots, listErr := sc.s.deps.Screenshots.List(u.GameID)
+		sc.addGroup(groupKey{groupShots, u.GameID}, shotItems(shots), listErr,
+			GroupUsage{Count: u.Count, SizeBytes: u.SizeBytes, SizeUnknown: u.SizeUnknown})
 	}
 	return nil
 }
@@ -292,7 +300,12 @@ func (sc *scanner) scanSnapshots() error {
 		return nil
 	}
 	for _, u := range usage {
-		sc.report.Snapshots = append(sc.report.Snapshots, sc.group(u.GameID, u.Count, u.SizeBytes, u.SizeUnknown))
+		snaps, listErr := sc.s.deps.Snapshots.List(sc.ctx, u.GameID)
+		if err := sc.ctx.Err(); err != nil {
+			return err
+		}
+		sc.addGroup(groupKey{groupSnaps, u.GameID}, snapItems(snaps), listErr,
+			GroupUsage{Count: u.Count, SizeBytes: u.SizeBytes, SizeUnknown: u.SizeUnknown})
 	}
 	return nil
 }

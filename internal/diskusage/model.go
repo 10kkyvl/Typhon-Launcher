@@ -70,6 +70,20 @@ type GroupUsage struct {
 	SizeUnknown  bool   `json:"sizeUnknown"`
 }
 
+// GroupDelete is what deleting a whole group did with the items the last scan
+// counted in it: deleted, already gone, or still on disk (failed). Code is
+// empty when nothing failed and DeletePartial when something did.
+type GroupDelete struct {
+	Deleted int    `json:"deleted"`
+	Gone    int    `json:"gone"`
+	Failed  int    `json:"failed"`
+	Code    string `json:"code"`
+}
+
+// DeletePartial: some items of a group could not be deleted; GroupDelete
+// carries how many went and how many did not.
+const DeletePartial = "diskusage.delete_partial"
+
 type Totals struct {
 	GamesBytes       int64 `json:"gamesBytes"`
 	DownloadsBytes   int64 `json:"downloadsBytes"`

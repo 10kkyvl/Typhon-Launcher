@@ -152,124 +152,14 @@ func (s *Service) dropDownload(id string) {
 	s.report.recount()
 }
 
-// DeleteScreenshots deletes every screenshot of a game one by one through the
-// screenshot service and reports what could not be deleted.
-func (s *Service) DeleteScreenshots(ctx context.Context, gameID string) error {
-	ctx, end, err := s.begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer end()
-	if gameID == "" {
-		return errEmptyGameID
-	}
-	s.opMu.Lock()
-	defer s.opMu.Unlock()
-
-	shots, err := s.deps.Screenshots.List(gameID)
-	if err != nil {
-		return err
-	}
-	var errs []error
-	for _, shot := range shots {
-		if err := ctx.Err(); err != nil {
-			errs = append(errs, err)
-			break
-		}
-		if err := s.deps.Screenshots.Delete(gameID, shot.Name); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			errs = append(errs, err)
-		}
-	}
-	left, listErr := s.deps.Screenshots.List(gameID)
-	if listErr != nil {
-		errs = append(errs, listErr)
-		return errors.Join(errs...)
-	}
-	var size int64
-	for _, shot := range left {
-		size += shot.Size
-	}
-	s.setGroup(gameID, true, len(left), size)
-	return errors.Join(errs...)
+// DeleteScreenshots deletes the screenshots of a game the last scan counted,
+// one by one through the screenshot service, and says how many went.
+func (s *Service) DeleteScreenshots(ctx context.Context, gameID string) (GroupDelete, error) {
+	return s.deleteGroup(ctx, groupKey{groupShots, gameID}, s.deleteShot(gameID), s.listShots(gameID))
 }
 
-// DeleteSnapshots deletes every local save snapshot of a game.
-func (s *Service) DeleteSnapshots(ctx context.Context, gameID string) error {
-	ctx, end, err := s.begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer end()
-	if gameID == "" {
-		return errEmptyGameID
-	}
-	s.opMu.Lock()
-	defer s.opMu.Unlock()
-
-	snaps, err := s.deps.Snapshots.List(ctx, gameID)
-	if err != nil {
-		return err
-	}
-	var errs []error
-	for _, snap := range snaps {
-		if err := ctx.Err(); err != nil {
-			errs = append(errs, err)
-			break
-		}
-		if err := s.deps.Snapshots.Delete(gameID, snap.ID); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", snap.ID, err))
-		}
-	}
-	left, listErr := s.deps.Snapshots.List(ctx, gameID)
-	if listErr != nil {
-		errs = append(errs, listErr)
-		return errors.Join(errs...)
-	}
-	var size int64
-	unknown := false
-	for _, snap := range left {
-		size += snap.SizeBytes
-		unknown = unknown || snap.Broken
-	}
-	s.setGroup(gameID, false, len(left), size)
-	if unknown {
-		s.markGroupUnknown(gameID)
-	}
-	return errors.Join(errs...)
-}
-
-func (s *Service) setGroup(gameID string, shots bool, count int, size int64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.report == nil {
-		return
-	}
-	groups := &s.report.Snapshots
-	if shots {
-		groups = &s.report.Screenshots
-	}
-	if count == 0 {
-		*groups = slices.DeleteFunc(*groups, func(g GroupUsage) bool { return g.GameID == gameID })
-	} else {
-		for i := range *groups {
-			if (*groups)[i].GameID == gameID {
-				(*groups)[i].Count, (*groups)[i].SizeBytes, (*groups)[i].SizeUnknown = count, size, false
-			}
-		}
-	}
-	s.report.recount()
-}
-
-func (s *Service) markGroupUnknown(gameID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.report == nil {
-		return
-	}
-	for i := range s.report.Snapshots {
-		if s.report.Snapshots[i].GameID == gameID {
-			s.report.Snapshots[i].SizeUnknown = true
-		}
-	}
-	s.report.recount()
+// DeleteSnapshots deletes the local save copies of a game the last scan
+// counted and says how many went.
+func (s *Service) DeleteSnapshots(ctx context.Context, gameID string) (GroupDelete, error) {
+	return s.deleteGroup(ctx, groupKey{groupSnaps, gameID}, s.deleteSnap(gameID), s.listSnaps(gameID))
 }
