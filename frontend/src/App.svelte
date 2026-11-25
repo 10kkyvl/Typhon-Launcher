@@ -46,7 +46,6 @@
   import { initSaveBackups } from './lib/stores/savebackup';
   import { initCloudSaves } from './lib/stores/cloudsaves';
   import { initSelfUpdate } from './lib/stores/selfupdate';
-  import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
   import { initSourceProgress } from './lib/stores/sourceProgress';
@@ -57,7 +56,7 @@
   import { initUpdates } from './lib/stores/updates';
   import { initWindowState } from './lib/stores/window';
   import { authState, bootSplash, initAuth } from './lib/stores/user';
-  import { refreshStorage } from './lib/stores/storage';
+  import { refreshStorage, refreshStorageOnFolderChange } from './lib/stores/storage';
   import Activity from './routes/activity/Activity.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
   import Catalog from './routes/catalog/Catalog.svelte';
@@ -123,14 +122,7 @@
   // CloudConflictModal below is mounted under the same gate.
   $effect(() => setWindowReady(linksReady));
 
-  let lastLibraryPath: string | undefined;
-  settings.subscribe((value) => {
-    if (!value) return;
-    if (lastLibraryPath !== undefined && lastLibraryPath !== value.libraryPath) {
-      refreshStorage();
-    }
-    lastLibraryPath = value.libraryPath;
-  });
+  onDestroy(refreshStorageOnFolderChange());
 </script>
 
 {#if $bigPictureActive && !$showLegalAcceptance && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
