@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { Calendar, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import { frameLook } from '../../lib/profile/frameLook';
@@ -13,6 +14,9 @@
   import Notice from '../../lib/components/Notice.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
+  import TextArea from '../../lib/components/TextArea.svelte';
+  import TextField from '../../lib/components/TextField.svelte';
+  import type { TextAreaCounter } from '../../lib/components/textArea';
   import { appearanceOf } from '../../lib/profile/appearance';
   import type { ProfileAppearance } from '../../lib/services/account';
   import { signOutPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -23,6 +27,7 @@
   import { shownPresence } from '../../lib/stores/presence';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
   import ProfileStats from './ProfileStats.svelte';
@@ -59,12 +64,30 @@
   const look = $derived(appearanceOf(appearance));
 
   const BIO_LIMIT = 150;
+  // Counted as the browser's maxlength counts, so the count and the limit it refuses at agree.
+  const bioCounter: TextAreaCounter = {
+    max: BIO_LIMIT,
+    measure: (value) => value.length,
+    text: (count, max) => msg('profile.bioCounter', { count, max }),
+    limitText: (count, max) => {
+      if (count > max) return msg('profile.bioOver', { count: count - max });
+      if (count === max) return msg('profile.bioAt');
+      return msg('profile.bioNear', { count: max - count });
+    },
+  };
 
   let editing = $state(false);
   let draft = $state({ displayName: '', username: '', bio: '' });
   let fieldErrors = $state<{ displayName?: string; username?: string; bio?: string; general?: string }>({});
   let busy = $state(false);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  let root = $state<HTMLElement>();
+  let displayNameField = $state<HTMLInputElement>();
+  let usernameField = $state<HTMLInputElement>();
+  let bioField = $state<HTMLTextAreaElement>();
+  // The editor is opened from the menu, which gives focus back to its trigger: the fields leaving hand
+  // focus back there.
+  const opener = () => root?.querySelector<HTMLElement>('[data-header-menu]');
 
   const isGuest = $derived($authState === 'guest');
   const avatarFrame = $derived(isGuest ? frameLook('none', '') : frameLook(look.avatarFrame, look.frameColor, $currentUser?.frames));
@@ -99,13 +122,33 @@
     editing = true;
   }
 
-  function cancelEditing() {
+  function close(handOff: ReturnType<typeof focusHandOff>) {
     fieldErrors = {};
     editing = false;
+    void handOff(opener);
+  }
+
+  function cancelEditing() {
+    close(focusHandOff());
+  }
+
+  // A refusal about one field is said there and that field takes focus; any other once, in the notice.
+  async function refuse(err: unknown) {
+    const message = accountErrorText(err, msg('social.saveFailed'));
+    const field = accountErrorField(err);
+    if (field === 'username') fieldErrors = { username: message };
+    else if (field === 'displayName') fieldErrors = { displayName: message };
+    else if (field === 'bio') fieldErrors = { bio: message };
+    else fieldErrors = { general: message };
+    await tick();
+    if (fieldErrors.username) usernameField?.focus();
+    else if (fieldErrors.displayName) displayNameField?.focus();
+    else if (fieldErrors.bio) bioField?.focus();
   }
 
   async function save() {
     if (!$currentUser || !dirty || $savingProfile || $isOffline) return;
+    const handOff = focusHandOff();
     fieldErrors = {};
     const patch: { displayName?: string; username?: string; bio?: string } = {};
     if (draft.displayName !== $currentUser.displayName) patch.displayName = draft.displayName;
@@ -116,15 +159,10 @@
         fieldErrors = { general: msg('profile.saveBusy') };
         return;
       }
-      editing = false;
+      close(handOff);
       toast(msg('social.profileUpdated'), 'success');
     } catch (err) {
-      const message = accountErrorText(err, msg('social.saveFailed'));
-      const field = accountErrorField(err);
-      if (field === 'username') fieldErrors = { username: message };
-      else if (field === 'displayName') fieldErrors = { displayName: message };
-      else if (field === 'bio') fieldErrors = { bio: message };
-      else fieldErrors = { general: message };
+      await refuse(err);
     }
   }
 
@@ -152,7 +190,7 @@
   }
 </script>
 
-<section class="profile-header">
+<section class="profile-header" bind:this={root}>
   <div class="header-surface">
     <div class="head">
       <Avatar
@@ -185,7 +223,7 @@
             {/if}
             {#if memberSince}
               <span class="meta-item">
-                <Calendar size="1.5rem" strokeWidth={1.8} />
+                <span class="meta-icon" aria-hidden="true"><Calendar size="1.5rem" strokeWidth={1.8} /></span>
                 {msg('social.memberSince', { date: memberSince })}
               </span>
             {/if}
@@ -211,7 +249,7 @@
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('social.moreLabel')}>
+                <IconButton {...props} data-header-menu label={msg('social.moreLabel')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -231,54 +269,42 @@
 
     {#if editing && $currentUser}
       <div class="fields">
-        <div class="field">
-          <label class="field-label" for="{uid}-display-name">{msg('social.displayNameLabel')}</label>
-          <input
-            id="{uid}-display-name"
-            class="input"
-            type="text"
-            maxlength="32"
-            disabled={$isOffline}
-            aria-invalid={fieldErrors.displayName ? 'true' : undefined}
-            aria-describedby={fieldErrors.displayName ? `${uid}-display-name-error` : undefined}
-            bind:value={draft.displayName}
-          />
-          {#if fieldErrors.displayName}<span class="error" id="{uid}-display-name-error" role="alert">{fieldErrors.displayName}</span>{/if}
-        </div>
-        <div class="field">
-          <label class="field-label" for="{uid}-username">{msg('social.usernameLabel')}</label>
-          <div class="username-field">
-            <span class="username-prefix" aria-hidden="true">@</span>
-            <input
-              id="{uid}-username"
-              class="input"
-              type="text"
-              maxlength="24"
-              disabled={$isOffline}
-              aria-invalid={fieldErrors.username ? 'true' : undefined}
-              aria-describedby={fieldErrors.username ? `${uid}-username-error` : undefined}
-              bind:value={draft.username}
-            />
-          </div>
-          {#if fieldErrors.username}<span class="error" id="{uid}-username-error" role="alert">{fieldErrors.username}</span>{/if}
-        </div>
-        <div class="field">
-          <div class="field-label">
-            <label for="{uid}-bio">{msg('social.aboutTitle')}</label>
-            <span class="counter">{draft.bio.length}/{BIO_LIMIT}</span>
-          </div>
-          <textarea
-            id="{uid}-bio"
-            class="input area"
-            rows="3"
-            maxlength={BIO_LIMIT}
-            disabled={$isOffline}
-            aria-invalid={fieldErrors.bio ? 'true' : undefined}
-            aria-describedby={fieldErrors.bio ? `${uid}-bio-error` : undefined}
-            bind:value={draft.bio}
-          ></textarea>
-          {#if fieldErrors.bio}<span class="error" id="{uid}-bio-error" role="alert">{fieldErrors.bio}</span>{/if}
-        </div>
+        {#if $isOffline}
+          <Notice tone="warning" compact>{msg('profile.editOffline')}</Notice>
+        {/if}
+        <!-- While the save waits, and while the connection is gone, the fields refuse edits by being
+             read-only: a field that turns disabled drops the focus it holds. -->
+        <TextField
+          id="{uid}-display-name"
+          label={msg('social.displayNameLabel')}
+          maxlength={32}
+          readonly={$isOffline || $savingProfile}
+          error={fieldErrors.displayName}
+          bind:value={draft.displayName}
+          bind:input={displayNameField}
+        />
+        <TextField
+          id="{uid}-username"
+          label={msg('social.usernameLabel')}
+          maxlength={24}
+          autocomplete="off"
+          hint={msg('profile.usernameHint', { username: draft.username })}
+          readonly={$isOffline || $savingProfile}
+          error={fieldErrors.username}
+          bind:value={draft.username}
+          bind:input={usernameField}
+        />
+        <TextArea
+          id="{uid}-bio"
+          label={msg('social.aboutTitle')}
+          rows={3}
+          maxlength={BIO_LIMIT}
+          counter={bioCounter}
+          readonly={$isOffline || $savingProfile}
+          error={fieldErrors.bio}
+          bind:value={draft.bio}
+          bind:textarea={bioField}
+        />
         <div class="field">
           <span class="field-label">{msg('common.email')}</span>
           <MaskedEmail email={$currentUser.email} />
@@ -292,7 +318,15 @@
       <div class="foot">
         {#if fieldErrors.general}<div class="general"><Notice tone="danger" compact>{fieldErrors.general}</Notice></div>{/if}
         <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>{msg('common.cancel')}</Button>
-        <Button variant="primary" disabled={!dirty || $savingProfile || $isOffline} onclick={save}>
+        <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Offline it stays
+             in the Tab order, refused, and says why. -->
+        <Button
+          variant="primary"
+          busy={$savingProfile}
+          disabled={!$savingProfile && (!dirty || $isOffline)}
+          reason={$isOffline ? msg('social.editRequiresConnection') : ''}
+          onclick={save}
+        >
           {$savingProfile ? msg('social.saving') : msg('common.save')}
         </Button>
       </div>
@@ -377,7 +411,8 @@
     color: var(--text-2);
   }
 
-  .meta-item :global(svg) {
+  .meta-icon {
+    display: inline-flex;
     color: var(--text-3);
     flex-shrink: 0;
   }
@@ -422,44 +457,9 @@
     color: var(--text-2);
   }
 
-  .counter {
-    color: var(--text-3);
-  }
-
-  .area {
-    height: auto;
-    font-family: inherit;
-    padding: 0.9rem 1.2rem;
-    resize: vertical;
-    line-height: 1.5;
-  }
-
-  .username-field {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .username-prefix {
-    position: absolute;
-    left: 1.2rem;
-    color: var(--text-3);
-    font-size: var(--font-sm);
-    pointer-events: none;
-  }
-
-  .username-field .input {
-    padding-left: 2.6rem;
-  }
-
   .hint {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .error {
-    font-size: var(--font-xs);
-    color: var(--danger);
   }
 
   .foot {

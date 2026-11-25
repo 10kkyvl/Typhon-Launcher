@@ -63,7 +63,8 @@ describe('the profile header editor', () => {
     const text = accountErrorText(new AccountError('username_taken'));
     expect(screen.getByRole('textbox', { name: 'Username' })).toBe(username);
     expect(username.getAttribute('aria-invalid')).toBe('true');
-    const error = document.getElementById(username.getAttribute('aria-describedby') ?? '');
+    // Described by its hint and then by the error, the error last.
+    const error = document.getElementById((username.getAttribute('aria-describedby') ?? '').split(' ').at(-1) ?? '');
     expect(error?.textContent).toBe(text);
     expect(error?.getAttribute('role')).toBe('alert');
     expect(displayName.getAttribute('aria-invalid')).not.toBe('true');

@@ -299,7 +299,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['warning', false],
   ],
-  'routes/profile/ProfileHeader.svelte': [['danger', true]],
+  // The connection went while the header's editor is open; a save was refused.
+  'routes/profile/ProfileHeader.svelte': [
+    ['warning', true],
+    ['danger', true],
+  ],
   // The connection went while the dialog is open; a save was refused.
   'routes/profile/ProfileSettingsModal.svelte': [
     ['warning', true],

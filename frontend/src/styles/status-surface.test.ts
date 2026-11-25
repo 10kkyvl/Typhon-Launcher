@@ -202,7 +202,6 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/diskusage/UsageRow.svelte': ['the fill of a row (.row, held opaque there)', ".reason[data-tone='warning']"],
   'routes/game/ReviewComposer.svelte': ["the plate of one's own review", '.recommend.negative'],
   'routes/profile/Profile.svelte': ['the editing bar', '.topbar-sub.error'],
-  'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
   'routes/history/HistoryDay.svelte': ["the plate of a day's list", '.row.failed .mark', '.row.failed .detail'],
   'routes/sources/Sources.svelte': ['the plate of the list the rows of SourceRow.svelte sit on'],
   // No status text of its own: the settings tab strip sticks over the scrolled cards, whose words

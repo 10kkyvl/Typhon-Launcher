@@ -169,7 +169,7 @@ describe("the base text field's and the raw forms' fields", () => {
 
 // Forms moved onto the base fields: they draw no field of their own, and a component's scoped rule
 // cannot reach the field inside TextField or TextArea except through `:global`, which they do not use.
-const ON_TEXT_FIELD = ['routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte'];
+const ON_TEXT_FIELD = ['routes/auth/AuthScreen.svelte', 'routes/profile/ProfileHeader.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte'];
 
 describe('the forms on the base text fields', () => {
   it.each(ON_TEXT_FIELD)('%s draws its fields through TextField or TextArea and reaches into none', (path) => {
