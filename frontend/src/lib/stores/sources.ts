@@ -132,7 +132,7 @@ export async function initSources(): Promise<void> {
     const { name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
     announce(message);
-    toast(msg('state.sourcesErrorToast', { name, message: sourceErrorText(new Error(message), message) }), 'danger');
+    toast(msg('state.sourcesErrorToast', { name, message: sourceErrorText(new Error(message)) }), 'danger');
   });
   on('source:degraded', (event) => {
     const status = event.data as { degraded: boolean; message: string } | null;

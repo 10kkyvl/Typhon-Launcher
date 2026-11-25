@@ -354,12 +354,15 @@ describe('announcements that already told the player', () => {
     expect(text).not.toContain('typhon:');
   });
 
-  it('keeps the backend text when the error carries no known code', async () => {
+  it('says the catalogue\'s plain failure, not the backend\'s text, when the error carries no known code', async () => {
     const { toast } = await load();
 
     handlers['source:error']({ data: { sourceId: 'a', name: 'Alpha', message: 'не удалось сопоставить 3 из 10 названий', scheduled: false } });
 
-    expect(String(toast.mock.calls[0][0])).toContain('не удалось сопоставить 3 из 10 названий');
+    const { msg } = await import('../i18n');
+    const text = String(toast.mock.calls[0][0]);
+    expect(text).toBe(msg('state.sourcesErrorToast', { name: 'Alpha', message: msg('errSources.fallback') }));
+    expect(text).not.toContain('не удалось сопоставить');
   });
 });
 
