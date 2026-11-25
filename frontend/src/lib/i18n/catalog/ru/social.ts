@@ -144,7 +144,6 @@ export const social = {
   'social.requestDeclined': 'Заявка отклонена',
   'social.friendsUnfriended': 'Удалён из друзей',
   'social.userBlocked': 'Пользователь заблокирован',
-  'social.actionFailed': 'Не удалось выполнить действие',
   'social.userProfileClosed': 'Профиль закрыт',
   'social.userRestToFriends': 'Остальное видно друзьям',
 
@@ -331,7 +330,7 @@ export const social = {
   'social.friendsChangeCodeWarning':
     'Старый код перестанет работать: по нему вас больше никто не найдёт. Уже отправленные заявки и список друзей это не затронет.',
   // 7-F2 user
-  'social.userNotFoundHiddenDesc': 'Проверьте имя. Профиль не откроется и тогда, когда один из вас заблокировал другого.',
+  'social.userNotFoundHiddenDesc': 'Проверьте имя. Профиль также не открывается, если один из вас заблокировал другого.',
   'social.userActionsNeedConnection': 'Без связи с сервером это недоступно',
   'social.userActionRunning': 'Дождитесь, пока закончится текущее действие',
   'social.userRequestSentTo': 'Заявка для {name} отправлена',

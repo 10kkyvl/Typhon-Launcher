@@ -146,7 +146,6 @@ export const social: Record<SocialKey, Message> = {
   'social.requestDeclined': 'Request declined',
   'social.friendsUnfriended': 'Removed from friends',
   'social.userBlocked': 'User blocked',
-  'social.actionFailed': 'Could not complete the action',
   'social.userProfileClosed': 'Profile is private',
   'social.userRestToFriends': 'The rest is visible to friends',
 
