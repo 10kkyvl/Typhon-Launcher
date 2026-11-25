@@ -225,6 +225,7 @@ func (s *Service) finishHandoff(ctx context.Context) {
 	s.settleAfterHandoff(ctx)
 
 	oldDir := ""
+	keepJournal := false
 	j, err := loadJournal(s.dir)
 	switch {
 	case err == nil:
@@ -234,6 +235,12 @@ func (s *Service) finishHandoff(ctx context.Context) {
 		}
 		oldDir = filepath.Dir(j.OldPath)
 	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, errJournalUnparseable):
+		if serr := setAsideJournal(s.dir, err); serr != nil {
+			// Not deleted either: the next start sets it aside.
+			keepJournal = true
+			slog.Warn("selfupdate: set aside the hand-off journal", "error", serr)
+		}
 	default:
 		slog.Warn("selfupdate: read the hand-off journal", "error", err)
 	}
@@ -245,6 +252,9 @@ func (s *Service) finishHandoff(ctx context.Context) {
 	sweepOld(oldDir)
 	if err := clearReadyMarkers(s.dir); err != nil {
 		slog.Warn("selfupdate: remove hand-off markers", "error", err)
+	}
+	if keepJournal {
+		return
 	}
 	if err := clearJournal(s.dir); err != nil {
 		slog.Warn("selfupdate: remove the hand-off journal", "error", err)

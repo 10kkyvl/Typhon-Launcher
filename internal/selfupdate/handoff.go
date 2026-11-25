@@ -77,6 +77,14 @@ var ErrHandoffPending = uierr.New("selfupdate.handoff_pending", "selfupdate: an 
 
 var errHandoffBadSpec = errors.New("selfupdate: the hand-off argument is not valid")
 
+// errJournalUnparseable is a journal that was read but cannot be understood:
+// broken JSON, or a format this build does not know.
+var errJournalUnparseable = errors.New("selfupdate: the hand-off journal cannot be parsed")
+
+// unparseableJournalSuffix marks a journal set aside because it could not be
+// parsed; a unix-nanosecond stamp follows, so none overwrites another.
+const unparseableJournalSuffix = ".unreadable-"
+
 // HandoffSpec is what the old launcher passes to its successor on the command
 // line (base64url JSON after --handoff).
 type HandoffSpec struct {
@@ -232,9 +240,52 @@ func loadJournal(configDir string) (handoffJournal, error) {
 	}
 	var j handoffJournal
 	if err := storage.Load(path, handoffJournalVersion, nil, &j); err != nil {
+		// A failure to read the file comes as a path error; anything else
+		// was said by the bytes.
+		var pathErr *fs.PathError
+		if !errors.As(err, &pathErr) {
+			return handoffJournal{}, fmt.Errorf("%w: %w", errJournalUnparseable, err)
+		}
 		return handoffJournal{}, err
 	}
 	return j, nil
+}
+
+// setAsideJournal renames a journal that cannot be parsed next to itself, so
+// that it stops holding updates back and stays for whoever wants to read it.
+// Nothing it may describe is touched.
+func setAsideJournal(configDir string, cause error) error {
+	path, err := handoffJournalPath(configDir)
+	if err != nil {
+		return err
+	}
+	aside := fmt.Sprintf("%s%s%d", path, unparseableJournalSuffix, time.Now().UnixNano())
+	if err := storage.Rename(path, aside); err != nil {
+		return fmt.Errorf("selfupdate: set aside the hand-off journal that cannot be parsed (%w): %w", cause, err)
+	}
+	slog.Error("selfupdate: the hand-off journal cannot be parsed, set it aside; updates are allowed again", "path", aside, "cause", cause)
+	return nil
+}
+
+// runsFromOwnName reports that exe is not under one of the names a hand-off
+// parks or stages a launcher under: this start is the launcher's ordinary
+// path, and something runnable sits at the launcher's name (this process).
+func runsFromOwnName(exe string, exeErr error) bool {
+	if exeErr != nil {
+		return false
+	}
+	if _, err := os.Lstat(exe); err != nil {
+		return false
+	}
+	for p := exe; ; p = filepath.Dir(p) {
+		base := filepath.Base(p)
+		if strings.HasPrefix(base, oldPrefix) || strings.HasPrefix(base, stagedPrefix) {
+			return false
+		}
+		if filepath.Dir(p) == p {
+			return true
+		}
+	}
 }
 
 func clearJournal(configDir string) error {
@@ -352,6 +403,9 @@ func RecoverHandoff(configDir, current string) error {
 			sweepOld(handoffOldDir(exe))
 		}
 		return nil
+	}
+	if errors.Is(err, errJournalUnparseable) && runsFromOwnName(exe, exeErr) {
+		return setAsideJournal(configDir, err)
 	}
 	if err != nil {
 		return fmt.Errorf("selfupdate: read the hand-off journal: %w", err)
