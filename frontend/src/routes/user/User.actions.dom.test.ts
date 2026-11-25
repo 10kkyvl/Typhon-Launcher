@@ -195,3 +195,24 @@ describe("a user's page: a success stays a success", () => {
     ]);
   });
 });
+
+describe("a user's page: an answer for a name the page has left", () => {
+  it('Add answered after the page moved to another name: the success names the player; nothing is re-read', async () => {
+    let answer!: (value: SendResult) => void;
+    vi.mocked(sendRequest).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const { user, rerender } = await mount(player());
+    await user.click(button(msg('social.relationNone')));
+    vi.mocked(fetchProfile).mockResolvedValue(player({ id: 'u2', username: 'bob', displayName: 'Bob' }));
+    await rerender({ username: 'bob' });
+    await screen.findByText('@bob', { selector: '.username' });
+
+    answer({ accepted: true } as SendResult);
+    await vi.waitFor(() => expect(said()).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(said()).toEqual([['success', msg('social.userNowFriendsWith', { name: 'Ann' })]]);
+    expect(vi.mocked(fetchProfile).mock.calls).toEqual([['ann'], ['bob']]);
+    expect(vi.mocked(refresh)).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(button(msg('social.relationNone')));
+  });
+});

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import Page from '../../lib/components/Page.svelte';
   import { Lock, LogIn, UserRound, Users } from '@lucide/svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
@@ -14,7 +15,7 @@
   import AboutBlock from '../../lib/components/profile/AboutBlock.svelte';
   import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
   import { AccountError } from '../../lib/services/account';
-  import { accountErrorText } from '../../lib/services/accountMessages';
+  import { accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { chatPeerOf, type PublicProfile } from '../../lib/services/social';
   import {
     accept,
@@ -69,9 +70,44 @@
   };
   const failedText = (action: Action, err: unknown) => accountErrorText(err, msg(FAILED[action]));
 
+  // The same, naming the player: said for a page the player has left, where it could read as being
+  // about what is on screen now.
+  const FAILED_NAMED: Record<Action, SocialKey> = {
+    add: 'social.userSendRequestFailedTo',
+    cancel: 'social.userCancelRequestFailedTo',
+    accept: 'social.userAcceptRequestFailedFrom',
+    decline: 'social.userDeclineRequestFailedFrom',
+    unfriend: 'social.userUnfriendFailedNamed',
+    block: 'social.userBlockFailedNamed',
+  };
+
+  type Outcome = 'sent' | 'friends' | 'cancelled' | 'declined' | 'unfriended' | 'blocked';
+  // What a done action says: on the page, and naming the player once the page has left them.
+  const DONE: Record<Outcome, [SocialKey, SocialKey]> = {
+    sent: ['social.relationOutgoing', 'social.userRequestSentTo'],
+    friends: ['social.friendsNowFriends', 'social.userNowFriendsWith'],
+    cancelled: ['social.requestCancelled', 'social.userRequestCancelledTo'],
+    declined: ['social.requestDeclined', 'social.userRequestDeclinedFrom'],
+    unfriended: ['social.friendsUnfriended', 'social.userUnfriendedNamed'],
+    blocked: ['social.userBlocked', 'social.userBlockedNamed'],
+  };
+
+  const nameOf = (player: PublicProfile) => player.displayName || player.username;
+
+  function lateFailure(action: Action, about: PublicProfile, err: unknown): string {
+    const what = msg(FAILED_NAMED[action], { name: nameOf(about) });
+    const why = err instanceof AccountError ? accountMessage(err.code, '') : '';
+    return why ? msg('social.userActionFailedWhy', { what, why }) : what;
+  }
+
+  // An answer is late once the page that asked is gone or shows another player.
+  let destroyed = false;
+  onDestroy(() => (destroyed = true));
+  const left = (about: PublicProfile) => destroyed || about.username !== username;
+
   const isGuest = $derived($authState === 'guest');
   let consentOpen = $state(false);
-  const name = $derived(data ? data.displayName || data.username : '');
+  const name = $derived(data ? nameOf(data) : '');
   const stranger = $derived(!!data && data.relation !== 'friend' && data.relation !== 'self');
   const closed = $derived(!!data && data.visibility === 'private' && data.relation !== 'self');
   const restricted = $derived(!!data && data.visibility === 'friends' && stranger);
@@ -164,62 +200,78 @@
     if (action !== 'unfriend' && action !== 'block') {
       const handOff = focusHandOff();
       perform(action).then(
-        () => handOff(relationControl),
+        () => {
+          if (!left(current)) void handOff(relationControl);
+        },
         (err: unknown) => toast(failedText(action, err), 'danger'),
       );
       return;
     }
-    const label = current.displayName || current.username;
+    const label = nameOf(current);
     pending = {
       prompt: action === 'unfriend' ? unfriendPrompt(label) : blockPrompt(label, current.relation === 'friend'),
       action,
     };
   }
 
-  async function change(action: Action, current: PublicProfile): Promise<string> {
+  async function change(action: Action, current: PublicProfile): Promise<Outcome> {
     if (action === 'add') {
       const result = await sendRequest(current.username);
-      return result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing');
+      return result.accepted ? 'friends' : 'sent';
     }
     if (action === 'cancel') {
       await decline(current.id);
-      return msg('social.requestCancelled');
+      return 'cancelled';
     }
     if (action === 'decline') {
       await decline(current.id);
-      return msg('social.requestDeclined');
+      return 'declined';
     }
     if (action === 'accept') {
       await accept(current.id);
-      return msg('social.friendsNowFriends');
+      return 'friends';
     }
     if (action === 'unfriend') {
       await unfriend(current.id);
-      return msg('social.friendsUnfriended');
+      return 'unfriended';
     }
     await block(current.id);
-    return msg('social.userBlocked');
+    return 'blocked';
   }
 
-  // Rejects only when the action itself failed: the caller says that where the player looks. Once it is
-  // done it is said as done, and a failed re-read after it is said as a failed read.
+  // Rejects only when the action itself failed on the page that asked: the caller says that where the
+  // player looks. Once it is done it is said as done, and a failed re-read after it is said as a failed
+  // read. An answer for a page the player has left is said once, naming the player, and nothing is
+  // re-read or opened: that would pull the player back or paint a page they are not on.
   async function perform(action: Action): Promise<void> {
     const current = data;
     if (!current || busy) return;
     busy = action;
     try {
-      toast(await change(action, current), 'success');
+      let outcome: Outcome;
+      try {
+        outcome = await change(action, current);
+      } catch (err) {
+        if (!left(current)) throw err;
+        toast(lateFailure(action, current, err), 'danger');
+        return;
+      }
+      if (left(current)) {
+        toast(msg(DONE[outcome][1], { name: nameOf(current) }), 'success');
+        return;
+      }
+      toast(msg(DONE[outcome][0]), 'success');
       if (action === 'block') {
         // The blocked players are on the friends screen, and the friends list is what refresh reads.
         await refresh().catch((err) => toast(accountErrorText(err, msg('social.friendsRefreshFailed')), 'danger'));
-        navigate('friends', { tab: 'blocked' });
+        if (!left(current)) navigate('friends', { tab: 'blocked' });
         return;
       }
       const listFailed = await refresh().then(
         () => null,
         (err: unknown) => err ?? new Error('refresh'),
       );
-      const profileFailed = await load(current.username, true);
+      const profileFailed = left(current) ? undefined : await load(current.username, true);
       // Both failing is said once, as the profile's: the page then shows the relation from before.
       if (profileFailed) toast(accountErrorText(profileFailed, msg('social.userRefreshFailed')), 'danger');
       else if (listFailed) toast(accountErrorText(listFailed, msg('social.friendsRefreshFailed')), 'danger');
