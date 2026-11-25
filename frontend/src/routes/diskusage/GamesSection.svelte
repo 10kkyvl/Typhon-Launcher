@@ -4,17 +4,20 @@
   import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import { ageOf, ageText, canManageGame, gameBlockedKey, isStale, type GameSort } from '../../lib/diskusage/usage';
+  import { ageOf, ageText, gameGates, isStale, type GameSort } from '../../lib/diskusage/usage';
   import { openMoveGame } from '../../lib/game/actions/move';
   import { msg } from '../../lib/i18n';
+  import { isEmulated } from '../../lib/library/emulation';
   import type { GameUsage } from '../../lib/services/diskusage';
   import { libraryGamesById } from '../../lib/stores/library';
+  import { activeMove } from '../../lib/stores/relocate';
   import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
 
-  // The installed games: their marks, when each was last played, the sort menu, Move and Remove.
+  // The installed games: their marks, when each was last played, the sort menu, Move and Remove with
+  // their gates (the scan's flags, a move under way, Go's refusal to move an emulated game).
   let {
     games,
     totalBytes,
@@ -56,8 +59,10 @@
     </DropdownMenu>
   {/snippet}
   {#each games as game (game.id)}
-    {@const blocked = gameBlockedKey(game)}
-    {@const manage = canManageGame(game)}
+    {@const gates = gameGates(game, {
+      moving: $activeMove?.scope === 'library' ? 'library' : $activeMove?.gameId === game.id ? 'game' : null,
+      emulated: isEmulated($libraryGamesById.get(game.id)),
+    })}
     <UsageRow
       key="games:{game.id}"
       title={game.title}
@@ -85,10 +90,10 @@
       {/snippet}
       {#snippet actions()}
         {#if !game.external}
-          <Button size="sm" data-row-control="move" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openMoveGame(game.id)}>
+          <Button size="sm" data-row-control="move" disabled={gates.move !== null} reason={gates.move ? msg(gates.move) : ''} onclick={() => openMoveGame(game.id)}>
             {msg('diskusage.move')}
           </Button>
-          <Button size="sm" variant="danger" data-row-control="remove" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => onremove(game)}>
+          <Button size="sm" variant="danger" data-row-control="remove" disabled={gates.remove !== null} reason={gates.remove ? msg(gates.remove) : ''} onclick={() => onremove(game)}>
             {msg('diskusage.remove')}
           </Button>
         {/if}

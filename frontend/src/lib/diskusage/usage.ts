@@ -59,6 +59,23 @@ export function gameBlockedKey(game: GameUsage): MessageKey | null {
   return null;
 }
 
+/** What holds a game beyond the scan's flags: a move of it or of the whole library, its emulation. */
+export interface GameHolds {
+  moving: 'game' | 'library' | null;
+  emulated: boolean;
+}
+
+/**
+ * Why Move and Remove of a game row are off, each null when on. A move under way holds both (the
+ * scan's `busy` may predate it); Go refuses to move any emulated game (library.CheckRelocatable:
+ * emulators.game_unsupported), so its Move is off while Remove follows the other gates.
+ */
+export function gameGates(game: GameUsage, holds: GameHolds): { move: MessageKey | null; remove: MessageKey | null } {
+  const held: MessageKey | null =
+    holds.moving === 'library' ? 'diskusage.blockedLibraryMoving' : holds.moving === 'game' ? 'diskusage.blockedMoving' : gameBlockedKey(game);
+  return { move: held ?? (holds.emulated ? 'diskusage.blockedEmulated' : null), remove: held };
+}
+
 /** The name of the game a group or a copy belongs to; "Unknown game" when nothing knows it. */
 export function gameTitle(item: { title?: string; titleUnknown?: boolean }): string {
   const title = item.title?.trim() ?? '';

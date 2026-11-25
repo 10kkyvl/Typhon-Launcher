@@ -13,7 +13,7 @@
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { countUnknown, measuredWhen, sizeSorted, sortGames, type GameSort } from '../../lib/diskusage/usage';
   import { isEmulated } from '../../lib/library/emulation';
-  import { libraryGames } from '../../lib/stores/library';
+  import { libraryGames, libraryLoaded } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
   import { deleteErrorText } from '../../lib/diskusage/errors';
   import { activeMove } from '../../lib/stores/relocate';
@@ -62,6 +62,26 @@
     const active = $activeMove !== null;
     if (hadMove && !active) void page.refresh();
     hadMove = active;
+  });
+
+  // The installed games and their folders, as the library last said (library:updated): a removal or a
+  // move that ended anywhere changes them, and the report's rows and flags with them. The library's
+  // first load is not a change: the page's own scan reads it.
+  const installedFolders = $derived(
+    $libraryLoaded
+      ? $libraryGames
+          .filter((game) => !game.uninstalled)
+          .map((game) => `${game.id}\u0000${game.installDir}`)
+          .sort()
+          .join('\u0001')
+      : null,
+  );
+  let seenFolders: string | null = null;
+  $effect(() => {
+    const folders = installedFolders;
+    if (folders === null) return;
+    if (seenFolders !== null && folders !== seenFolders) void page.refresh();
+    seenFolders = folders;
   });
 
   // Where the removed game's row stood, read at the press: focus follows the row rule once it has gone.
