@@ -102,6 +102,12 @@ describe('a text field', () => {
     expect(body(".input[aria-invalid='true']:focus-visible")).toMatch(/outline-color: var\(--danger\);/);
   });
 
+  // A browser gives a multi-line field its own monospace face unless told otherwise.
+  it('is written in the page\'s face, the multi-line one too', () => {
+    const reset = /(?:^|\})\s*([^{}]*)\{[^}]*font:\s*inherit[^}]*\}/.exec(css)?.[1] ?? '';
+    expect(selectors(reset)).toEqual(expect.arrayContaining(['button', 'input', 'select', 'textarea']));
+  });
+
   // A locked field takes no input: it must not look like one that does, with the strong edge, a
   // hover that strengthens it, or the text cursor. Its look comes from tokens.
   it('looks locked while disabled, and does not answer the pointer', () => {
