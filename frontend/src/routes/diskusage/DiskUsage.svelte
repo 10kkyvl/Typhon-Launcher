@@ -10,7 +10,8 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
-  import { countUnknown, sizeSorted, sortGames, type GameSort } from '../../lib/diskusage/usage';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
+  import { countUnknown, measuredWhen, sizeSorted, sortGames, type GameSort } from '../../lib/diskusage/usage';
   import { isEmulated } from '../../lib/library/emulation';
   import { libraryGames } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
@@ -49,7 +50,11 @@
 
   onMount(() => {
     void page.load();
+    return () => page.leave();
   });
+
+  const when = $derived(page.report ? measuredWhen(page.report.scannedAt) : null);
+  let retrying = $state(false);
 
   let hadMove = false;
   $effect(() => {
@@ -75,12 +80,25 @@
     {/snippet}
   </PageHeader>
 
-  {#if page.scanError}
-    <div class="error"><Notice tone="danger">{page.scanError}</Notice></div>
+  {#if when}
+    <p class="measured">
+      <!-- The exact time goes to assistive tech as text and to the pointer as a hint (the History
+           convention); the time element takes focus only from the pointer. -->
+      <Tooltip text={when.exact} describe={false}>
+        <time datetime={page.report?.scannedAt} tabindex="-1"><span aria-hidden="true">{when.words}</span><span class="sr-only">{when.exact}</span></time>
+      </Tooltip>
+      {#if page.scanning}<span class="remeasuring">{msg('diskusage.remeasuring')}</span>{/if}
+    </p>
+  {/if}
+
+  {#if page.scanError || retrying}
+    <div class="error">
+      <Notice tone="danger" retry={{ label: msg('common.retry'), run: page.refresh }} bind:retrying>{page.scanError}</Notice>
+    </div>
   {/if}
 
   {#if !page.report}
-    {#if page.scanning}
+    {#if page.scanning && !page.scanError && !retrying}
       <Spinner label={msg('diskusage.scanning')} />
     {/if}
   {:else}
@@ -144,6 +162,19 @@
 <style>
   .error {
     margin-bottom: var(--space-4);
+  }
+
+  .measured {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
+  .remeasuring {
+    color: var(--text-3);
   }
 
   .summary {

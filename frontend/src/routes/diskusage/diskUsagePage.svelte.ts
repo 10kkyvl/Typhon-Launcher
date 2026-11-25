@@ -1,9 +1,11 @@
 import { msg } from '../../lib/i18n';
 import type { ConfirmPrompt } from '../../lib/confirm/prompts';
+import { diskusageErrorText, isScanCancelled } from '../../lib/diskusage/errors';
 import { leftoverKindKey } from '../../lib/diskusage/usage';
 import { installErrorText } from '../../lib/install/installErrors';
 import {
   cachedUsage,
+  cancelScan,
   deleteDownloadData,
   deleteLeftover,
   deleteScreenshots,
@@ -26,7 +28,7 @@ function failureText(err: unknown) {
  * What the disk usage page reads and deletes: the report (the cached one first, then a scan; an answer
  * overtaken by a newer scan is dropped), the scan's state and error, and the one confirmation every
  * delete goes through, which rescans when it is done. Created once by the page; the page starts
- * `load()` on mount and `refresh()` when a move ends.
+ * `load()` on mount, `refresh()` when a move ends, and `leave()` when it unmounts.
  */
 export function createDiskUsagePage() {
   let report = $state<Report | null>(null);
@@ -34,16 +36,25 @@ export function createDiskUsagePage() {
   let scanError = $state('');
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let scanSerial = 0;
+  let left = false;
 
-  async function refresh() {
+  /**
+   * Measures again; answers whether a report came. The last failure stays said until the scan answers,
+   * so a retry in flight keeps its words. A scan stopped by `leave` (or by CancelScan) is not a failure.
+   */
+  async function refresh(): Promise<boolean> {
+    if (left) return false;
     const serial = ++scanSerial;
     scanning = true;
-    scanError = '';
     try {
       const next = await scanUsage();
-      if (serial === scanSerial) report = next;
+      if (serial !== scanSerial) return false;
+      report = next;
+      scanError = '';
+      return true;
     } catch (err) {
-      if (serial === scanSerial) scanError = installErrorText(err, msg('diskusage.scanFailed'));
+      if (serial === scanSerial) scanError = isScanCancelled(err) ? '' : diskusageErrorText(err, msg('diskusage.scanFailed'));
+      return false;
     } finally {
       if (serial === scanSerial) scanning = false;
     }
@@ -52,11 +63,20 @@ export function createDiskUsagePage() {
   async function load() {
     try {
       const cached = await cachedUsage();
-      if (cached && !report) report = cached;
+      if (cached && !report && !left) report = cached;
     } catch (err) {
-      scanError = installErrorText(err, msg('diskusage.scanFailed'));
+      scanError = diskusageErrorText(err, msg('diskusage.scanFailed'));
     }
     await refresh();
+  }
+
+  /** The page is left: its scan in flight is stopped, and no answer lands any more. */
+  function leave() {
+    left = true;
+    scanSerial += 1;
+    if (!scanning) return;
+    scanning = false;
+    cancelScan().catch((err: unknown) => console.warn('cancel the disk usage scan', err));
   }
 
   function ask(prompt: ConfirmPrompt, action: () => Promise<unknown>, done: string) {
@@ -138,6 +158,7 @@ export function createDiskUsagePage() {
     closePending() { pending = null; },
     load,
     refresh,
+    leave,
     askDownload,
     askLeftover,
     askScreenshots,

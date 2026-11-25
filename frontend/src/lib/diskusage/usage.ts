@@ -1,5 +1,6 @@
 import type { DownloadUsage, GameUsage, GroupUsage, Leftover, LeftoverKind, Warning } from '../services/diskusage';
 import { hasMessage, msg, type MessageKey } from '../i18n';
+import { clockTime, longDate } from '../utils/format';
 
 export const STALE_DAYS = 90;
 
@@ -122,6 +123,17 @@ export function countUnknown(report: {
     ...report.snapshots,
   ];
   return flags.filter((item) => item.sizeUnknown).length;
+}
+
+/**
+ * When a report was measured (its walk started), as the History screen says a time: the clock time in
+ * words, the date and the time for the hint and for assistive tech. Null for a time it cannot read.
+ */
+export function measuredWhen(iso: string): { words: string; exact: string } | null {
+  const at = new Date(iso);
+  if (!iso || Number.isNaN(at.getTime())) return null;
+  const time = clockTime(at);
+  return { words: msg('diskusage.measuredAt', { time }), exact: msg('transfers.historyExactTime', { date: longDate(at), time }) };
 }
 
 export function ageText(age: Age): string {
