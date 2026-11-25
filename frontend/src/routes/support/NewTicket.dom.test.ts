@@ -6,6 +6,7 @@ import { AccountError } from '../../lib/services/account';
 import { createTicket, ticketLimits } from '../../lib/services/support';
 import { navigate, resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
+import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { description } from '../../lib/testing/hints';
@@ -215,6 +216,22 @@ describe('NewTicket: a refused request says why by its code', () => {
     const alert = await screen.findByRole('alert');
     await vi.waitFor(() => expect(alert.textContent).toContain(msg('errSupport.generic')));
     expect(alert.textContent).not.toContain('something_new');
+  });
+});
+
+describe('NewTicket: a session gone', () => {
+  it('says so in the form, keeps the draft and offers the way to sign in', async () => {
+    authState.set('authenticated');
+    vi.mocked(createTicket).mockRejectedValue(new AccountError('unauthenticated'));
+    const { user } = await filled();
+    await user.click(submit());
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('state.accountErrorUnauthenticated')));
+    expect(subjectField().value).toBe('  Cannot sign in  ');
+    await user.click(within(alert.closest('.notice') as HTMLElement).getByRole('button', { name: msg('tickets.signInAgain') }));
+    expect(get(authState)).toBe('unauthenticated');
+    authState.set('bootstrapping');
   });
 });
 

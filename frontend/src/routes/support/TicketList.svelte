@@ -15,14 +15,18 @@
   import { navigate } from '../../lib/stores/router';
   import { unreadReplies } from '../../lib/stores/support';
   import { toast } from '../../lib/stores/toasts';
+  import { handleSessionLost } from '../../lib/stores/user';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { relativeDate } from '../../lib/utils/format';
+  import { sessionGone } from './sending';
 
   let tickets = $state<Ticket[]>([]);
   let next = $state('');
   let loading = $state(true);
   let loadingMore = $state(false);
   let failure = $state('');
+  // The failure found the session gone: the notice offers to sign in instead of a Retry.
+  let signedOut = $state(false);
   // Which request the failure is about, so Retry asks for that one again.
   let failedPage: 'first' | 'refresh' | 'more' | null = null;
   let loaded = $state(false);
@@ -54,11 +58,13 @@
       }
       loaded = true;
       failure = '';
+      signedOut = false;
       failedPage = null;
       return true;
     } catch (err) {
       if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.loadFailed'));
+      signedOut = sessionGone(err);
       failedPage = keepLater ? 'refresh' : 'first';
       return false;
     } finally {
@@ -85,11 +91,13 @@
       next = page.next;
       pages += 1;
       failure = '';
+      signedOut = false;
       failedPage = null;
       return true;
     } catch (err) {
       if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.loadFailed'));
+      signedOut = sessionGone(err);
       failedPage = 'more';
       return false;
     } finally {
@@ -185,11 +193,15 @@
 
 {#if failure || retrying}
   <div class="banner">
-    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: retry, focus: retryFocus, within: () => list }}>
+    <Notice tone="danger" bind:retrying retry={signedOut ? undefined : { label: msg('common.retry'), run: retry, focus: retryFocus, within: () => list }} action={signedOut ? signIn : undefined}>
       {failure}
     </Notice>
   </div>
 {/if}
+
+{#snippet signIn()}
+  <Button size="sm" onclick={handleSessionLost}>{msg('tickets.signInAgain')}</Button>
+{/snippet}
 
 {#if loading}
   <Spinner label={msg('tickets.loading')} />
@@ -202,7 +214,7 @@
       <Button variant="primary" onclick={newTicket}>{msg('tickets.new')}</Button>
     {/snippet}
   </EmptyState>
-{:else}
+{:else if tickets.length > 0}
   <ul class="list" bind:this={list}>
     {#each tickets as item (item.number)}
       {@const status = statusView(item.status)}

@@ -163,6 +163,30 @@ describe('TicketList: a failed read says why by its code', () => {
   });
 });
 
+describe('TicketList: truthful states', () => {
+  it('draws no list while the first read has found nothing to list', async () => {
+    vi.mocked(listTickets).mockRejectedValue(new AccountError('network_error'));
+    renderDom(TicketList);
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('list')).toBeNull();
+  });
+
+  it('a session gone: says sign-in is needed and offers it instead of a Retry that cannot help', async () => {
+    authState.set('authenticated');
+    vi.mocked(listTickets).mockRejectedValue(new AccountError('unauthenticated'));
+    const { user } = renderDom(TicketList);
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('state.accountErrorUnauthenticated')));
+    const notice = alert.closest('.notice') as HTMLElement;
+    expect(within(notice).queryByRole('button', { name: msg('common.retry') })).toBeNull();
+
+    await user.click(within(notice).getByRole('button', { name: msg('tickets.signInAgain') }));
+
+    expect(get(authState)).toBe('unauthenticated');
+  });
+});
+
 describe('TicketList: the unread count', () => {
   it('reads the list again when the count changes, keeping the rows meanwhile', async () => {
     renderDom(TicketList);

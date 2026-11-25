@@ -1,7 +1,13 @@
 import { msg } from '../../lib/i18n';
+import { AccountError } from '../../lib/services/account';
 import type { TextAreaCounter } from '../../lib/components/textArea';
 import { bodyLength } from '../../lib/support/draft';
 import { onMacKeyboard } from '../../lib/utils/shortcut';
+
+/** A support call found the session gone: a Retry cannot help, signing in again can. */
+export function sessionGone(err: unknown): boolean {
+  return err instanceof AccountError && err.code === 'unauthenticated';
+}
 
 /** The keys that send a support text, as the keyboard labels them. */
 export function sendKeys(mac: boolean = onMacKeyboard()): string {

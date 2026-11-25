@@ -27,10 +27,11 @@
   import { attachLogsByDefault, isTopic, topicOptions } from '../../lib/support/topics';
   import { goBack, navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { handleSessionLost } from '../../lib/stores/user';
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
   import LogsConfirm from './LogsConfirm.svelte';
-  import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys } from './sending';
+  import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
   let { initialTopic, initialSubject = '' }: { initialTopic: SupportTopic; initialSubject?: string } = $props();
   const uid = $props.id();
@@ -46,6 +47,8 @@
   let limitsFailure = $state('');
   let errors = $state<DraftErrors>({});
   let formError = $state('');
+  // The send found the session gone: the notice offers to sign in.
+  let formSignedOut = $state(false);
   let sending = $state(false);
   let limitsRetrying = $state(false);
   let upload = $state<LogUploadStatus | null>(null);
@@ -108,7 +111,10 @@
     const text = supportErrorText(err, msg('errSupport.generic'));
     if (field === 'subject') errors = { ...errors, subject: text };
     else if (field === 'body') errors = { ...errors, body: text };
-    else formError = text;
+    else {
+      formError = text;
+      formSignedOut = sessionGone(err);
+    }
     await focusInvalid();
   }
 
@@ -224,7 +230,7 @@
     />
 
     {#if formError}
-      <Notice tone="danger">{formError}</Notice>
+      <Notice tone="danger" action={formSignedOut ? signIn : undefined}>{formError}</Notice>
     {/if}
 
     {#if sending && stage}
@@ -249,6 +255,10 @@
 {/if}
 
 <LogsConfirm bind:this={confirm} />
+
+{#snippet signIn()}
+  <Button size="sm" onclick={handleSessionLost}>{msg('tickets.signInAgain')}</Button>
+{/snippet}
 
 <style>
   .form {

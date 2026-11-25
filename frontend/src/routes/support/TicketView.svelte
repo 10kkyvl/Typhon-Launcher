@@ -27,10 +27,11 @@
   import { navigate } from '../../lib/stores/router';
   import { refreshUnread, unreadReplies } from '../../lib/stores/support';
   import { toast } from '../../lib/stores/toasts';
+  import { handleSessionLost } from '../../lib/stores/user';
   import { dateTime } from '../../lib/utils/format';
   import AttachLogs from './AttachLogs.svelte';
   import LogsConfirm from './LogsConfirm.svelte';
-  import { bodyCounter, isSendShortcut, sendKeys } from './sending';
+  import { bodyCounter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
   let { number }: { number: number } = $props();
   const uid = $props.id();
@@ -43,6 +44,9 @@
   let reply = $state('');
   let replyError = $state('');
   let replyFailure = $state('');
+  // A read or a reply found the session gone: its notice offers to sign in instead of a Retry.
+  let signedOut = $state(false);
+  let replySignedOut = $state(false);
   let attachLogs = $state(false);
   let sending = $state(false);
   let upload = $state<LogUploadStatus | null>(null);
@@ -69,11 +73,13 @@
       if (current !== run) return false;
       thread = next;
       failure = '';
+      signedOut = false;
       void refreshUnread();
       return true;
     } catch (err) {
       if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.ticketLoadFailed'));
+      signedOut = sessionGone(err);
       return false;
     } finally {
       if (current === run) loading = false;
@@ -184,6 +190,7 @@
         replyField?.focus();
       } else {
         replyFailure = text;
+        replySignedOut = sessionGone(err);
       }
     } finally {
       sending = false;
@@ -222,11 +229,15 @@
 
 {#if failure || retrying}
   <div class="banner">
-    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: retryThread, focus: () => head?.querySelector('h1') }}>
+    <Notice tone="danger" bind:retrying retry={signedOut ? undefined : { label: msg('common.retry'), run: retryThread, focus: () => head?.querySelector('h1') }} action={signedOut ? signIn : undefined}>
       {failure}
     </Notice>
   </div>
 {/if}
+
+{#snippet signIn()}
+  <Button size="sm" onclick={handleSessionLost}>{msg('tickets.signInAgain')}</Button>
+{/snippet}
 
 {#if loading}
   <Spinner label={msg('tickets.loading')} />
@@ -290,7 +301,7 @@
       <AttachLogs bind:checked={attachLogs} disabled={sending} />
 
       {#if replyFailure}
-        <Notice tone="danger" compact>{replyFailure}</Notice>
+        <Notice tone="danger" compact action={replySignedOut ? signIn : undefined}>{replyFailure}</Notice>
       {/if}
 
       {#if sending && stage}

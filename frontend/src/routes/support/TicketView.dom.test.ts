@@ -7,6 +7,7 @@ import { getTicket, replyTicket, resolveTicket, ticketLimits } from '../../lib/s
 import { resetHistory, route } from '../../lib/stores/router';
 import { unreadReplies } from '../../lib/stores/support';
 import { toasts } from '../../lib/stores/toasts';
+import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { description } from '../../lib/testing/hints';
@@ -42,6 +43,7 @@ afterEach(() => {
   for (const mock of [ticketLimits, getTicket, replyTicket, resolveTicket]) vi.mocked(mock).mockReset();
   unreadReplies.set(0);
   toasts.set([]);
+  authState.set('bootstrapping');
   resetHistory();
 });
 
@@ -253,6 +255,33 @@ describe('TicketView: the reply is the base multi-line field', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(replyBox().hasAttribute('aria-invalid')).toBe(false);
     expect(replyBox().value).toBe('Still closes.');
+  });
+});
+
+describe('TicketView: a session gone', () => {
+  it('on reading the request: says sign-in is needed and offers it instead of Retry', async () => {
+    authState.set('authenticated');
+    vi.mocked(getTicket).mockRejectedValue(new AccountError('unauthenticated'));
+    const { user } = renderDom(TicketView, { number: 7 });
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('state.accountErrorUnauthenticated')));
+    const notice = alert.closest('.notice') as HTMLElement;
+    expect(within(notice).queryByRole('button', { name: msg('common.retry') })).toBeNull();
+    await user.click(within(notice).getByRole('button', { name: msg('tickets.signInAgain') }));
+    expect(get(authState)).toBe('unauthenticated');
+  });
+
+  it('on a reply: says so in the reply form, with the way to sign in', async () => {
+    authState.set('authenticated');
+    vi.mocked(replyTicket).mockRejectedValue(new AccountError('unauthenticated'));
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+    await user.click(replyButton());
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('state.accountErrorUnauthenticated')));
+    expect(within(alert.closest('.notice') as HTMLElement).getByRole('button', { name: msg('tickets.signInAgain') })).toBeTruthy();
   });
 });
 
