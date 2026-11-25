@@ -7,6 +7,7 @@ import { getStorageInfoFor } from '../services/system';
 import { createLibrary } from '../stores/settings';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { description } from '../testing/hints';
 import { bytesLabel } from '../utils/format';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
 
@@ -40,6 +41,8 @@ beforeEach(() => {
 
 afterEach(() => {
   toasts.set([]);
+  // A press the dialog failed to refuse leaves answers queued for the next test.
+  for (const mock of [selectFolder, proposeLibraryPath, getStorageInfoFor, createLibrary]) vi.mocked(mock).mockReset();
   vi.clearAllMocks();
   document.body.replaceChildren();
 });
@@ -119,6 +122,42 @@ describe('LibrarySetupModal: the folder', () => {
 
     await vi.waitFor(() => expect(get(toasts).map(({ message, kind }) => [message, kind])).toEqual([[msg('modals.librarySetupFolderDialogFailed'), 'danger']]));
     expect(create()).toHaveProperty('disabled', true);
+  });
+
+  it('shows the path as text read whole in a group named by the folder label; Browse is described by the path and the drive', async () => {
+    vi.mocked(selectFolder).mockResolvedValueOnce('D:/Games');
+    vi.mocked(proposeLibraryPath).mockResolvedValueOnce(LONG);
+    const { dialog, keys, browse } = open();
+    const group = within(dialog).getByRole('group', { name: msg('modals.librarySetupFolderLabel') });
+    expect(within(group).queryByRole('textbox')).toBeNull();
+    expect(description(browse)).toBe(msg('modals.librarySetupFolderPlaceholder'));
+
+    await keys.click(browse);
+
+    const drive = `${msg('modals.librarySetupDiskName', { volume: 'D' })} · NTFS`;
+    await within(group).findByText(drive);
+    expect(within(group).getByText(LONG).tagName).toBe('P');
+    expect(description(browse)).toBe(`${LONG} ${drive} ${msg('modals.librarySetupDiskFree', { free: bytesLabel(DISK.freeBytes), total: bytesLabel(DISK.totalBytes) })}`);
+    expect(dialog.querySelectorAll('[title]')).toHaveLength(0);
+  });
+
+  it('keeps Browse busy and focused while the picker is up, and opens no second picker', async () => {
+    let answer!: (path: string) => void;
+    vi.mocked(selectFolder).mockReturnValueOnce(new Promise<string>((resolve) => (answer = resolve)));
+    vi.mocked(proposeLibraryPath).mockResolvedValueOnce(LONG);
+    const { keys, browse } = open();
+    browse.focus();
+
+    await keys.keyboard('{Enter}');
+    expect(browse.getAttribute('aria-busy')).toBe('true');
+    await keys.keyboard('{Enter}');
+    await keys.click(browse);
+    expect(vi.mocked(selectFolder)).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(browse);
+
+    answer('D:/Games');
+    await vi.waitFor(() => expect(browse.hasAttribute('aria-busy')).toBe(false));
+    expect(document.activeElement).toBe(browse);
   });
 
   it('keeps the path and says so when the free space cannot be read', async () => {

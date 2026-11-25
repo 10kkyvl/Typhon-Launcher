@@ -9,6 +9,7 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import PathField from './PathField.svelte';
   import { errorCode, hasMessage, msg } from '../i18n';
 
   let {
@@ -86,6 +87,20 @@
   }
 </script>
 
+{#snippet disk()}
+  {#if info}
+    <div class="disk">
+      <HardDrive size="1.7rem" strokeWidth={1.8} />
+      <div class="disk-text">
+        <span class="disk-name">{msg('modals.librarySetupDiskName', { volume: info.volume || '—' })}{info.filesystem ? ` · ${info.filesystem}` : ''}</span>
+        <span class="disk-meta">
+          {msg('modals.librarySetupDiskFree', { free: bytesLabel(info.freeBytes), total: bytesLabel(info.totalBytes) })}
+        </span>
+      </div>
+    </div>
+  {/if}
+{/snippet}
+
 <Modal dismissible={!busy} bind:open {title} width="52rem">
   <div class="setup">
     <p class="intro">
@@ -96,32 +111,14 @@
       <Notice compact announce={false}>{note}</Notice>
     {/if}
 
-    <div class="pick">
-      <span class="field-label" id="{uid}-folder-label">{msg('modals.librarySetupFolderLabel')}</span>
-      <div class="pick-controls">
-        <input
-          class="input sm"
-          type="text"
-          readonly
-          aria-labelledby="{uid}-folder-label"
-          placeholder={msg('modals.librarySetupFolderPlaceholder')}
-          value={proposed}
-        />
-        <Button size="sm" onclick={pickFolder}>{msg('modals.librarySetupBrowse')}</Button>
-      </div>
-    </div>
-
-    {#if info}
-      <div class="disk">
-        <HardDrive size="1.7rem" strokeWidth={1.8} />
-        <div class="disk-text">
-          <span class="disk-name">{msg('modals.librarySetupDiskName', { volume: info.volume || '—' })}{info.filesystem ? ` · ${info.filesystem}` : ''}</span>
-          <span class="disk-meta">
-            {msg('modals.librarySetupDiskFree', { free: bytesLabel(info.freeBytes), total: bytesLabel(info.totalBytes) })}
-          </span>
-        </div>
-      </div>
-    {/if}
+    <PathField
+      label={msg('modals.librarySetupFolderLabel')}
+      placeholder={msg('modals.librarySetupFolderPlaceholder')}
+      browseLabel={msg('modals.librarySetupBrowse')}
+      onbrowse={pickFolder}
+      value={proposed}
+      facts={info ? disk : undefined}
+    />
 
     {#if failure}
       <Notice tone="danger" compact>{failure}</Notice>
@@ -149,26 +146,6 @@
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);
-  }
-
-  .pick {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-
-  .field-label {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .pick-controls {
-    display: flex;
-    gap: var(--space-2);
-  }
-
-  .pick-controls .input {
-    flex: 1;
   }
 
   .disk {
