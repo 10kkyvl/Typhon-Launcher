@@ -77,6 +77,34 @@ func TestWorkRunningWhileAGameIsRemoved(t *testing.T) {
 	}
 }
 
+// A retried install is pending, with no job yet, while its old .partial
+// folder is swept: a record in a working status is work by itself.
+func TestWorkRunningWhileARetriedInstallSweepsItsPartialFolder(t *testing.T) {
+	r := newRig(t)
+	archive := zipDownload(t, r)
+	dest := filepath.Join(t.TempDir(), "Game")
+	seedFailedInstall(t, r, archive, dest, true)
+	mkFile(t, filepath.Join(dest+partialSuffix, "data.bin"), 64)
+	started, release := blockPartialRemoval(t)
+
+	retried := make(chan error, 1)
+	go func() { retried <- r.s.Retry("failed1") }()
+	select {
+	case <-started:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the retry never swept the partial folder")
+	}
+	running := r.s.WorkRunning()
+	release()
+	if err := <-retried; err != nil {
+		t.Fatalf("Retry: %v", err)
+	}
+	r.settle("failed1")
+	if !running {
+		t.Fatal("WorkRunning() = false while a retried install is pending")
+	}
+}
+
 // raiseBroker starts the pre-elevated broker of download d1 and waits for it.
 func raiseBroker(t *testing.T, s *Service) *fakeProc {
 	t.Helper()

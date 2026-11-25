@@ -119,6 +119,45 @@ func TestBundleUndoRetriedAfterAPartialRemovalKeepsTheOldBundle(t *testing.T) {
 	}
 }
 
+// The launcher's name is emptied after the swap (the player trashed the app)
+// while the parked name holds the bundle this launcher runs from. A missing
+// bundle at the launcher's name is not the running one: the undo, and the
+// recovery of the next start from the parked name, must remove nothing.
+func TestBundleUndoWithTheLauncherNameEmptiedKeepsTheRunningBundle(t *testing.T) {
+	d := newBundleDisk(t)
+	j := d.plan.journalFor(os.Getpid())
+	undo, err := performSwap(t.Context(), d.plan, j)
+	if err != nil {
+		t.Fatalf("performSwap() = %v", err)
+	}
+	if err := os.RemoveAll(d.bundle); err != nil {
+		t.Fatal(err)
+	}
+	parkedExe := filepath.Join(j.OldPath, "Contents", "MacOS", "typhon")
+
+	if err := undo(); err == nil {
+		t.Fatal("the undo reported success with nothing at the launcher's name")
+	}
+	if got := readFileString(t, parkedExe); got != "old build" {
+		t.Fatalf("the parked name holds %q after the undo, want the running old build", got)
+	}
+
+	j.Stage = stageUndoOwed
+	if err := saveJournal(d.cfg, j); err != nil {
+		t.Fatal(err)
+	}
+	prevExe, prevAlive := currentExecutable, parentAlive
+	currentExecutable = func() (string, error) { return parkedExe, nil }
+	parentAlive = func(int) (bool, error) { return false, nil }
+	t.Cleanup(func() { currentExecutable, parentAlive = prevExe, prevAlive })
+	if err := RecoverHandoff(d.cfg, "1.4.0"); err == nil {
+		t.Fatal("RecoverHandoff() from the parked name = nil, want the hand-over left unsettled")
+	}
+	if got := readFileString(t, parkedExe); got != "old build" {
+		t.Fatalf("the parked name holds %q after the recovery, want the running old build", got)
+	}
+}
+
 // The undo may not act on a parked name it cannot identify: if the bundle at
 // the launcher's name is not the one this launcher ran from, and neither is
 // the parked one, nothing is exchanged and nothing removed.
