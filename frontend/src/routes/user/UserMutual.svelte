@@ -40,7 +40,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
 
@@ -64,7 +64,7 @@
     justify-content: center;
     min-width: 3.2rem;
     height: 3.2rem;
-    padding: 0 0.6rem;
+    padding: 0 var(--space-2);
     border-radius: 50%;
     background: var(--surface-3);
     color: var(--text-2);

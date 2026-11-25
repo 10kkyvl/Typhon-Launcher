@@ -24,7 +24,7 @@
     align-items: center;
     gap: var(--space-4);
     width: 100%;
-    padding: 0.8rem;
+    padding: var(--space-2);
     border: 0;
     border-radius: var(--radius-md);
     background: none;

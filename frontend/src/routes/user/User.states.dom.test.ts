@@ -125,3 +125,26 @@ describe("a user's page: offline", () => {
     expect(vi.mocked(sendRequest)).toHaveBeenCalledWith('ann');
   });
 });
+
+describe("a user's page: headings", () => {
+  // One h1 names the player from the first frame (the shell moves focus to it on arrival, before the
+  // profile has come); the display name heads the profile; its cards are h3, as the kit's Card draws them.
+  it('one h1, the @name; then the display name; no level skipped', async () => {
+    vi.mocked(fetchProfile).mockResolvedValue(
+      player({
+        relation: 'friend',
+        recentlyPlayed: [{ igdbId: 1, title: 'Hades', coverUrl: '', status: '', favorite: false, lastPlayedAt: null }],
+        mutualFriends: [{ id: 'u3', username: 'cid', displayName: 'Cid', avatarUrl: '' }],
+        mutualCount: 1,
+      }),
+    );
+    renderDom(UserProfile, { username: 'ann' });
+    await screen.findByText('@ann', { selector: '.username' });
+
+    const headings = screen.getAllByRole('heading').map((h) => [Number(h.tagName.slice(1)), h.textContent?.trim()] as const);
+    expect(headings.filter(([level]) => level === 1)).toEqual([[1, '@ann']]);
+    expect(headings[1]).toEqual([2, 'Ann']);
+    expect(headings.length).toBeGreaterThan(2);
+    headings.forEach(([level], i) => expect(level - (headings[i - 1]?.[0] ?? 0), `${i}`).toBeLessThanOrEqual(1));
+  });
+});

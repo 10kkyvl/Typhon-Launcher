@@ -138,7 +138,10 @@
 </section>
 
 <style>
-  .header-surface { padding-bottom: 2rem; position: relative; }
+  .header-surface {
+    position: relative;
+    padding-bottom: var(--space-5);
+  }
   .user-header {
     container-type: inline-size;
     display: block;
@@ -156,7 +159,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--space-1);
   }
 
   .display-name {
@@ -175,7 +178,7 @@
   .status {
     display: flex;
     align-items: baseline;
-    gap: 0.6rem;
+    gap: var(--space-2);
     font-size: var(--font-sm);
     color: var(--text-2);
     overflow-wrap: anywhere;
@@ -183,7 +186,7 @@
 
   .bio {
     max-width: 60rem;
-    margin-top: 0.4rem;
+    margin-top: var(--space-1);
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);
@@ -201,13 +204,13 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-4);
-    margin-top: 0.4rem;
+    margin-top: var(--space-1);
   }
 
   .meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: var(--space-2);
     font-size: var(--font-sm);
     color: var(--text-2);
   }
@@ -219,8 +222,7 @@
 
   .meta-item.now {
     min-width: 0;
-    height: 2.8rem;
-    padding: 0 1.1rem;
+    padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-xl);
     background: var(--accent-subtle);
     color: var(--accent-text);
@@ -247,7 +249,7 @@
   .head-actions {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: var(--space-2);
     flex-shrink: 0;
   }
 

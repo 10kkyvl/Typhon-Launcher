@@ -88,6 +88,9 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/profile/ProfilePlaying.svelte': { open: 'row' },
   'routes/settings/AccentPicker.svelte': { swatch: 'radio tile' },
   'routes/settings/ThemeTiles.svelte': { preset: 'radio tile' },
+  // A player's games are known by their IGDB id and open through openGameByIGDB, which asks the
+  // catalog first; GameLink takes a route id. The kit has no part for a person (an avatar that opens
+  // the player's page): FeedRow, FriendRow and ReviewCard draw theirs raw as well.
   'routes/user/GameRow.svelte': { row: 'row' },
   'routes/user/UserActivity.svelte': { row: 'row' },
   'routes/user/UserMutual.svelte': { person: 'row' },

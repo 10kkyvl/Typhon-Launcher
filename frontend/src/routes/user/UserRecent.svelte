@@ -45,7 +45,7 @@
   .capsule {
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: var(--space-2);
     flex: 0 0 auto;
     width: 22rem;
     padding: 0;
@@ -86,7 +86,7 @@
   .meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: var(--space-2);
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
