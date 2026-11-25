@@ -317,25 +317,25 @@ describe('the general tab: disabled rows', () => {
 describe('the general tab: rows that depend on the platform', () => {
   const windowsRows = () => ['settings.gameModePowerLabel', 'settings.gameModePriorityLabel'].map((key) => screen.queryByRole('switch', { name: msg(key as MessageKey) }));
 
-  it('draws no Windows row and offers no import while the app facts are pending', () => {
+  it('draws no Windows row and offers no import while the app facts are pending, saying they load', () => {
     vi.mocked(getAppInfo).mockReturnValue(new Promise(() => {}));
     open();
     expect(windowsRows()).toEqual([null, null]);
     const find = button('settings.extlibLabel');
     expect(find.disabled).toBe(true);
-    expect(description(find)).toBe(msg('settings.extlibSub'));
+    expect(description(find)).toBe(said('common.loading', 'settings.extlibSub'));
     expect(screen.queryByText(msg('settings.extlibWindowsOnly'))).toBeNull();
     expect(sw('settings.gameModeHideLabel')).toBeTruthy();
   });
 
-  it('draws no Windows row and offers no import when the app facts could not be read', async () => {
+  it('draws no Windows row and offers no import when the app facts could not be read, saying so', async () => {
     vi.mocked(getAppInfo).mockRejectedValue(new Error('app info down'));
     open();
     await waitFor(() => expect(console.warn).toHaveBeenCalled());
     expect(windowsRows()).toEqual([null, null]);
     const find = button('settings.extlibLabel');
     expect(find.disabled).toBe(true);
-    expect(description(find)).toBe(msg('settings.extlibSub'));
+    await waitFor(() => expect(description(find)).toBe(said('settings.aboutSystemFailed', 'settings.extlibSub')));
     expect(screen.queryByText(msg('settings.extlibWindowsOnly'))).toBeNull();
   });
 

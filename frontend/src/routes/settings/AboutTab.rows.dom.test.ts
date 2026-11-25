@@ -238,13 +238,30 @@ describe('the about tab: the version and the machine', () => {
 // The page reads the app facts, the system, CrossOver and the legal list once on opening: each read
 // fails on its own and the others still show.
 describe('the about tab: its first reads failing one by one', () => {
-  it('the app facts: the version is a dash and the rest still shows', async () => {
+  it('the app facts: the rows that need them say the read failed, and the rest still shows', async () => {
     vi.mocked(getAppInfo).mockRejectedValue(new Error('app info down'));
     open();
     expect(await said('settings.aboutSystemLabel')).toBe('Windows 11 Pro');
     expect(await screen.findByText('Terms of use')).toBeTruthy();
-    expect(screen.getByText(`${msg('settings.aboutVersionLabel', { version: '—' })} · /`)).toBeTruthy();
-    expect(await said('settings.aboutCheckUpdatesLabel')).toBe(msg('settings.aboutInstalledVersion', { version: '—' }));
+    const heading = screen.getByRole('heading', { name: 'Typhon Launcher' });
+    expect(squeeze(heading.parentElement?.textContent)).toBe(`Typhon Launcher ${msg('settings.aboutSystemFailed')}`);
+    expect(await said('settings.aboutCheckUpdatesLabel')).toBe(msg('settings.aboutSystemFailed'));
+    expect(description(button(msg('settings.aboutCheckButtonLabel')))).toBe(msg('settings.aboutSystemFailed'));
+  });
+
+  it('the app facts failing still says the version the update status knows', async () => {
+    vi.mocked(getAppInfo).mockRejectedValue(new Error('app info down'));
+    selfUpdateStatus.set({ state: 'idle', currentVersion: '1.4.2' });
+    open();
+    await screen.findByText(msg('settings.aboutSystemFailed'));
+    expect(await said('settings.aboutCheckUpdatesLabel')).toBe(msg('settings.aboutInstalledVersion', { version: '1.4.2' }));
+  });
+
+  it('the app facts pending: a dash for the version, no platform yet', () => {
+    vi.mocked(getAppInfo).mockReturnValue(new Promise(() => {}));
+    open();
+    const heading = screen.getByRole('heading', { name: 'Typhon Launcher' });
+    expect(squeeze(heading.parentElement?.textContent)).toBe(`Typhon Launcher ${msg('settings.aboutVersionLabel', { version: '—' })}`);
   });
 
   it('the system: one row says it failed and the rest still shows', async () => {

@@ -30,10 +30,14 @@
   const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(page.appInfo?.channel));
   const missing = $derived(msg('settings.aboutValueMissing'));
 
+  // The rows that need the app facts say a failed read the way the system rows do; while it is
+  // pending the version is a dash and the platform is left out.
   const buildLine = $derived.by(() => {
+    if (page.appInfoFailed) return msg('settings.aboutSystemFailed');
     const version = msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: page.appInfo?.version ?? missing });
-    const parts = { version, platform: page.appInfo?.platform ?? '', arch: page.appInfo?.arch ?? '' };
-    return msg(page.appInfo?.devMock ? 'settings.aboutBuildLineDevmock' : 'settings.aboutBuildLine', parts);
+    if (!page.appInfo) return version;
+    const parts = { version, platform: page.appInfo.platform, arch: page.appInfo.arch };
+    return msg(page.appInfo.devMock ? 'settings.aboutBuildLineDevmock' : 'settings.aboutBuildLine', parts);
   });
 
   function cpuLine(info: SystemInfo): string {
@@ -45,7 +49,9 @@
 
   const checkHint = $derived.by(() => {
     if ($selfUpdateChecking) return msg('settings.aboutCheckUpdatesChecking');
-    const installed = msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || page.appInfo?.version || missing });
+    const version = $selfUpdateStatus.currentVersion || page.appInfo?.version;
+    if (!version && page.appInfoFailed) return msg('settings.aboutSystemFailed');
+    const installed = msg('settings.aboutInstalledVersion', { version: version || missing });
     if (!$selfUpdateStatus.checkedAt) return installed;
     return msg('settings.aboutInstalledCheckedAt', { installed, checked: msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) }) });
   });

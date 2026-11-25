@@ -47,6 +47,7 @@ export function overlayReason(err: unknown): string {
  */
 export function createSettingsPage() {
   let appInfo = $state<AppInfo | null>(null);
+  let appInfoFailed = $state(false);
   let systemInfo = $state<SystemInfo | null>(null);
   let systemFailed = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
@@ -89,6 +90,7 @@ export function createSettingsPage() {
       try {
         appInfo = await getAppInfo();
       } catch (err) {
+        appInfoFailed = true;
         console.warn('settings: app info', err);
       }
       try {
@@ -342,6 +344,7 @@ export function createSettingsPage() {
 
   return {
     get appInfo() { return appInfo; },
+    get appInfoFailed() { return appInfoFailed; },
     get systemInfo() { return systemInfo; },
     get systemFailed() { return systemFailed; },
     get wineStatus() { return wineStatus; },

@@ -34,10 +34,12 @@
 
   const folderRows = $derived(folderRowOptions());
 
-  // The import is a Windows feature. Until the platform is known it is off with no reason: saying
-  // "Windows only" then would be false on Windows whose app facts could not be read.
-  const platformKnown = $derived(page.appInfo !== null);
-  const extlibReason = $derived(platformKnown && page.appInfo?.platform !== 'windows' ? msg('settings.extlibWindowsOnly') : undefined);
+  // The import is a Windows feature. Until the platform is known it is off and says the facts are
+  // loading, or that they could not be read: "Windows only" then would be false on Windows.
+  const extlibReason = $derived.by(() => {
+    if (page.appInfo) return page.appInfo.platform !== 'windows' ? msg('settings.extlibWindowsOnly') : undefined;
+    return page.appInfoFailed ? msg('settings.aboutSystemFailed') : msg('common.loading');
+  });
 
   async function openPath(path: string | undefined) {
     if (!path) return;
@@ -126,7 +128,7 @@
     stack
   >
     {#snippet children({ hintId, disabled })}
-      <Button size="sm" aria-describedby={hintId} disabled={disabled || !platformKnown} busy={page.importing} onclick={page.runImportExternal}>
+      <Button size="sm" aria-describedby={hintId} {disabled} busy={page.importing} onclick={page.runImportExternal}>
         <RefreshCw size="1.5rem" strokeWidth={1.8} />
         {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
       </Button>
