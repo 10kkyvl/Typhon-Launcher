@@ -209,6 +209,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateHandoffFailed': 'The launcher stayed on the previous version; the update is still ready.',
   'state.selfupdateReasonHandoffUnsupported': 'Updating without a restart is not available here.',
   'state.selfupdateReasonHandoffPending': 'The previous update has not finished. Restart the launcher to complete it, then update again.',
+  'state.selfupdateReasonNotWaiting': 'The launcher is no longer waiting for the previous version: there is no need to close it.',
   'state.selfupdateHandoffUndoFailed': 'The update failed and the previous version could not be put back. Close the launcher: it restores it on exit or on the next start.',
 
   'state.stateSaveFailed': 'Could not save state to disk: {message}',

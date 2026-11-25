@@ -208,6 +208,7 @@ export const state = {
   'state.selfupdateHandoffFailed': 'Лаунчер остался на прежней версии, обновление по-прежнему готово.',
   'state.selfupdateReasonHandoffUnsupported': 'Обновление без перезапуска здесь недоступно.',
   'state.selfupdateReasonHandoffPending': 'Предыдущее обновление ещё не завершено. Перезапустите лаунчер, чтобы закончить его, и обновитесь снова.',
+  'state.selfupdateReasonNotWaiting': 'Лаунчер уже не ждёт прежнюю версию: закрывать его не нужно.',
   'state.selfupdateHandoffUndoFailed': 'Обновление не удалось, и прежнюю версию не получилось вернуть на место. Закройте лаунчер: он восстановит её при выходе или при следующем запуске.',
 
   'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
