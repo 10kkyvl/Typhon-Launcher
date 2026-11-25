@@ -249,6 +249,26 @@ func (m *Manager) closePieceCompletion() error {
 	return pc.Close()
 }
 
+// reopenPieceCompletion reads the record of finished pieces again before any
+// torrent client uses it. The constructor opened it, and in a successor of a
+// seamless update that was while the old launcher still downloaded and later
+// flushed its own record on the way out; the copy read back then would be
+// written over that one. Nothing has marked a piece since the constructor (no
+// client exists yet), so closing the first copy writes nothing.
+func (m *Manager) reopenPieceCompletion() error {
+	if err := m.closePieceCompletion(); err != nil {
+		return fmt.Errorf("close piece completion db: %w", err)
+	}
+	completion, err := openPieceCompletion(m.metaDir)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.pieceCompletion = completion
+	m.mu.Unlock()
+	return nil
+}
+
 func newManagerAt(dir string, settingsService *settings.Service) (*Manager, error) {
 	if dir == "" {
 		return nil, errors.New("downloads path unavailable")
@@ -304,6 +324,9 @@ func (m *Manager) ServiceStartup(ctx context.Context, opts application.ServiceOp
 }
 
 func (m *Manager) startService(ctx context.Context, _ application.ServiceOptions) error {
+	if err := m.reopenPieceCompletion(); err != nil {
+		return err
+	}
 	runCtx, cancelRun := context.WithCancel(ctx)
 	m.mu.Lock()
 	m.ctx, m.cancel = runCtx, cancelRun
