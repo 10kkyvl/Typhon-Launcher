@@ -131,18 +131,32 @@
     return near ?? primaryOf(toolbar) ?? pageHeading();
   }
 
-  // Read before the list changes on screen, acted on right after, when the focused row left and focus
-  // fell with it.
+  // The game added from this screen (the add dialog, the image dialog); cleared at the next opening,
+  // the next scan and once focus has been handed to it. A dialog reads `returnFocus` at every close,
+  // its opener still there or not, so reading the target clears nothing.
+  let addedId = '';
+
+  // Where focus goes when the control that held it (the empty card's, a dialog's opener there) left
+  // with the empty screen: the game just added from here, else the first row by the leave rule.
+  function arrivalTarget(): HTMLElement | undefined {
+    return primaryOf(addedId ? rowOf(addedId) : undefined) ?? leaveTarget(0, shownIds);
+  }
+
+  // Read before the list changes on screen, acted on right after, when the focused row, or a control
+  // of the results outside any row, left and focus fell with it.
   let shownIds: string[] = [];
-  let held: { id: string; index: number } | null = null;
+  let held: { id: string; index: number } | { control: HTMLElement } | null = null;
 
   $effect.pre(() => {
     void filteredGames;
     untrack(() => {
       const active = document.activeElement;
-      const row = active instanceof HTMLElement && results?.contains(active) ? active.closest<HTMLElement>('[data-game-row]') : null;
-      const id = row?.dataset.gameRow;
-      held = id ? { id, index: shownIds.indexOf(id) } : null;
+      if (!(active instanceof HTMLElement) || !results?.contains(active)) {
+        held = null;
+        return;
+      }
+      const id = active.closest<HTMLElement>('[data-game-row]')?.dataset.gameRow;
+      held = id ? { id, index: shownIds.indexOf(id) } : { control: active };
     });
   });
 
@@ -152,10 +166,11 @@
       const was = held;
       held = null;
       shownIds = ids;
-      if (!was || ids.includes(was.id)) return;
+      if (!was || ('id' in was ? ids.includes(was.id) : was.control.isConnected)) return;
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
-      const target = leaveTarget(was.index, ids);
+      const target = 'id' in was ? leaveTarget(was.index, ids) : arrivalTarget();
+      if (!('id' in was)) addedId = '';
       if (target) focusInView(target);
     });
   });
@@ -169,6 +184,7 @@
       toast(msg('games.installedAddDesktopOnly'));
       return;
     }
+    addedId = '';
     addGameDialog?.show();
   }
 
@@ -178,14 +194,28 @@
   });
 
   let imageOpen = $state(false);
+  // The image dialog takes no fallback of its own: an opener gone by its close (the empty card's
+  // button, replaced by the first games meanwhile) hands focus on from here.
+  let imageHandOff: ReturnType<typeof focusHandOff> | null = null;
 
   function openImageDialog() {
     if (!inWails) {
       toast(msg('games.installedAddDesktopOnly'));
       return;
     }
+    addedId = '';
+    imageHandOff = focusHandOff();
     imageOpen = true;
   }
+
+  $effect(() => {
+    if (imageOpen) return;
+    untrack(() => {
+      const handOff = imageHandOff;
+      imageHandOff = null;
+      if (handOff) void handOff(arrivalTarget);
+    });
+  });
 
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('disk');
@@ -218,6 +248,7 @@
       return;
     }
     if ($scanning) return;
+    addedId = '';
     try {
       const result = await rescan();
       if (result.cancelled) {
@@ -240,11 +271,8 @@
     await handOff(() => primaryOf(storageBox) ?? primaryOf(toolbar));
   }
 
-  // The game the add dialog added: focus goes to its row when its opener (on the empty screen) is gone.
-  let addedId = '';
-  function addReturn(): HTMLElement | undefined {
-    return primaryOf(rowOf(addedId)) ?? primaryOf(toolbar);
-  }
+  // The add dialog's opener on the empty screen gone by its close: focus goes to the game it added.
+  const addReturn = arrivalTarget;
 
   let addGameDialog = $state<InstalledAddGame | undefined>(undefined);
 
@@ -327,7 +355,7 @@
 
   <LibrarySetupModal bind:open={librarySetupOpen} onready={() => void libraryReady()} />
 
-  <AddImageModal bind:open={imageOpen} />
+  <AddImageModal bind:open={imageOpen} onadded={(game) => (addedId = game.id)} />
 
   {#if removeTarget}
     <RemoveGameModal

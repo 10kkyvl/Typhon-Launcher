@@ -6,7 +6,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { inspectRemoval, removeGame } from '../../lib/services/install';
-import { addGame, selectExecutable, type LibraryGame } from '../../lib/services/library';
+import { addEmulatedGame, addGame, selectExecutable, type LibraryGame } from '../../lib/services/library';
 import { proposeLibraryPath, selectFolder, setupLibrary } from '../../lib/services/settings';
 import { getStorageInfo, getStorageInfoFor, type StorageInfo } from '../../lib/services/system';
 import { settings } from '../../lib/stores/settings';
@@ -34,7 +34,20 @@ vi.mock('../../lib/services/install', async (importOriginal) => ({
 vi.mock('../../lib/services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/library')>()),
   addGame: vi.fn(),
+  addEmulatedGame: vi.fn(),
   selectExecutable: vi.fn(async () => ''),
+}));
+vi.mock('../../lib/services/discovery', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/discovery')>()),
+  scanInstalledGames: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock('../../lib/services/emulators', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/emulators')>()),
+  listPlatforms: vi.fn(async () => [
+    { id: 'ps2', name: 'PlayStation 2', emulator: 'PCSX2', homepage: '', extensions: ['.iso'], imageNames: [], path: '', status: 'ready', reason: '', warnings: [] },
+  ]),
+  imageConsoles: vi.fn(async () => []),
+  imageTitle: vi.fn(async () => ''),
 }));
 vi.mock('../../lib/services/system', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/system')>()),
@@ -190,6 +203,158 @@ describe('Installed: adding a game from the empty screen', () => {
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await vi.waitFor(() => expect(focusedRow()).toBe('g-new'));
     expect(selectExecutable).not.toHaveBeenCalled();
+  });
+});
+
+describe('Installed: the empty screen’s control replaced by the first rows', () => {
+  // Hades was played last, so it sorts first; the added game, never played, after it.
+  const added = game('g-new', 'New', null);
+  const card = () => screen.getByRole('heading', { name: msg('games.installedNoGamesTitle') }).closest('.empty') as HTMLElement;
+  const onCard = (key: Parameters<typeof msg>[0]) => within(card()).getByRole('button', { name: msg(key) });
+  const search = () => screen.getByRole('textbox', { name: msg('games.installedSearchPlaceholder') });
+
+  async function addFromCard(user: ReturnType<typeof renderDom>['user']) {
+    await user.click(onCard('games.installedAddGameButton'));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox', { name: msg('games.executableLabel') }), 'C:\\Games\\New\\new.exe');
+    await user.click(within(dialog).getByRole('button', { name: msg('common.add') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  }
+
+  async function addImageFromCard(user: ReturnType<typeof renderDom>['user']) {
+    await user.click(onCard('emul.addButton'));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox', { name: msg('emul.addImageLabel') }), 'C:\\Games\\New\\new.iso');
+    await user.type(within(dialog).getByRole('textbox', { name: msg('games.installedTitleFieldLabel') }), 'New');
+    const submit = within(dialog).getByRole('button', { name: msg('common.add') });
+    await vi.waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
+    await user.click(submit);
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  }
+
+  beforeEach(() => {
+    libraryGames.set([]);
+  });
+
+  it('Add game, Go answering before the list shows the game: focus goes from the card’s button to the added row', async () => {
+    vi.mocked(addGame).mockResolvedValue(added);
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+
+    await addFromCard(user);
+    expect(document.activeElement).toBe(onCard('games.installedAddGameButton'));
+    libraryGames.set([hades, added]);
+    await tick();
+
+    expect(focusedRow()).toBe('g-new');
+  });
+
+  it('Add game, the list showing the game before Go answers: focus goes to the added row, not the first', async () => {
+    vi.mocked(addGame).mockImplementation(async () => {
+      libraryGames.set([hades, added]);
+      return added;
+    });
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+
+    await addFromCard(user);
+    await tick();
+
+    expect(focusedRow()).toBe('g-new');
+  });
+
+  it('Add game cancelled after the first games came meanwhile: focus goes to the first row', async () => {
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+    await user.click(onCard('games.installedAddGameButton'));
+    const dialog = await screen.findByRole('dialog');
+
+    libraryGames.set([hades, celeste]);
+    await tick();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.click(within(dialog).getByRole('button', { name: msg('common.cancel') }));
+    await tick();
+
+    expect(focusedRow()).toBe('g-hades');
+  });
+
+  it('Add image, a game arriving while the dialog is open, then the dialog cancelled: focus goes to the first row', async () => {
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+    await user.click(onCard('emul.addButton'));
+    const dialog = await screen.findByRole('dialog');
+
+    libraryGames.set([hades, celeste]);
+    await tick();
+    await user.click(within(dialog).getByRole('button', { name: msg('common.cancel') }));
+    await tick();
+    await tick();
+
+    expect(focusedRow()).toBe('g-hades');
+  });
+
+  it('Add image, the list showing the image before Go answers: focus goes to the added row', async () => {
+    vi.mocked(addEmulatedGame).mockImplementation(async () => {
+      libraryGames.set([hades, added]);
+      return added;
+    });
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+
+    await addImageFromCard(user);
+    await tick();
+    await tick();
+
+    expect(focusedRow()).toBe('g-new');
+  });
+
+  it('Add image, Go answering before the list shows the image: focus goes from the card’s button to the added row', async () => {
+    vi.mocked(addEmulatedGame).mockResolvedValue(added);
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+
+    await addImageFromCard(user);
+    await tick();
+    expect(document.activeElement).toBe(onCard('emul.addButton'));
+    libraryGames.set([hades, added]);
+    await tick();
+
+    expect(focusedRow()).toBe('g-new');
+  });
+
+  it('Find games, the scan bringing the first games while its busy button holds focus: focus goes to the first row', async () => {
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+    await user.click(onCard('games.installedFindGames'));
+    const busy = within(card()).getByRole('button', { name: msg('games.installedScanning') });
+    expect(document.activeElement).toBe(busy);
+
+    libraryGames.set([hades, celeste]);
+    await tick();
+
+    expect(focusedRow()).toBe('g-hades');
+  });
+
+  it.each([
+    ['the search field', () => search()],
+    ['a control outside the screen, as the sidebar', () => {
+      const side = document.createElement('button');
+      side.textContent = 'Sidebar';
+      document.body.append(side);
+      return side;
+    }],
+  ])('leaves focus on %s, where the player moved it before the first games came', async (_name, elsewhere) => {
+    vi.mocked(addGame).mockResolvedValue(added);
+    const { user } = renderDom(Installed);
+    backend.inWails = true;
+    await addFromCard(user);
+
+    const moved = elsewhere();
+    moved.focus();
+    libraryGames.set([hades, added]);
+    await tick();
+
+    expect(document.activeElement).toBe(moved);
   });
 });
 
