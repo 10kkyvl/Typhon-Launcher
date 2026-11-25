@@ -2,6 +2,7 @@
   import { Play, Square } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { LibraryGame } from '../../lib/services/library';
@@ -11,7 +12,6 @@
   import { isLaunchable } from '../../lib/library/external';
   import { gameArt } from '../../lib/stores/metadata';
   import { gameContextMenu } from '../../lib/stores/gameMenu';
-  import { navigate } from '../../lib/stores/router';
   import { updatesByGame } from '../../lib/stores/updates';
   import { msg } from '../../lib/i18n';
   import { coverFor, play, sizeLabel, stop, updateLabel } from './installedGame';
@@ -39,18 +39,16 @@
     {@const updateText = updateLabel(update)}
     <div class="card" role="presentation" data-game-row={game.id} {@attach gameContextMenu(game.id)}>
       <div class="card-media">
-        <button
-          class="card-cover"
-          onclick={() => navigate('game', { id: game.id })}
-          aria-label={updateText ? `${game.title} — ${updateText}` : game.title}
-        >
-          <Artwork src={coverFor(game, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
-          {#if updateText}
-            <span class="card-badge">
-              <StatusBadge kind={update?.kind === 'update' ? 'warning' : 'neutral'} label={updateText} />
-            </span>
-          {/if}
-        </button>
+        <div class="card-cover">
+          <GameLink id={game.id} name={updateText ? `${game.title} — ${updateText}` : game.title}>
+            <Artwork src={coverFor(game, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+            {#if updateText}
+              <span class="card-badge">
+                <StatusBadge kind={update?.kind === 'update' ? 'warning' : 'neutral'} label={updateText} />
+              </span>
+            {/if}
+          </GameLink>
+        </div>
         {#if running || (isLaunchable(game) && !$missingImages.has(game.id))}
           <span class="card-play" class:running>
             <IconButton
@@ -92,7 +90,7 @@
   .card {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: var(--space-2);
     min-width: 0;
   }
 

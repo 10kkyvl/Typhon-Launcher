@@ -4,6 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import type { MenuItem } from '../../lib/components/menu';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -17,7 +18,6 @@
   import { gameArt } from '../../lib/stores/metadata';
   import { gameContextMenu } from '../../lib/stores/gameMenu';
   import { activeMove, openMoveGame } from '../../lib/stores/relocate';
-  import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { updatesByGame } from '../../lib/stores/updates';
   import { brokenStatus } from '../../lib/game/compat';
@@ -158,13 +158,15 @@
     {@const updateText = updateLabel(update)}
     {@const main = mainAction(game, running)}
     <div class="row" role="presentation" data-game-row={game.id} {@attach gameContextMenu(game.id)}>
-      <button class="game" onclick={() => navigate('game', { id: game.id })}>
-        <div class="thumb" aria-hidden="true">
-          <Artwork src={heroFor(game, $gameArt)} alt="" label={game.title} radius="var(--radius-sm)" />
+      <div class="game">
+        <div class="thumb">
+          <GameLink id={game.id} name={game.title} repeat>
+            <Artwork src={heroFor(game, $gameArt)} alt="" label={game.title} radius="var(--radius-sm)" />
+          </GameLink>
         </div>
         <div class="titles">
           <span class="title-line">
-            <span class="title">{game.title}</span>
+            <span class="title"><GameLink id={game.id} name={game.title} truncate /></span>
             {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
           </span>
           <span class="path">{game.installDir}</span>
@@ -179,7 +181,7 @@
             </span>
           {/if}
         </div>
-      </button>
+      </div>
       <div class="status">
         <span class="status-label">{msg('games.lastPlayedLabel')}</span>
         <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
@@ -239,7 +241,6 @@
     align-items: center;
     gap: var(--space-4);
     min-width: 0;
-    text-align: left;
   }
 
   .thumb {
@@ -253,7 +254,7 @@
   .titles {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -265,12 +266,11 @@
   }
 
   .title {
+    display: flex;
+    min-width: 0;
     font-size: var(--font-lg);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .path {
@@ -290,12 +290,12 @@
   .status {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
   .status-label {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -303,13 +303,13 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-1);
     justify-self: end;
   }
 
   .row-update {
     display: inline-flex;
-    margin-left: 0.8rem;
+    margin-left: var(--space-2);
     vertical-align: bottom;
   }
 

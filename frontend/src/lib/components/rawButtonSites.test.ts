@@ -83,8 +83,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/game/ReviewCard.svelte': { who: 'row' },
   'routes/game/ReviewComposer.svelte': { toggle: 'radio tile' },
   'routes/game/ReviewSummary.svelte': { score: 'row' },
-  'routes/installed/InstalledGrid.svelte': { 'card-cover': 'row' },
-  'routes/installed/InstalledList.svelte': { game: 'row' },
   'routes/profile/ProfileActivity.svelte': { row: 'row' },
   'routes/profile/ProfileAppearancePanel.svelte': { theme: 'radio tile', 'pick-card': 'radio tile', 'emoji-cell': 'radio tile', color: 'swatch' },
   'routes/profile/ProfilePlaying.svelte': { open: 'row' },
