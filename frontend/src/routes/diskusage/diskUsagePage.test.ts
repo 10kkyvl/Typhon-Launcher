@@ -20,6 +20,19 @@ describe('the disk usage page object', () => {
     ]);
   });
 
+  // A negative claim of the whole screen: Go's prose (a row's `reason`, a warning's `message`, an
+  // error's text) never reaches the window; the words come from the codes. A source tripwire over every
+  // file of the screen and of lib/diskusage; the dom tests prove the words shown.
+  it('reads no Go prose anywhere in the screen', () => {
+    const code = { ...parts, ...import.meta.glob<string>(['./*.ts', '!./*.test.ts', '!./diskUsageTesting.ts', '../../lib/diskusage/*.ts', '!../../lib/diskusage/*.test.ts'], { query: '?raw', import: 'default', eager: true }) };
+    expect(Object.keys(code)).toContain('./diskUsagePage.svelte.ts');
+    expect(Object.keys(code)).toContain('../../lib/diskusage/usage.ts');
+    const raw = Object.entries(code).flatMap(([path, text]) =>
+      [...text.replace(/<style[\s\S]*?<\/style>/g, '').matchAll(/(?<!diskusage)\.(reason|message)\b(?!Code|\.)/g)].map((m) => `${path}: .${m[1]}`),
+    );
+    expect(raw).toEqual([]);
+  });
+
   it('has a setter for every field a part writes or binds', () => {
     const written = new Set<string>();
     for (const text of Object.values(parts)) {
