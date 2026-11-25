@@ -67,7 +67,7 @@
       <TicketView {number} />
     {/key}
   {:else if view === 'new'}
-    <NewTicket initialTopic={parseTopic(topic)} initialSubject={subject ?? ''} />
+    <NewTicket initialTopic={topic ? parseTopic(topic) : undefined} initialSubject={subject || undefined} />
   {:else}
     <TicketList />
     <Card title={msg('settings.aiSkillSupportTitle')}>

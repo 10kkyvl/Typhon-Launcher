@@ -63,7 +63,7 @@ const logsSwitch = () => screen.getByRole('switch', { name: msg('tickets.attachL
 const topicBox = () => screen.getByRole('combobox', { name: msg('tickets.topicLabel') });
 
 async function newRequest() {
-  const view = renderDom(NewTicket, { initialTopic: 'install' });
+  const view = renderDom(NewTicket, {});
   await screen.findByRole('button', { name: msg('tickets.submit') });
   return view;
 }

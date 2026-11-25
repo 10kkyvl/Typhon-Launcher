@@ -24,7 +24,7 @@
     type DraftErrors,
   } from '../../lib/support/draft';
   import { logsStageText, uploadPercent } from '../../lib/support/progress';
-  import { attachLogsByDefault, isTopic, topicOptions } from '../../lib/support/topics';
+  import { attachLogsByDefault, isTopic, parseTopic, topicOptions } from '../../lib/support/topics';
   import { goBack, navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
@@ -34,18 +34,25 @@
   import LogsConfirm from './LogsConfirm.svelte';
   import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
-  let { initialTopic, initialSubject = '' }: { initialTopic: SupportTopic; initialSubject?: string } = $props();
+  // A way in that sets a topic or a subject (the Beta badge, the Move dialog, Settings) passes it; the
+  // list's "New request" passes neither.
+  let { initialTopic, initialSubject }: { initialTopic?: SupportTopic; initialSubject?: string } = $props();
   const uid = $props.id();
 
-  // What the player left unsent (the session gone, another screen opened) comes back before what the
-  // way in suggests.
-  const draft = keptRequest();
-  let topic = $state<string>(draft?.topic ?? untrack(() => initialTopic));
-  let attachLogs = $state(draft?.attachLogs ?? untrack(() => attachLogsByDefault(initialTopic)));
+  // What the player left unsent (the session gone, another screen opened): a plain way in gives it back
+  // whole; a way in with a prefill opens with the prefill and offers it.
+  const prefill = untrack(() => ({ topic: initialTopic, subject: initialSubject }));
+  const prefilled = prefill.topic !== undefined || prefill.subject !== undefined;
+  const startTopic = prefill.topic ?? parseTopic(undefined);
+  const kept = keptRequest();
+  const draft = prefilled ? null : kept;
+  let offered = $state<RequestDraft | null>(prefilled ? kept : null);
+  let topic = $state<string>(draft?.topic ?? startTopic);
+  let attachLogs = $state(draft?.attachLogs ?? attachLogsByDefault(startTopic));
   let logsTouched = draft?.logsTouched ?? false;
   let game = $state<{ igdbId: number; title: string } | null>(draft?.game ?? null);
   let pickerOpen = $state(false);
-  let subject = $state(draft?.subject ?? untrack(() => initialSubject));
+  let subject = $state(draft?.subject ?? prefill.subject ?? '');
   let body = $state(draft?.body ?? '');
   let limits = $state<Limits | null>(null);
   let limitsFailure = $state('');
@@ -63,8 +70,9 @@
 
   // This form, as the writer of what is kept: its Cancel and its own send forget only what it wrote.
   const me: Writer = {};
-  // The player changed something here since the form opened.
-  let edited = false;
+  // This form's content is what is kept: it gave back the draft, or the player edited it. A prefill
+  // alone is never kept.
+  let owns = $state(draft !== null);
 
   let form = $state<HTMLElement>();
   let subjectField = $state<HTMLInputElement>();
@@ -107,9 +115,15 @@
       if (sending) upload = status;
     });
     // A request whose send failed after its form was left comes back into this one while the player
-    // has not changed anything here.
+    // has not edited it: as a prefilled form offers a draft, or into a plain one.
     const offBack = onRequestBack((back) => {
-      if (!edited) fill(back);
+      if (owns) return;
+      if (prefilled) {
+        offered = back;
+        return;
+      }
+      fill(back);
+      owns = true;
     });
     return () => {
       onScreen = false;
@@ -120,8 +134,25 @@
 
   $effect(() => {
     const now = { topic, game, subject, body, attachLogs };
+    if (!owns) return;
     untrack(() => keepRequest({ ...now, logsTouched }, me));
   });
+
+  // From the player's first edit this form's content is the draft: the one offered is replaced.
+  function edit() {
+    owns = true;
+    offered = null;
+  }
+
+  async function restore() {
+    if (!offered) return;
+    fill(offered);
+    offered = null;
+    owns = true;
+    // The notice and its button leave: focus goes on to the subject, never to the page.
+    await tick();
+    subjectField?.focus();
+  }
 
   function cancel() {
     forgetRequest(me);
@@ -129,28 +160,28 @@
   }
 
   function changeTopic(id: string) {
-    edited = true;
+    edit();
     topic = id;
     if (!logsTouched && isTopic(id)) attachLogs = attachLogsByDefault(id);
   }
 
   function clearGame() {
-    edited = true;
+    edit();
     game = null;
   }
 
   function editField(field: 'subject' | 'body') {
-    edited = true;
+    edit();
     errors = { ...errors, [field]: undefined };
   }
 
   function setLogs() {
-    edited = true;
+    edit();
     logsTouched = true;
   }
 
   function pickGame(pick: { igdbId: number; game: { title: string } }) {
-    edited = true;
+    edit();
     game = { igdbId: pick.igdbId, title: pick.game.title };
     pickerOpen = false;
   }
@@ -227,6 +258,12 @@
   <Spinner label={msg('tickets.loading')} />
 {:else}
   <div class="form" bind:this={form}>
+    {#if offered}
+      <Notice tone="info" announce={false} action={restoreDraft}>
+        {offered.subject.trim() ? msg('tickets.draftKept', { subject: offered.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
+      </Notice>
+    {/if}
+
     <div class="field">
       <span class="label" id="{uid}-topic-label">{msg('tickets.topicLabel')}</span>
       <Select options={topics} value={topic} width="100%" labelledby="{uid}-topic-label" onchange={changeTopic} />
@@ -319,6 +356,10 @@
 {/if}
 
 <LogsConfirm bind:this={confirm} />
+
+{#snippet restoreDraft()}
+  <Button size="sm" onclick={restore}>{msg('tickets.draftRestore')}</Button>
+{/snippet}
 
 {#snippet signIn()}
   <Button size="sm" onclick={handleSessionLost}>{msg('tickets.signInAgain')}</Button>
