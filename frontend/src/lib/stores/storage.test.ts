@@ -158,3 +158,38 @@ describe('following the library storage', () => {
     await vi.waitFor(() => expect(get(store.storageInfo)).toEqual(info));
   });
 });
+
+describe('the app reading the storage again when the library folder changes', () => {
+  it('reads nothing for the first settings, once when the library folder changes, nothing for another setting', async () => {
+    getStorageInfo.mockResolvedValue(info);
+    settings.set(null);
+    const store = await load();
+
+    const stop = store.refreshStorageOnFolderChange();
+    settings.set({ libraryPath: 'D:\\Games' });
+    expect(getStorageInfo).not.toHaveBeenCalled();
+
+    settings.set({ libraryPath: 'D:\\Games', gamesPath: 'E:\\Other' });
+    expect(getStorageInfo).not.toHaveBeenCalled();
+
+    settings.set({ libraryPath: 'F:\\Library' });
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(get(store.storageInfo)).toEqual(info));
+
+    stop();
+    settings.set({ libraryPath: 'G:\\Elsewhere' });
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes the settings already there when it starts as the first value', async () => {
+    const store = await load();
+
+    const stop = store.refreshStorageOnFolderChange();
+    settings.set({ libraryPath: get(settings)?.libraryPath ?? '', gamesPath: 'E:\\Other' });
+    expect(getStorageInfo).not.toHaveBeenCalled();
+
+    settings.set({ libraryPath: 'F:\\Library' });
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+    stop();
+  });
+});

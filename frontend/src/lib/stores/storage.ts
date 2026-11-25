@@ -29,6 +29,20 @@ export async function refreshStorage() {
 }
 
 /**
+ * For the app, once: reads the numbers again when the library folder Go measures changes, whatever
+ * screen is shown (Disk usage reads them without Installed mounted). The first settings are the
+ * folder already read at start; another setting changing reads nothing. Answers the disposer.
+ */
+export function refreshStorageOnFolderChange(): () => void {
+  let path: string | undefined;
+  return settings.subscribe((value) => {
+    if (!value) return;
+    if (path !== undefined && value.libraryPath !== path) void refreshStorage();
+    path = value.libraryPath;
+  });
+}
+
+/**
  * Keeps the numbers true while a screen shows them: reads them now, then again when the library
  * folder changes (the one Go measures), when an installed game comes, goes, moves or is measured,
  * and when any move ends. A game that only changes otherwise (played, renamed) reads nothing. Answers
