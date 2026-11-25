@@ -125,6 +125,9 @@ func newTimer(d time.Duration) (<-chan time.Time, func() bool) {
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("extlib") {
+		return nil
+	}
 	s.mu.Lock()
 	s.closing = true
 	cancel := s.cancel

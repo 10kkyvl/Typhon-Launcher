@@ -775,6 +775,9 @@ func (s *Service) markResumedOwnership(id string) error {
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("install") {
+		return nil
+	}
 	s.mu.Lock()
 	s.closing = true
 	cancel := s.cancel
@@ -790,9 +793,10 @@ func (s *Service) ServiceShutdown() error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.loadErr != nil {
-		// ServiceStartup уже вернул эту ошибку; сохранять нечего, а файл на диске
-		// остаётся единственной копией данных пользователя.
+	if s.ctx == nil || s.loadErr != nil {
+		// Без старта список не читался (startService ставит ctx до чтения), а
+		// при ошибке чтения ServiceStartup уже её вернул: сохранять нечего, файл
+		// на диске остаётся единственной копией данных пользователя.
 		return nil
 	}
 	return s.persistLocked()
@@ -952,6 +956,11 @@ func (s *Service) markPersistFailureLocked(item *Installation, err error) (Insta
 }
 
 func (s *Service) persistNowLocked() error {
+	if s.ctx == nil {
+		// Сервис не стартовал (старт преемника отложен): список не читался, и
+		// то, что в памяти, — не список пользователя.
+		return fmt.Errorf("%w: %w", errStoreNotLoaded, errNotStarted)
+	}
 	if s.loadErr != nil {
 		return fmt.Errorf("%w: %w", errStoreNotLoaded, s.loadErr)
 	}

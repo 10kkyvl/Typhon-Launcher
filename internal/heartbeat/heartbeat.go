@@ -100,6 +100,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("heartbeat") {
+		return nil
+	}
 	s.mu.Lock()
 	cancel := s.cancel
 	s.mu.Unlock()

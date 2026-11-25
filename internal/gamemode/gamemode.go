@@ -287,6 +287,9 @@ func (s *Service) start(ctx context.Context) error {
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("gamemode") {
+		return nil
+	}
 	if s.cancel != nil {
 		s.cancel()
 	}

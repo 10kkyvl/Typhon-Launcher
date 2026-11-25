@@ -210,6 +210,9 @@ func (s *Service) flushAttempts(ctx context.Context) {
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("metadata") {
+		return nil
+	}
 	s.mu.Lock()
 	s.closing = true
 	cancel := s.cancel

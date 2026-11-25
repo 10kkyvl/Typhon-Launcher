@@ -55,8 +55,10 @@ func (m *Manager) Repoint(ctx context.Context, oldRoot, newRoot string) error {
 	}
 
 	m.mu.Lock()
-	if m.closing {
-		// A restore spawned behind ServiceShutdown's wait would race it.
+	if m.closing || m.ctx == nil {
+		// A restore spawned behind ServiceShutdown's wait would race it; and
+		// before the start the list is unread, so no record would follow the
+		// files.
 		m.mu.Unlock()
 		return errUnavailable
 	}

@@ -98,6 +98,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("usagestats") {
+		return nil
+	}
 	s.mu.Lock()
 	started := s.sessionStart
 	cancel := s.cancel

@@ -73,6 +73,12 @@ var (
 	errUpdateFailed    = uierr.New("updates.update_failed", "не удалось применить обновление")
 )
 
+// gateName is this service's name at the hand-over gate.
+const gateName = "updates"
+
+// errHeldBack refuses a change while a successor's start is held back.
+var errHeldBack = errors.New("updates service is not started")
+
 // degradedStatus is the update:degraded event payload. It stays unexported
 // with no accessor method: adding either would change the wails bindings
 // generated for Service, which is not allowed here.
@@ -238,7 +244,7 @@ func (s *Service) clearDegradedLocked() {
 // ServiceStartup runs the startup at once, or after the old launcher has
 // exited when this one is the successor of a seamless update.
 func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
-	return handoffgate.Startup(ctx, "updates", func() error { return s.startService(ctx, opts) })
+	return handoffgate.Startup(ctx, gateName, func() error { return s.startService(ctx, opts) })
 }
 
 func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
@@ -323,6 +329,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping(gateName) {
+		return nil
+	}
 	s.mu.Lock()
 	s.closing = true
 	cancel := s.cancel
@@ -338,9 +347,10 @@ func (s *Service) ServiceShutdown() error {
 
 	s.mu.Lock()
 	var err error
-	// A refused start loaded nothing: saving its empty picture would replace
-	// the file that failed to load.
-	if s.store.writable() == nil {
+	// A refused start, and a service that never started, loaded nothing:
+	// saving the empty picture would replace the file. Only a start that read
+	// the file sets ctx.
+	if s.ctx != nil && s.store.writable() == nil {
 		err = s.persistLocked()
 	}
 	s.mu.Unlock()
@@ -701,6 +711,9 @@ func (s *Service) CheckUpdates() []Update {
 }
 
 func (s *Service) CheckGame(gameID string) (Update, error) {
+	if handoffgate.HeldBack(gateName) {
+		return Update{}, fmt.Errorf("%w: %w", errStoreUnloaded, errHeldBack)
+	}
 	if s.isExternal(gameID) {
 		return Update{}, errExternalGame
 	}

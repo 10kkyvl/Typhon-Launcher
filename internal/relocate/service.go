@@ -135,6 +135,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("relocate") {
+		return nil
+	}
 	s.mu.Lock()
 	s.closing = true
 	cancel := s.cancel

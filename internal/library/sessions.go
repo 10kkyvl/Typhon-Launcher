@@ -12,6 +12,7 @@ import (
 
 	"typhon/internal/crashlog"
 	"typhon/internal/emulators"
+	"typhon/internal/handoffgate"
 	"typhon/internal/procs"
 	"typhon/internal/redact"
 	"typhon/internal/uierr"
@@ -425,6 +426,9 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 // ожидания cmd.Wait() дочерних процессов игр — сюда намеренно не входят:
 // игра должна пережить закрытие лаунчера, а не быть убитой вместе с ним.
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("library") {
+		return nil
+	}
 	s.mu.Lock()
 	s.closed = true
 	cancel := s.cancel

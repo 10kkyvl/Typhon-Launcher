@@ -123,6 +123,9 @@ func (s *Sharer) startService(ctx context.Context, _ application.ServiceOptions)
 }
 
 func (s *Sharer) ServiceShutdown() error {
+	if !handoffgate.Stopping("compat") {
+		return nil
+	}
 	if s.cancel != nil {
 		s.cancel()
 	}

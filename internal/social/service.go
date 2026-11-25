@@ -148,6 +148,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("social") {
+		return nil
+	}
 	s.mu.Lock()
 	cancel := s.cancel
 	s.cancel = nil

@@ -245,6 +245,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("overlay") {
+		return nil
+	}
 	s.regMu.Lock()
 	s.mu.Lock()
 	s.closed = true

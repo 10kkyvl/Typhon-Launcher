@@ -360,6 +360,9 @@ func (m *Manager) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (m *Manager) ServiceShutdown() error {
+	if !handoffgate.Stopping("download") {
+		return nil
+	}
 	m.mu.Lock()
 	m.closing = true
 	cancel := m.cancel
@@ -382,7 +385,12 @@ func (m *Manager) ServiceShutdown() error {
 	m.wg.Wait()
 
 	m.mu.Lock()
-	persistErr := m.persistLocked()
+	var persistErr error
+	// Without a start the list was never read (startService sets ctx before
+	// it loads), and saving the empty one would replace the user's.
+	if m.ctx != nil {
+		persistErr = m.persistLocked()
+	}
 	cl := m.client
 	m.client = nil
 	m.clientCtx, m.clientCancel = nil, nil
@@ -513,6 +521,11 @@ func applySelection(info *metainfo.Info, selected []int) ([]FileState, error) {
 // whether to also roll that change back — persistLocked only knows about
 // records, not about which Download field motivated this call.
 func (m *Manager) persistLocked() error {
+	if m.ctx == nil {
+		// Not started (a successor's start held back): the list was never
+		// read, so whatever is in memory is not the user's list.
+		return errNoClient
+	}
 	if m.loadErr != nil {
 		m.degraded = degradedStatus{Degraded: true, Message: fmt.Sprintf("%s: %v", stateUnreadMessage, m.loadErr)}
 		emit(eventDegraded, m.degraded)

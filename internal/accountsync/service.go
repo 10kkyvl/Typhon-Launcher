@@ -134,6 +134,9 @@ func (s *Service) Nudge() {
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("accountsync") {
+		return nil
+	}
 	s.mu.Lock()
 	unwatch := s.unwatch
 	s.unwatch = nil

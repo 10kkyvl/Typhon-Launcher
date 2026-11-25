@@ -20,7 +20,16 @@ var (
 	mu      sync.Mutex
 	armed   bool
 	open    = make(chan struct{})
+	// held is every service whose startup the gate deferred and that has not
+	// finished it yet, by the name the service gave Startup.
+	held = map[string]*heldStart{}
 )
+
+type heldStart struct {
+	running bool          // the deferred startup has begun
+	stopped bool          // the service is shutting down; the startup must not begin
+	done    chan struct{} // closed when a begun startup has returned
+}
 
 // Arm closes the gate. Call it once, before the services start.
 func Arm() {
@@ -42,6 +51,13 @@ func Open() {
 	}
 	armed = false
 	close(open)
+	// A service already shut down is done with: nothing calls it any more,
+	// and its name may start afresh.
+	for name, h := range held {
+		if h.stopped {
+			delete(held, name)
+		}
+	}
 }
 
 // Armed reports whether the gate is currently closed.
@@ -73,12 +89,17 @@ func Wait(ctx context.Context) bool {
 // returns at once and runs start when the gate opens, so the service reads and
 // writes its state only after the old launcher has gone. A failure there can
 // no longer stop the application from starting and is logged.
+//
+// name identifies the service to Stopping and HeldBack and must be unique.
 func Startup(ctx context.Context, name string, start func() error) error {
 	mu.Lock()
 	if !armed {
+		delete(held, name)
 		mu.Unlock()
 		return start()
 	}
+	h := &heldStart{done: make(chan struct{})}
+	held[name] = h
 	pending.Add(1)
 	ch := open
 	mu.Unlock()
@@ -89,11 +110,59 @@ func Startup(ctx context.Context, name string, start func() error) error {
 		case <-ctx.Done():
 			return
 		}
-		if err := start(); err != nil {
+		mu.Lock()
+		if h.stopped || ctx.Err() != nil {
+			mu.Unlock()
+			return
+		}
+		h.running = true
+		mu.Unlock()
+		err := start()
+		mu.Lock()
+		if held[name] == h {
+			delete(held, name)
+		}
+		mu.Unlock()
+		close(h.done)
+		if err != nil {
 			slog.Error("deferred service startup failed", "service", name, "error", err)
 		}
 	}()
 	return nil
+}
+
+// Stopping is the first call of a service's shutdown. It reports whether the
+// service's startup ran (or is running, in which case it waits for it): only
+// then has the service loaded state it may save or work it must stop. A
+// startup still held back is cancelled for good, and the shutdown must do
+// nothing: the service's lists were never read, so saving them would replace
+// the user's state with empty ones.
+func Stopping(name string) bool {
+	mu.Lock()
+	h, ok := held[name]
+	if !ok {
+		mu.Unlock()
+		return true
+	}
+	if !h.running {
+		h.stopped = true
+		mu.Unlock()
+		slog.Info("service shut down before its held-back startup ran, nothing to stop", "service", name)
+		return false
+	}
+	mu.Unlock()
+	<-h.done
+	return true
+}
+
+// HeldBack reports whether the named service's startup was deferred by the
+// gate and has not begun: the service has not read its state, and a call
+// that would change it must refuse.
+func HeldBack(name string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	h, ok := held[name]
+	return ok && !h.running
 }
 
 // Settled waits until every startup held back by the gate has finished. Call

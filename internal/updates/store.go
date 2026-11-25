@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"typhon/internal/handoffgate"
 	"typhon/internal/storage"
 )
 
@@ -50,6 +51,10 @@ func (s *store) block(cause error) {
 }
 
 func (s *store) writable() error {
+	if handoffgate.HeldBack(gateName) {
+		// A successor's start is held back: nothing has been read yet.
+		return fmt.Errorf("%w: %w", errStoreUnloaded, errHeldBack)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.blocked

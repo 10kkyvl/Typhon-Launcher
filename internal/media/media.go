@@ -117,6 +117,9 @@ func (s *Service) startService(ctx context.Context, _ application.ServiceOptions
 }
 
 func (s *Service) ServiceShutdown() error {
+	if !handoffgate.Stopping("media") {
+		return nil
+	}
 	if s.p == nil {
 		return nil
 	}
