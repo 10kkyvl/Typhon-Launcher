@@ -48,14 +48,10 @@ function watchOwner() {
   else stop();
 }
 
+// While something is kept its owner is watched, so a signed-in player is its owner: no one signed in
+// (a guest, the session gone) reads nothing.
 function mine(): Kept | null {
-  const id = owner();
-  if (!kept || !id) return null;
-  if (kept.owner !== id) {
-    forget();
-    return null;
-  }
-  return kept;
+  return owner() ? kept : null;
 }
 
 function writable(): Kept | null {
