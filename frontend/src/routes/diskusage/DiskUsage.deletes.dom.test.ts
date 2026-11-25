@@ -12,7 +12,7 @@ import {
 import { toast } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import DiskUsage from './DiskUsage.svelte';
-import { download, group, leftover, report, rowOf } from './diskUsageTesting';
+import { download, group, groupAsked, leftover, report, rowOf } from './diskUsageTesting';
 
 // Each delete of the page, through its confirmation: the words it asks with, the one service call and
 // its argument, what the player is told after it worked and after it failed. The services are mocked
@@ -102,7 +102,7 @@ const CASES: Case[] = [
     row: 'Hades',
     button: 'diskusage.deleteAll',
     title: 'diskusage.screenshotsConfirmTitle',
-    text: msg('diskusage.screenshotsConfirmText', { title: 'Hades', count: 12 }),
+    text: groupAsked('screenshots', 'Hades', 12),
     confirm: 'diskusage.deleteAll',
     service: deleteScreenshots,
     argument: 'g-hades',
@@ -114,7 +114,7 @@ const CASES: Case[] = [
     row: 'Celeste',
     button: 'diskusage.deleteAll',
     title: 'diskusage.snapshotsConfirmTitle',
-    text: msg('diskusage.snapshotsConfirmText', { title: 'Celeste', count: 4 }),
+    text: groupAsked('snapshots', 'Celeste', 4),
     confirm: 'diskusage.snapshotsConfirmAction',
     service: deleteSnapshots,
     argument: 'g-celeste',
@@ -212,7 +212,7 @@ describe('DiskUsage: a group of a game nothing knows', () => {
     expect(row.textContent).not.toContain('3f2a-raw-id');
     await view.user.click(within(row).getByRole('button', { name: msg('diskusage.deleteAll') }));
     const dialog = await screen.findByRole('dialog', { name: msg('diskusage.screenshotsConfirmTitle') });
-    expect(within(dialog).getByText(msg('diskusage.screenshotsConfirmText', { title: msg('diskusage.unknownGame'), count: 3 }))).toBeTruthy();
+    expect(within(dialog).getByText(groupAsked('screenshots', msg('diskusage.unknownGame'), 3))).toBeTruthy();
   });
 });
 

@@ -89,7 +89,6 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.leftLibrary': 'Game is no longer in the library',
   'diskusage.deleteAll': 'Delete all',
   'diskusage.screenshotsConfirmTitle': 'Delete screenshots',
-  'diskusage.screenshotsConfirmText': 'All screenshots of "{title}" ({count}) will be deleted from disk and cannot be restored.',
   'diskusage.screenshotsDeleted': 'Screenshots deleted',
 
   'diskusage.snapshotsTitle': 'Save snapshots',
@@ -97,7 +96,6 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.snapshotsEmpty': 'No save snapshots',
   'diskusage.snapshotsCount': { one: '{count} copy', other: '{count} copies' },
   'diskusage.snapshotsConfirmTitle': 'Delete save copies',
-  'diskusage.snapshotsConfirmText': 'All local save copies of "{title}" ({count}) will be deleted.',
   'diskusage.snapshotsConfirmNote': 'These are backups of your progress. If the game itself no longer has its saves, the progress cannot be restored.',
   'diskusage.snapshotsConfirmAction': 'Delete save copies',
   'diskusage.snapshotsDeleted': 'Save copies deleted',

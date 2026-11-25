@@ -17,16 +17,34 @@ import {
   type Report,
 } from '../../lib/services/diskusage';
 import { toast } from '../../lib/stores/toasts';
+import { bytesSize } from '../../lib/utils/format';
 import { placeOf, returnTo, type RowPlace } from './rowFocus';
 
 export type DiskUsagePage = ReturnType<typeof createDiskUsagePage>;
 
 /** The one confirmation in view: what it asks, what it runs, where focus goes when its row has gone. */
 export interface PendingDelete {
-  prompt: ConfirmPrompt;
+  /** Read anew with every report for a group, whose delete Go answers from its latest scan. */
+  readonly prompt: ConfirmPrompt;
   run: () => Promise<void>;
   returnFocus: () => HTMLElement | null;
 }
+
+type GroupKind = 'screenshots' | 'snapshots';
+interface GroupRef {
+  kind: GroupKind;
+  gameId: string;
+}
+
+/** A group's size in the words of a question: exact, at least, or not measured. */
+function groupSize(group: GroupUsage): string {
+  if (group.sizeUnknown && group.sizeBytes <= 0) return msg('diskusage.sizeUnknown');
+  const size = bytesSize(group.sizeBytes);
+  return group.sizeUnknown ? msg('diskusage.atLeast', { size }) : size;
+}
+
+const groupsOf = (from: Report, kind: GroupKind) => (kind === 'screenshots' ? from.screenshots : from.snapshots);
+const rowOf = (from: Report | null, group: GroupRef) => (from ? groupsOf(from, group.kind).find((g) => g.gameId === group.gameId) : undefined);
 
 /**
  * What the disk usage page reads and deletes: the report (the cached one first, then a scan; an answer
@@ -39,6 +57,10 @@ export function createDiskUsagePage() {
   let scanning = $state(false);
   let scanError = $state('');
   let pending = $state<PendingDelete | null>(null);
+  // The group the open question is about, when it is one: a report without that group closes it.
+  let pendingGroup: GroupRef | null = null;
+  // A confirmation's run is under way: its own rescan does not close it; it closes when it is done.
+  let running = false;
   let scanSerial = 0;
   let left = false;
 
@@ -55,6 +77,7 @@ export function createDiskUsagePage() {
       if (serial !== scanSerial) return false;
       report = next;
       scanError = '';
+      if (pendingGroup && !running && !rowOf(next, pendingGroup)) closePending();
       return true;
     } catch (err) {
       if (serial === scanSerial) scanError = isScanCancelled(err) ? '' : diskusageErrorText(err, msg('diskusage.scanFailed'));
@@ -89,34 +112,49 @@ export function createDiskUsagePage() {
    * confirmation keeps that failure in view with Retry. `row` is the row's key: where it stood is read
    * now, for focus once the row has gone.
    */
-  function ask(prompt: ConfirmPrompt, action: () => Promise<GroupDelete | void>, done: string, row: string) {
+  function ask(prompt: () => ConfirmPrompt, action: () => Promise<GroupDelete | void>, done: string, row: string, group: GroupRef | null = null) {
     const place: RowPlace = placeOf(row, 'delete');
+    pendingGroup = group;
     pending = {
-      prompt,
+      get prompt() {
+        return prompt();
+      },
       returnFocus: () => returnTo(place),
       run: async () => {
+        // A Retry after the group's rows went: Go has nothing of it to delete.
+        if (group && !rowOf(report, group)) return;
         let result: GroupDelete | void;
+        running = true;
         try {
-          result = await action();
-        } catch (err) {
+          try {
+            result = await action();
+          } catch (err) {
+            await refresh();
+            throw err;
+          }
           await refresh();
-          throw err;
+        } finally {
+          running = false;
         }
-        await refresh();
         if (result && result.failed > 0) throw new PartialDeleteError(result);
         toast(done, 'success');
       },
     };
   }
 
+  function closePending() {
+    pending = null;
+    pendingGroup = null;
+  }
+
   function askDownload(download: DownloadUsage) {
     ask(
-      {
+      () => ({
         title: msg('diskusage.downloadConfirmTitle'),
         text: msg('diskusage.downloadConfirmText', { name: download.name }),
         confirm: msg('diskusage.downloadDelete'),
         busy: msg('diskusage.deleting'),
-      },
+      }),
       () => deleteDownloadData(download.id),
       msg('diskusage.downloadDeleted'),
       `downloads:${download.id}`,
@@ -125,7 +163,7 @@ export function createDiskUsagePage() {
 
   function askLeftover(leftover: Leftover) {
     ask(
-      {
+      () => ({
         title: msg('diskusage.leftoverConfirmTitle'),
         text: msg('diskusage.leftoverConfirmText', {
           kind: msg(leftoverKindKey(leftover.kind)),
@@ -133,39 +171,59 @@ export function createDiskUsagePage() {
         }),
         confirm: msg('diskusage.leftoverDelete'),
         busy: msg('diskusage.deleting'),
-      },
+      }),
       () => deleteLeftover(leftover.path),
       msg('diskusage.leftoverDeleted'),
       `leftovers:${leftover.path}`,
     );
   }
 
+  /**
+   * A group delete sends only the game's id and Go deletes what its latest scan counted, so the question
+   * is put in the words of the group's row as the latest report shows it, read again with each report;
+   * the row it was put from stands in once the group has gone.
+   */
+  function askGroup(kind: GroupKind, group: GroupUsage, words: (row: GroupUsage) => ConfirmPrompt, action: () => Promise<GroupDelete>, done: string) {
+    const ref: GroupRef = { kind, gameId: group.gameId };
+    ask(() => words(rowOf(report, ref) ?? group), action, done, `${kind}:${group.gameId}`, ref);
+  }
+
   function askScreenshots(group: GroupUsage) {
-    ask(
-      {
+    askGroup(
+      'screenshots',
+      group,
+      (row) => ({
         title: msg('diskusage.screenshotsConfirmTitle'),
-        text: msg('diskusage.screenshotsConfirmText', { title: gameTitle(group), count: group.count }),
+        text: msg('diskusage.screenshotsConfirmSized', {
+          title: gameTitle(row),
+          count: msg('diskusage.screenshotsCount', { count: row.count }),
+          size: groupSize(row),
+        }),
         confirm: msg('diskusage.deleteAll'),
         busy: msg('diskusage.deleting'),
-      },
+      }),
       () => deleteScreenshots(group.gameId),
       msg('diskusage.screenshotsDeleted'),
-      `screenshots:${group.gameId}`,
     );
   }
 
   function askSnapshots(group: GroupUsage) {
-    ask(
-      {
+    askGroup(
+      'snapshots',
+      group,
+      (row) => ({
         title: msg('diskusage.snapshotsConfirmTitle'),
-        text: msg('diskusage.snapshotsConfirmText', { title: gameTitle(group), count: group.count }),
+        text: msg('diskusage.snapshotsConfirmSized', {
+          title: gameTitle(row),
+          count: msg('diskusage.snapshotsCount', { count: row.count }),
+          size: groupSize(row),
+        }),
         note: msg('diskusage.snapshotsConfirmNote'),
         confirm: msg('diskusage.snapshotsConfirmAction'),
         busy: msg('diskusage.deleting'),
-      },
+      }),
       () => deleteSnapshots(group.gameId),
       msg('diskusage.snapshotsDeleted'),
-      `snapshots:${group.gameId}`,
     );
   }
 
@@ -174,7 +232,7 @@ export function createDiskUsagePage() {
     get scanning() { return scanning; },
     get scanError() { return scanError; },
     get pending() { return pending; },
-    closePending() { pending = null; },
+    closePending,
     load,
     refresh,
     leave,

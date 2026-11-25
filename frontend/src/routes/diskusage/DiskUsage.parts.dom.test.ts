@@ -18,6 +18,7 @@ import { moveTarget } from '../../lib/stores/relocate';
 import { renderDom } from '../../lib/testing/dom';
 import { bytesSize } from '../../lib/utils/format';
 import DiskUsage from './DiskUsage.svelte';
+import { groupAsked } from './diskUsageTesting';
 
 // The page keeps the report, the sort and the one confirmation, and hands them down. A callback not
 // wired, a total read from the wrong field or a kind given the other kind's words breaks nothing a
@@ -113,8 +114,8 @@ describe('DiskUsage: a Delete in each section', () => {
   it.each([
     ['diskusage.downloadsTitle', 'Celeste torrent', 'diskusage.downloadDelete', msg('diskusage.downloadConfirmText', { name: 'Celeste torrent' }), deleteDownloadData, 'd-1'],
     ['diskusage.leftoversTitle', msg('diskusage.kindInstallPartial'), 'diskusage.leftoverDelete', msg('diskusage.leftoverConfirmText', { kind: msg('diskusage.kindInstallPartial'), path: 'D:\\Games\\.partial' }), deleteLeftover, 'D:\\Games\\.partial'],
-    ['diskusage.screenshotsTitle', 'Hades', 'diskusage.deleteAll', msg('diskusage.screenshotsConfirmText', { title: 'Hades', count: 12 }), deleteScreenshots, 'g-hades'],
-    ['diskusage.snapshotsTitle', 'Celeste', 'diskusage.deleteAll', msg('diskusage.snapshotsConfirmText', { title: 'Celeste', count: 4 }), deleteSnapshots, 'g-celeste'],
+    ['diskusage.screenshotsTitle', 'Hades', 'diskusage.deleteAll', groupAsked('screenshots', 'Hades', 12), deleteScreenshots, 'g-hades'],
+    ['diskusage.snapshotsTitle', 'Celeste', 'diskusage.deleteAll', groupAsked('snapshots', 'Celeste', 4), deleteSnapshots, 'g-celeste'],
   ] as const)('in %s asks with that row’s words, deletes it by its own argument and scans again', async (heading, title, button, text, service, argument) => {
     const { user } = await shown();
     const row = [...section(msg(heading)).querySelectorAll<HTMLElement>('.row')].find((el) => el.querySelector('.title')?.textContent === title) as HTMLElement;

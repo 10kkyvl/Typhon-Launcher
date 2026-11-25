@@ -99,7 +99,6 @@ export const diskusage = {
   'diskusage.leftLibrary': 'Игры нет в библиотеке',
   'diskusage.deleteAll': 'Удалить все',
   'diskusage.screenshotsConfirmTitle': 'Удалить снимки экрана',
-  'diskusage.screenshotsConfirmText': 'Все снимки игры «{title}» ({count}) будут удалены с диска без возможности восстановления.',
   'diskusage.screenshotsDeleted': 'Снимки удалены',
 
   'diskusage.snapshotsTitle': 'Снимки сохранений',
@@ -111,7 +110,6 @@ export const diskusage = {
     many: '{count} копий',
   },
   'diskusage.snapshotsConfirmTitle': 'Удалить копии сохранений',
-  'diskusage.snapshotsConfirmText': 'Все локальные копии сохранений игры «{title}» ({count}) будут удалены.',
   'diskusage.snapshotsConfirmNote': 'Это резервные копии вашего прогресса. Если сохранений самой игры больше нет, вернуть прогресс будет нельзя.',
   'diskusage.snapshotsConfirmAction': 'Удалить копии сохранений',
   'diskusage.snapshotsDeleted': 'Копии сохранений удалены',

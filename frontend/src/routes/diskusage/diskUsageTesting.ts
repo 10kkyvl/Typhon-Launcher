@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/svelte';
 import { msg, type MessageKey } from '../../lib/i18n';
 import type { DownloadUsage, GameUsage, GroupUsage, Leftover, Report } from '../../lib/services/diskusage';
+import { bytesSize } from '../../lib/utils/format';
 
 // Fixtures and queries of the disk usage page's dom tests. Each test file mocks the services itself
 // (vi.mock is hoisted per file): nothing here reaches Go, and nothing is measured or deleted.
@@ -63,6 +64,13 @@ export function report(patch: Partial<Report> = {}): Report {
     scannedAt: '2026-11-12T10:05:00Z',
     ...patch,
   };
+}
+
+/** The words a group's delete asks with: its title, the count of its files and their size (a fixture group's is 1 GB). */
+export function groupAsked(kind: 'screenshots' | 'snapshots', title: string, count: number, size: string = bytesSize(GB)): string {
+  return kind === 'screenshots'
+    ? msg('diskusage.screenshotsConfirmSized', { title, count: msg('diskusage.screenshotsCount', { count }), size })
+    : msg('diskusage.snapshotsConfirmSized', { title, count: msg('diskusage.snapshotsCount', { count }), size });
 }
 
 /** The section of the page whose heading starts with the words of `title` (a count may follow them). */
