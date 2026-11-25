@@ -64,7 +64,7 @@
         {kind}
         {#if event.kind === 'reviewed' && event.review}
           {@const verdict = msg(event.review.recommended ? 'social.feedReviewYes' : 'social.feedReviewNo')}
-          <span class="verdict" role="img" aria-label={verdict} title={verdict}>
+          <span class="verdict" role="img" aria-label={verdict}>
             {#if event.review.recommended}
               <ThumbsUp size="1.5rem" strokeWidth={1.8} />
             {:else}
