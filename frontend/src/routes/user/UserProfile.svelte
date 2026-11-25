@@ -360,7 +360,7 @@
                 {name}
                 username={data.username}
                 offline={$isOffline}
-                oninvite={data.relation === 'friend' ? (game) => inviteToPlay(data!, game.title) : undefined}
+                oninvite={data.relation === 'friend' ? (game) => data && inviteToPlay(chatPeerOf(data), game.title) : undefined}
               />
             {/if}
             {#if mutual.length > 0}

@@ -242,16 +242,21 @@ describe("a user's page: what it shows", () => {
     expect(vi.mocked(openChat)).toHaveBeenCalledWith(chatPeerOf(friend));
   });
 
-  it("inviting a friend to a common game writes the invitation into the chat's draft and opens the chat", async () => {
+  it("inviting a friend to a common game writes the invitation into the chat's draft and opens the chat with the friend as Write does", async () => {
     const game = { igdbId: 7, title: 'Hades', coverUrl: '', viewerOwned: true, targetOwned: true } as CommonGame;
-    const friend = player({ relation: 'friend', common: { count: 1, games: [game] } });
+    const friend = player({
+      relation: 'friend',
+      common: { count: 1, games: [game] },
+      appearance: { avatarFrame: 'gold', frameColor: '#ffaa00' } as unknown as PublicProfile['appearance'],
+    });
     const { user } = await mount(friend);
     drafts.set(draftKey('u1'), 'hi');
 
     await user.click(button(msg('social.userCommonInvite')));
 
     expect(drafts.get(draftKey('u1'))).toBe(`hi\n${inviteText('Hades')}`);
-    expect(vi.mocked(openChat)).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1', username: 'ann' }));
+    expect(vi.mocked(openChat).mock.calls).toEqual([[chatPeerOf(friend)]]);
+    expect(chatPeerOf(friend)).toMatchObject({ avatarFrame: 'gold', frameColor: '#ffaa00' });
   });
 
   it('a stranger is not offered an invitation', async () => {
