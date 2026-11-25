@@ -285,6 +285,16 @@ export async function beginHandoff(phaseStart: number): Promise<void> {
   }
 }
 
+/** Closes this launcher while it is a successor still waiting for the old one; refused in any other state. */
+export async function quitWaitingSuccessor(): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.QuitWaitingSuccessor();
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
 export async function handoffRendered(): Promise<void> {
   if (!inWails) throw unavailable();
   try {

@@ -3,7 +3,7 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { getHandoffInfo, handoffRendered } from '../services/selfupdate';
+import { getHandoffInfo, handoffRendered, quitWaitingSuccessor } from '../services/selfupdate';
 import { loadHandoff, setShellReady } from '../stores/handoff';
 import { selfUpdateOutcome, selfUpdateStatus } from '../stores/selfupdate';
 import { endUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, updateShow } from '../stores/updateShow';
@@ -25,6 +25,7 @@ vi.mock('../services/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/selfupdate')>()),
   getHandoffInfo: vi.fn(),
   handoffRendered: vi.fn(async () => {}),
+  quitWaitingSuccessor: vi.fn(async () => {}),
 }));
 
 // A seamless restart seen from both windows. The old one holds the funnel over a curtain that closes
@@ -216,6 +217,56 @@ describe('a successor whose old launcher is still shutting down', () => {
     expect(note()).not.toBe(msg('ui.handoffWaitingNote'));
     await advance(3000);
     expect(shown()).toBeNull();
+  });
+
+  it('offers to close this launcher while it waits: under focus, one call for two presses, gone with the wait', async () => {
+    await becomeSuccessor(START - 10_000);
+    renderDom(UpdateShowHarness, { logo: false, page: false });
+    await advance(48);
+    const close = () => screen.queryByRole('button', { name: msg('ui.handoffCloseLauncher') });
+    expect(close()).toBeNull();
+
+    handlers['launcher:handoff_waiting']({ data: null });
+    await tick();
+    await tick();
+    const button = close()!;
+    expect(document.activeElement).toBe(button);
+
+    let quit!: () => void;
+    vi.mocked(quitWaitingSuccessor).mockClear();
+    vi.mocked(quitWaitingSuccessor).mockReturnValueOnce(new Promise<void>((resolve) => (quit = resolve)));
+    button.click();
+    button.click();
+    await tick();
+    expect(quitWaitingSuccessor).toHaveBeenCalledTimes(1);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(button);
+    quit();
+
+    setShellReady(true);
+    handlers['launcher:handoff_done']({ data: { active: false, phaseStart: START - 10_000, version: '1.5.0', background: '#090d17', waiting: false } });
+    await advance(100);
+    expect(close()).toBeNull();
+  });
+
+  it('lets the close be pressed again when Go could not do it', async () => {
+    await becomeSuccessor(START - 10_000);
+    renderDom(UpdateShowHarness, { logo: false, page: false });
+    await advance(48);
+    handlers['launcher:handoff_waiting']({ data: null });
+    await tick();
+    await tick();
+    const button = screen.getByRole('button', { name: msg('ui.handoffCloseLauncher') });
+
+    vi.mocked(quitWaitingSuccessor).mockClear();
+    vi.mocked(quitWaitingSuccessor).mockRejectedValueOnce(new Error('typhon:selfupdate.not_waiting: not a waiting successor'));
+    button.click();
+    await tick();
+    await tick();
+    expect(button.getAttribute('aria-busy')).not.toBe('true');
+    button.click();
+    await tick();
+    expect(quitWaitingSuccessor).toHaveBeenCalledTimes(2);
   });
 
   it('in the old window, keeps its words whatever comes', async () => {

@@ -3,11 +3,16 @@
   import type { Attachment } from 'svelte/attachments';
   import { msg } from '../i18n';
   import { layer } from '../layers';
+  import { focusQuietly } from '../layers/focus';
   import { runFrames } from '../motion/frames';
   import { motionOn, tokenMs } from '../motion/motion';
   import { curtainDrawn, handoffWaiting } from '../stores/handoff';
+  import { quitWaitingSuccessor } from '../services/selfupdate';
+  import { updateReason } from '../services/selfupdateMessages';
   import { settings } from '../stores/settings';
+  import { toast } from '../stores/toasts';
   import { beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, updateShow, type UpdateShowState } from '../stores/updateShow';
+  import Button from './Button.svelte';
   import LogoArcs from './LogoArcs.svelte';
   import UpdateFunnel from './UpdateFunnel.svelte';
   import UpdateRing from './UpdateRing.svelte';
@@ -31,6 +36,27 @@
   const show = $derived($updateShow);
   const words = $derived(show?.version ? show.version : '');
   const tint = $derived(Boolean($settings?.tintLogo));
+
+  // A successor whose old launcher is slow to go: the page under the show is inert, so the one thing
+  // the player can do is offered here and takes focus as it appears.
+  const waitingForOld = $derived(Boolean(show?.handoff && show.held && $handoffWaiting));
+  let closing = $state(false);
+  const focusClose: Attachment<HTMLElement> = (node) => {
+    const button = node.querySelector('button');
+    if (button) focusQuietly(button);
+  };
+
+  async function closeLauncher() {
+    if (closing) return;
+    closing = true;
+    try {
+      await quitWaitingSuccessor();
+    } catch (err) {
+      // Go quits on success, and this window goes with it: only a refusal comes back.
+      closing = false;
+      toast(updateReason(err), 'danger');
+    }
+  }
 
   const timing: ShowTiming = {
     fly: tokenMs('--motion-show', 1200),
@@ -243,6 +269,11 @@
         <p class="note">{msg(!show.handoff ? 'ui.launcherWillRestartShort' : show.held && $handoffWaiting ? 'ui.handoffWaitingNote' : 'ui.handoffNote')}</p>
       </div>
     {/if}
+    {#if waitingForOld}
+      <div class="wait-actions" {@attach focusClose}>
+        <Button busy={closing} onclick={closeLauncher}>{msg('ui.handoffCloseLauncher')}</Button>
+      </div>
+    {/if}
   </div>
   {#if mode === 'ring' && ringOnLogo && logo}
     <div class="ringmark" style:left="{logo.left}px" style:top="{logo.top}px" style:width="{logo.size}px" style:height="{logo.size}px">
@@ -337,6 +368,12 @@
   .note {
     color: var(--text-2);
     font-size: var(--font-sm);
+  }
+
+  .wait-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--space-3);
   }
 
   .expand {
