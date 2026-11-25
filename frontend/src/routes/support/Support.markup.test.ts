@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { ruleBody, styleOf } from '../../lib/testing/css';
 import { sourcesUnder } from '../../lib/testing/sources';
+import support from './Support.svelte?raw';
 
 /**
  * The support screens' markup and stylesheets, read from the source: jsdom lays nothing out, so what
@@ -29,6 +31,19 @@ describe('the support screens', () => {
     expect(offScale('.a { gap: 0.6rem; }')).toEqual(['gap: 0.6rem']);
     expect(offScale('.a { margin: 0 0 var(--space-4) calc(-1 * var(--space-2)); padding: var(--space-1) var(--space-3); }')).toEqual([]);
     expect(screens.flatMap(([path, source]) => offScale(style(source)).map((rule) => `${path}: ${rule}`))).toEqual([]);
+  });
+
+  // jsdom lays nothing out: what holds here is that the two cards under the list sit in one column with
+  // the scale's gap, set off from the list above by a larger step. How far apart they look is for a
+  // real browser.
+  it('set the cards under the list apart from it and from each other', () => {
+    expect(markup(support)).toMatch(/<TicketList \/>\s*<div class="cards">\s*<Card\b[\s\S]*?<\/Card>\s*<Card\b[\s\S]*?<\/Card>\s*<\/div>/);
+    expect(ruleBody(styleOf(support, 'Support.svelte'), '.cards')).toEqual({
+      display: 'flex',
+      'flex-direction': 'column',
+      gap: 'var(--space-3)',
+      'margin-top': 'var(--space-6)',
+    });
   });
 
   it('write no native hint on an element', () => {

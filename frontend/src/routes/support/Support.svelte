@@ -70,22 +70,31 @@
     <NewTicket initialTopic={topic ? parseTopic(topic) : undefined} initialSubject={subject || undefined} />
   {:else}
     <TicketList />
-    <Card title={msg('settings.aiSkillSupportTitle')}>
-      <div class="skill-row">
-        <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
-        <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
-      </div>
-    </Card>
-    <Card title={msg('discord.communityLabel')}>
-      <div class="skill-row">
-        <span class="skill-sub">{msg('discord.communitySub')}</span>
-        <DiscordJoinButton />
-      </div>
-    </Card>
+    <div class="cards">
+      <Card title={msg('settings.aiSkillSupportTitle')}>
+        <div class="skill-row">
+          <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
+          <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
+        </div>
+      </Card>
+      <Card title={msg('discord.communityLabel')}>
+        <div class="skill-row">
+          <span class="skill-sub">{msg('discord.communitySub')}</span>
+          <DiscordJoinButton />
+        </div>
+      </Card>
+    </div>
   {/if}
 </Page>
 
 <style>
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+  }
+
   .skill-row {
     display: flex;
     align-items: center;
