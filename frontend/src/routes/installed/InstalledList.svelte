@@ -135,7 +135,7 @@
     {@const running = $runningGames.has(game.id)}
     {@const update = $updatesByGame.get(game.id)?.availability}
     {@const updateText = updateLabel(update)}
-    <div class="row" role="presentation" {@attach gameContextMenu(game.id)}>
+    <div class="row" role="presentation" data-game-row={game.id} {@attach gameContextMenu(game.id)}>
       <button class="game" onclick={() => navigate('game', { id: game.id })}>
         <div class="thumb" aria-hidden="true">
           <Artwork src={heroFor(game, $gameArt)} alt="" label={game.title} radius="var(--radius-sm)" />

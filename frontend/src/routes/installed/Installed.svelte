@@ -4,13 +4,14 @@
   import AddImageModal from '../../lib/components/AddImageModal.svelte';
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { inWails } from '../../lib/services/backend';
   import type { LibraryGame } from '../../lib/services/library';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
-  import { installedGames, runningGames } from '../../lib/stores/library';
+  import { installedGames, libraryLoaded, libraryLoadError, loadLibrary, runningGames } from '../../lib/stores/library';
   import { isEmulated } from '../../lib/library/emulation';
   import { refreshMissingImages } from '../../lib/stores/missingImages';
   import { externalLabel } from '../../lib/library/external';
@@ -20,7 +21,7 @@
   import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
   import { msg } from '../../lib/i18n';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
-  import type { Sort } from './installedGame';
+  import { libraryErrorText, type Sort } from './installedGame';
   import InstalledAddGame from './InstalledAddGame.svelte';
   import InstalledGrid from './InstalledGrid.svelte';
   import InstalledList from './InstalledList.svelte';
@@ -34,13 +35,24 @@
   // при каждой смене состава запущенных игр: сессия только что закончилась —
   // значит вывод про игру мог измениться.
   let compat = $state<Map<string, CompatStatus>>(new Map());
+  let compatRead = 0;
   $effect(() => {
     void $runningGames;
     void $installedGames;
-    compatStatuses().then((next) => {
-      compat = next;
-    });
+    const mine = ++compatRead;
+    compatStatuses().then(
+      (next) => {
+        if (mine === compatRead) compat = next;
+      },
+      // The log only adds the broken badge: a failed read keeps what the last one said, unsaid.
+      () => {},
+    );
   });
+
+  // Until the first list arrives an empty list is not an empty library.
+  const loadFailed = $derived($libraryLoadError != null && !$libraryLoaded);
+  let libraryRetrying = $state(false);
+  let results = $state<HTMLElement>();
 
   function timeOf(value: string | null) {
     if (!value) return 0;
@@ -134,9 +146,11 @@
 <Page>
   <PageHeader
     title={msg('games.installedStatusWord')}
-    subtitle={$installedGames.length > 0
-      ? msg('installed.youHave', { count: $installedGames.length })
-      : msg('games.installedEmptySubtitle')}
+    subtitle={!$libraryLoaded
+      ? undefined
+      : $installedGames.length > 0
+        ? msg('installed.youHave', { count: $installedGames.length })
+        : msg('games.installedEmptySubtitle')}
   >
     {#snippet actions()}
       <InstalledToolbar bind:search bind:sort {scanLabel} onfind={findGames} onaddimage={openImageDialog} onaddgame={openAddDialog} />
@@ -145,40 +159,53 @@
 
   <InstalledStorage onchoosefolder={() => (librarySetupOpen = true)} />
 
-  {#if $installedGames.length === 0}
-    <EmptyState level={2}
-      title={msg('games.installedNoGamesTitle')}
-      description={msg('games.installedNoGamesDescription')}
-    >
-      {#snippet icon()}
-        <Gamepad2 size="2rem" strokeWidth={1.8} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={findGames} busy={$scanning}>
-          {#if !$scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
-          {$scanning ? scanLabel : msg('games.installedFindGames')}
-        </Button>
-        <Button onclick={openAddDialog}>
-          <Plus size="1.5rem" strokeWidth={2} />
-          {msg('games.installedAddGameButton')}
-        </Button>
-        <Button onclick={openImageDialog}>
-          <Plus size="1.5rem" strokeWidth={2} />
-          {msg('emul.addButton')}
-        </Button>
-      {/snippet}
-    </EmptyState>
-  {:else if filteredGames.length === 0}
-    <EmptyState level={2} title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
-      {#snippet icon()}
-        <Search size="2rem" strokeWidth={1.8} />
-      {/snippet}
-    </EmptyState>
-  {:else if $installedView === 'list'}
-    <InstalledList games={filteredGames} {compat} onremove={askRemove} />
-  {:else}
-    <InstalledGrid games={filteredGames} {uid} />
-  {/if}
+  <div bind:this={results}>
+    {#if loadFailed || libraryRetrying}
+      <Notice
+        tone="danger"
+        title={msg('library.loadFailedTitle')}
+        retry={{ label: msg('common.retry'), run: () => loadLibrary(), within: () => results }}
+        bind:retrying={libraryRetrying}
+      >
+        {libraryErrorText($libraryLoadError, msg('library.loadFailedText'))}
+      </Notice>
+    {:else if !$libraryLoaded}
+      <EmptyState level={2} title={msg('library.loadingTitle')} />
+    {:else if $installedGames.length === 0}
+      <EmptyState level={2}
+        title={msg('games.installedNoGamesTitle')}
+        description={msg('games.installedNoGamesDescription')}
+      >
+        {#snippet icon()}
+          <Gamepad2 size="2rem" strokeWidth={1.8} />
+        {/snippet}
+        {#snippet actions()}
+          <Button variant="primary" onclick={findGames} busy={$scanning}>
+            {#if !$scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
+            {$scanning ? scanLabel : msg('games.installedFindGames')}
+          </Button>
+          <Button onclick={openAddDialog}>
+            <Plus size="1.5rem" strokeWidth={2} />
+            {msg('games.installedAddGameButton')}
+          </Button>
+          <Button onclick={openImageDialog}>
+            <Plus size="1.5rem" strokeWidth={2} />
+            {msg('emul.addButton')}
+          </Button>
+        {/snippet}
+      </EmptyState>
+    {:else if filteredGames.length === 0}
+      <EmptyState level={2} title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
+        {#snippet icon()}
+          <Search size="2rem" strokeWidth={1.8} />
+        {/snippet}
+      </EmptyState>
+    {:else if $installedView === 'list'}
+      <InstalledList games={filteredGames} {compat} onremove={askRemove} />
+    {:else}
+      <InstalledGrid games={filteredGames} {uid} />
+    {/if}
+  </div>
 
   {#if $installedGames.length > 0}
     <p class="count">

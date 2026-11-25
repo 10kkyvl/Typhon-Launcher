@@ -4,7 +4,7 @@ import { msg } from '../../lib/i18n';
 import { addGame, playGame, type LibraryGame } from '../../lib/services/library';
 import { getStorageInfo } from '../../lib/services/system';
 import type { Update } from '../../lib/services/updates';
-import { libraryGames } from '../../lib/stores/library';
+import { libraryGames, libraryLoaded } from '../../lib/stores/library';
 import { settings } from '../../lib/stores/settings';
 import { storageFailed, storageInfo } from '../../lib/stores/storage';
 import { installedView } from '../../lib/stores/ui';
@@ -49,9 +49,11 @@ const times = (text: string, word: string) => text.split(word).length - 1;
 
 beforeEach(() => {
   libraryGames.set(games);
+  libraryLoaded.set(true);
 });
 
 afterEach(() => {
+  libraryLoaded.set(false);
   libraryGames.set([]);
   installedView.set('list');
   document.body.replaceChildren();

@@ -5,7 +5,7 @@ import { msg } from '../../lib/i18n';
 import { compatStatuses } from '../../lib/services/compat';
 import { inspectRemoval } from '../../lib/services/install';
 import type { LibraryGame } from '../../lib/services/library';
-import { libraryGames, runningGames } from '../../lib/stores/library';
+import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
 import { loadArt } from '../../lib/stores/metadata';
 import { refreshMissingImages } from '../../lib/stores/missingImages';
 import { installedView } from '../../lib/stores/ui';
@@ -49,10 +49,12 @@ const shownOf = (shown: number) => msg('installed.shownOf', { shown, count: game
 
 beforeEach(() => {
   libraryGames.set(games);
+  libraryLoaded.set(true);
   installedView.set('list');
 });
 
 afterEach(() => {
+  libraryLoaded.set(false);
   // Unmounted first: a page left mounted would answer the next test's store changes with reads of its own.
   cleanup();
   libraryGames.set([]);

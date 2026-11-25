@@ -10,7 +10,7 @@ import Installed from './installed/Installed.svelte';
 import Sources from './sources/Sources.svelte';
 import { msg } from '../lib/i18n';
 import { downloads } from '../lib/stores/downloads';
-import { libraryGames } from '../lib/stores/library';
+import { libraryGames, libraryLoaded } from '../lib/stores/library';
 import { friendsPage } from '../lib/stores/social';
 import { sources, sourcesLoaded } from '../lib/stores/sources';
 import { authState } from '../lib/stores/user';
@@ -40,6 +40,7 @@ function expectNamed(names: string[], message: (subject: string) => string, subj
 afterEach(() => {
   downloads.set([]);
   libraryGames.set([]);
+  libraryLoaded.set(false);
   friendsPage.set({ friends: [], incoming: [], outgoing: [] });
   sources.set([]);
   sourcesLoaded.set(false);
@@ -74,6 +75,7 @@ describe('row menu buttons name their row', () => {
   });
 
   it('Installed: each installed game', () => {
+    libraryLoaded.set(true);
     libraryGames.set(
       ['Hollow Knight', 'Celeste'].map(
         (title, i) => ({ id: `g${i}`, title, installDir: `C:\\Games\\${i}`, executable: 'game.exe', sizeBytes: 0, lastPlayed: null, uninstalled: false, tags: [] }) as unknown as LibraryGame,

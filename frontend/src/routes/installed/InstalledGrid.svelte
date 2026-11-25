@@ -26,7 +26,7 @@
     {@const running = $runningGames.has(game.id)}
     {@const update = $updatesByGame.get(game.id)?.availability}
     {@const updateText = updateLabel(update)}
-    <div class="card" role="presentation" {@attach gameContextMenu(game.id)}>
+    <div class="card" role="presentation" data-game-row={game.id} {@attach gameContextMenu(game.id)}>
       <div class="card-media">
         <button
           class="card-cover"

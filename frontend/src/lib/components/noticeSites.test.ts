@@ -254,6 +254,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', true],
   ],
+  // The first read of the installed games failed: that just happened.
+  'routes/installed/Installed.svelte': [['danger', true]],
   'routes/installed/InstalledStorage.svelte': [['danger', true]],
   // The first read that failed: it just happened. Sharing switched off: a standing fact of the screen.
   'routes/lan/Lan.svelte': [

@@ -6,7 +6,7 @@ import { msg } from '../lib/i18n';
 import type { LibraryGame } from '../lib/services/library';
 import type { CatalogGame } from '../lib/services/sources';
 import { closeGameMenu, GAME_MENU_ID } from '../lib/stores/gameMenu';
-import { libraryGames } from '../lib/stores/library';
+import { libraryGames, libraryLoaded } from '../lib/stores/library';
 import { installedView, libraryView } from '../lib/stores/ui';
 import { user } from '../lib/testing/dom';
 import Catalog from './catalog/Catalog.svelte';
@@ -49,11 +49,13 @@ beforeEach(() => {
   app.id = 'app';
   document.body.append(app);
   libraryGames.set(games);
+  libraryLoaded.set(true);
 });
 
 afterEach(() => {
   closeGameMenu();
   libraryGames.set([]);
+  libraryLoaded.set(false);
   installedView.set('list');
   libraryView.set('grid');
   document.body.replaceChildren();
