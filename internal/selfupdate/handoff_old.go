@@ -179,6 +179,9 @@ func (s *Service) prepareHandoff() (handoffPlan, error) {
 	if state != StateReady || art == nil {
 		return handoffPlan{}, ErrNotReady
 	}
+	if err := s.refuseUnsettledHandoff(); err != nil {
+		return handoffPlan{}, err
+	}
 	isExe := art.Kind == KindExe
 	if !isExe && s.portable != (art.Kind == KindPortable) {
 		return handoffPlan{}, ErrNotReady
@@ -449,6 +452,29 @@ func (s *Service) failHandoff(plan handoffPlan, j handoffJournal, proc handoffPr
 	s.status = status
 	s.mu.Unlock()
 	emit(eventStatus, status)
+}
+
+// refuseUnsettledHandoff keeps any update from starting while a hand-over
+// journal is open. The version a snapshot is labelled with is the running
+// one, and nothing here reads a version out of a binary: the label is true
+// only while the launcher's name holds the build that runs, and an open
+// journal is the one state in which it may not. An undo this process owes is
+// tried first; once paid, the old build is back at the name.
+func (s *Service) refuseUnsettledHandoff() error {
+	if err := s.payOwedUndo(); err != nil {
+		slog.Warn("selfupdate: the previous launcher is still parked", "error", err)
+	}
+	j, err := loadJournal(s.dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil
+	case err != nil:
+		return fmt.Errorf("%w: %w", ErrHandoffPending, err)
+	case j.Stage == stageDone:
+		return nil
+	default:
+		return ErrHandoffPending
+	}
 }
 
 // payOwedUndo retries, in the process that failed it, the undo a hand-off

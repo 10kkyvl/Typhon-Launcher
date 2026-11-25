@@ -1108,6 +1108,21 @@ func (s *Service) applyReady(language string, downgrade bool) error {
 		s.mu.Unlock()
 		return ErrNotReady
 	}
+	s.mu.Unlock()
+	// The worker snapshots whatever sits at the launcher's name as this
+	// version; with a hand-over unsettled that may be another build.
+	if err := s.refuseUnsettledHandoff(); err != nil {
+		s.mu.Lock()
+		s.busy = false
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Lock()
+	if s.status.State != StateReady {
+		s.busy = false
+		s.mu.Unlock()
+		return ErrNotReady
+	}
 	readyPath := s.readyPath
 	readyArtifact := s.readyArtifact
 	version := s.status.AvailableVersion

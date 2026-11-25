@@ -69,6 +69,12 @@ const (
 // update without a restart; nothing was changed and the worker path is open.
 var ErrHandoffUnsupported = uierr.New("selfupdate.handoff_unsupported", "selfupdate: updating without a restart is not available here")
 
+// ErrHandoffPending refuses an update, with or without a restart, while an
+// earlier hand-over has not been settled: the launcher on disk may not be the
+// build that runs, and a new attempt would save the wrong build as the
+// previous version and sweep the parked one. The next launch settles it.
+var ErrHandoffPending = uierr.New("selfupdate.handoff_pending", "selfupdate: an earlier update is not settled yet")
+
 var errHandoffBadSpec = errors.New("selfupdate: the hand-off argument is not valid")
 
 // HandoffSpec is what the old launcher passes to its successor on the command
