@@ -86,8 +86,14 @@ describe('DiskUsage: the summary meter', () => {
     expect(entries(legend).slice(0, SEGMENTS.length)).toEqual(SEGMENTS);
     expect(entries(legend).join(' ')).not.toContain(msg('common.meterOther'));
     expect(entries(legend).join(' ')).not.toContain(msg('common.meterRest'));
+    // The launcher's files have no free space of their own: none is listed, not even as unknown.
+    expect(entries(legend).join(' ')).not.toContain(msg('common.meterFree'));
+    expect(bar.getAttribute('aria-label')).not.toContain(msg('common.meterFree'));
     expect(entries(legend).join(' ')).not.toContain(bytesSize(20 * GB));
-    expect(legend.querySelector('.total')?.textContent?.trim()).toBe(msg('common.meterTotal', { total: bytesSize(61 * GB) }));
+    // One of the games is not fully measured, so the sum is a lower bound and says so.
+    expect(legend.querySelector('.total')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      msg('common.meterTotal', { total: msg('common.meterAtLeast', { size: bytesSize(61 * GB) }) }).replace(/\s+/g, ' '),
+    );
     expect(screen.getByText(diskLine(disk))).toBeTruthy();
     expect(screen.queryByText(msg('diskusage.freeUnknown'))).toBeNull();
   });

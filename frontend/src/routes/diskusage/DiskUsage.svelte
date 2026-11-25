@@ -171,8 +171,7 @@
              free space and no other files beside them; the library disk is said on a line of its own. -->
         <DiskMeter
           segments={summarySegments(page.report)}
-          total={page.report.totals.totalBytes}
-          free={null}
+          sum
           label={msg('diskusage.meterLauncher')}
           onpick={pickSection}
         />
