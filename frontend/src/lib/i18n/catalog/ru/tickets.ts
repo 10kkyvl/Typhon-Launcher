@@ -99,7 +99,7 @@ export const tickets = {
   // 7-P support
   'tickets.counterNear': { one: 'Остался {count} символ', few: 'Осталось {count} символа', many: 'Осталось {count} символов' },
   'tickets.counterAt': 'Достигнут предел длины',
-  'tickets.counterOver': { one: 'На {count} символ больше предела', few: 'На {count} символа больше предела', many: 'На {count} символов больше предела' },
+  'tickets.counterOver': { one: 'Лимит превышен на {count} символ', few: 'Лимит превышен на {count} символа', many: 'Лимит превышен на {count} символов' },
   'tickets.sendHint': '{keys} — отправить',
   'tickets.thread': 'Сообщения',
   'tickets.messageTime': '{date} в {time}',
