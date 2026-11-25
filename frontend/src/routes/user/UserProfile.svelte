@@ -298,9 +298,14 @@
   {:else if loading && !failure}
     <Spinner label={msg('social.loadingEllipsis')} />
   {:else if missing}
-    <!-- Takes the focus when a retry ends here: the heading of an empty state cannot. -->
+    <!-- Takes the focus when a retry ends here: the heading of an empty state cannot. The server says
+         "not found" also for a player either of the two has blocked, and the page cannot tell which. -->
     <div class="missing" tabindex="-1" bind:this={missingState}>
-      <EmptyState level={2} title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
+      <EmptyState
+        level={2}
+        title={msg('social.userNotFoundTitle')}
+        description={username ? msg('social.userNotFoundHiddenDesc') : msg('social.userNotFoundDesc')}
+      >
         {#snippet icon()}
           <UserRound size="2.2rem" strokeWidth={1.6} />
         {/snippet}
