@@ -27,6 +27,11 @@ export interface UpdateShowState {
   handoff?: boolean;
   /** A successor holds the show it took over: no status moves it until `releaseShow`. */
   held?: boolean;
+  /**
+   * A successor's curtain: the page colour the old window handed over (`#rrggbb`), which this build's
+   * theme may not resolve `--bg` to. Kept to the show's end, so the curtain lifts without a step.
+   */
+  background?: string;
   /** A finish owed at a start after an update: `since` is the first frame the show draws (`beginOwedFinish`). */
   owed?: boolean;
 }
@@ -122,15 +127,17 @@ export function beginOwedFinish(now: number): void {
  * A successor of a seamless restart goes on with the show the old launcher began: the same clock, so
  * the same frame, held until the old launcher is gone (`releaseShow`).
  */
-export function takeOverShow(startedAt: number, version: string): void {
-  state.set({ startedAt, phase: 'run', since: startedAt, version, from: '', handoff: true, held: true });
+export function takeOverShow(startedAt: number, version: string, background = ''): void {
+  const handed = /^#[0-9a-f]{6}$/i.test(background) ? { background } : {};
+  state.set({ startedAt, phase: 'run', since: startedAt, version, from: '', handoff: true, held: true, ...handed });
 }
 
 /** The successor owns the launcher: the show plays its finish from where it is. */
 export function releaseShow(now = Date.now()): void {
   const show = get(state);
   if (!show?.held) return;
-  state.set({ startedAt: show.startedAt, phase: 'finish', since: now, version: show.version, from: show.from, handoff: true });
+  const handed = show.background ? { background: show.background } : {};
+  state.set({ startedAt: show.startedAt, phase: 'finish', since: now, version: show.version, from: show.from, handoff: true, ...handed });
 }
 
 /** Called by the show once its last frame is drawn, or when it cannot be drawn at all. */

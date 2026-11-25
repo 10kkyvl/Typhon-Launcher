@@ -62,7 +62,7 @@ export async function loadHandoff(): Promise<HandoffInfo | null> {
     return null;
   }
   successor = info;
-  takeOverShow(info.phaseStart, info.version);
+  takeOverShow(info.phaseStart, info.version, info.background);
   return info;
 }
 

@@ -225,7 +225,7 @@
 
 {#snippet picture(show: UpdateShowState)}
   <div class="scrim" style:opacity={mode === 'flight' ? (frame?.scrim ?? 0) : 1}></div>
-  <div class="curtain" style:opacity={curtain}></div>
+  <div class="curtain" style:opacity={curtain} style:background-color={show.background}></div>
   {#if mode === 'flight'}
     <div class="expand" style:transform="scale({frame?.ring.scale ?? 0})" style:opacity={frame?.ring.opacity ?? 0}></div>
   {/if}
@@ -282,7 +282,8 @@
     background: var(--scrim-update);
   }
 
-  /* A seamless restart's curtain: the page colour the successor's window opens in. */
+  /* A seamless restart's curtain: the page colour the successor's window opens in. A successor paints
+     it in the colour handed over (UpdateShowState.background), which its own theme may not share. */
   .curtain {
     position: absolute;
     inset: 0;

@@ -155,6 +155,43 @@ describe('the moment the successor takes the old window\'s place', () => {
   });
 });
 
+describe('the colour of the curtain', () => {
+  // The old window hands over its page colour; the successor's theme may resolve --bg to another one.
+  const curtainColour = () => shown()?.querySelector<HTMLElement>('.curtain')?.style.backgroundColor ?? null;
+
+  it('in a successor is the colour handed over, while held and while it lifts off the page', async () => {
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart: START - 10_000, version: '1.5.0', background: '#123456' });
+    expect(await loadHandoff()).not.toBeNull();
+    renderDom(UpdateShowHarness, { logo: true, page: true });
+    await advance(48);
+    expect(shown()?.querySelector<HTMLElement>('.curtain')?.style.opacity).toBe('1');
+    expect(curtainColour()).toBe('rgb(18, 52, 86)');
+
+    setShellReady(true);
+    handlers['launcher:handoff_done']({ data: { active: false, phaseStart: START - 10_000, version: '1.5.0', background: '#123456' } });
+    await advance(100);
+    expect(shown()?.dataset.stage).toBe('finish');
+    expect(curtainColour()).toBe('rgb(18, 52, 86)');
+  });
+
+  it('handed something that is not a colour, is left to the page token', async () => {
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart: START - 10_000, version: '1.5.0', background: 'url(x)' });
+    expect(await loadHandoff()).not.toBeNull();
+    renderDom(UpdateShowHarness, { logo: false, page: false });
+    await advance(48);
+    expect(shown()?.querySelector<HTMLElement>('.curtain')?.style.opacity).toBe('1');
+    expect(curtainColour()).toBe('');
+  });
+
+  it('in the old window and in an ordinary show is left to the page token', async () => {
+    showFollowsStatus(APPLYING, START - 10_000, { startedAt: START - 10_000, handoff: true });
+    renderDom(UpdateShowHarness);
+    await tick();
+    expect(shown()?.querySelector<HTMLElement>('.curtain')?.style.opacity).toBe('1');
+    expect(curtainColour()).toBe('');
+  });
+});
+
 describe('telling Go the successor may be shown', () => {
   it('waits for the curtain to close, then two animation frames, and tells Go once', async () => {
     await becomeSuccessor(START - 1000);
