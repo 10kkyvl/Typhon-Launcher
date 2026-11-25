@@ -526,6 +526,24 @@ describe('the about tab: each control described by its row', () => {
     expect(description(await screen.findByRole('button', { name: msg('settings.aboutLogsSendIdCopyLabel') }))).toBe('AB12CD');
   });
 
+  it('says the stage of a running send under the row, not in the button\'s description', async () => {
+    const sending = later<{ id: string; dropped: string[] }>();
+    vi.mocked(sendLogs).mockReturnValueOnce(sending.promise);
+    open();
+    await confirmSend();
+    emit({ state: 'sending', sentBytes: 42, totalBytes: 100 });
+    const said42 = await screen.findByText(msg('settings.aboutLogsSendingProgress', { percent: 42 }));
+
+    const send = document.querySelector<HTMLButtonElement>('button[aria-busy="true"]')!;
+    expect(description(send)).toBe(msg('settings.aboutLogsSendConfirmNote'));
+    expect(description(send)).not.toContain(said42.textContent?.trim() ?? '');
+    expect(send.closest('.settings-row')?.contains(said42)).toBe(true);
+
+    sending.resolve({ id: 'AB12CD', dropped: [] });
+    emit({ state: 'success' });
+    await screen.findByRole('button', { name: msg('settings.aboutLogsSendIdCopyLabel') });
+  });
+
   it('keeps the send stage, the failure and the progress under the send row, its hint the same', async () => {
     vi.mocked(sendLogs).mockRejectedValueOnce(new Error('typhon:diagnostics.log_upload_network: dial tcp'));
     open();
