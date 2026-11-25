@@ -9,6 +9,17 @@ export const installed = {
     few: 'Показано {shown} из {count} игр',
     many: 'Показано {shown} из {count} игр',
   },
+  // 7-C2 installed
+  'installed.storageLoading': 'Читаем данные о диске…',
+  'installed.meterDisk': 'Диск {volume}',
+  'installed.meterMoreGames': {
+    one: 'Ещё {count} игра',
+    few: 'Ещё {count} игры',
+    many: 'Ещё {count} игр',
+  },
+  'installed.moving': 'Переносится',
+  'installed.menuMoving': '{action}: идёт перенос',
+  // /7-C2 installed
 } as const;
 
 export type InstalledKey = keyof typeof installed;
