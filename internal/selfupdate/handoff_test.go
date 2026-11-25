@@ -115,12 +115,18 @@ func TestHandoffSpecRejectsForeignReadyPath(t *testing.T) {
 	}
 }
 
+// The default is the dark preset's page colour (--bg in theme/presets.go).
 func TestBackgroundFallsBackToTheDefaultTheme(t *testing.T) {
 	for _, bad := range []string{"", "red", "#12345", "#gggggg", "123456"} {
 		r, g, b := HandoffSpec{Background: bad}.BackgroundRGB()
-		if r != 9 || g != 13 || b != 23 {
-			t.Errorf("BackgroundRGB(%q) = %d %d %d, want the default #090d17", bad, r, g, b)
+		if r != 14 || g != 15 || b != 17 {
+			t.Errorf("BackgroundRGB(%q) = %d %d %d, want the default #0e0f11", bad, r, g, b)
 		}
+	}
+	s := &Service{}
+	s.SetHandoff(HandoffSpec{Background: "not a colour"})
+	if got := s.HandoffInfo().Background; got != "#0e0f11" {
+		t.Errorf("HandoffInfo().Background = %q, want the default #0e0f11", got)
 	}
 }
 

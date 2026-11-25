@@ -37,9 +37,9 @@ const (
 	oldPrefix    = ".typhon-old-"
 	stagedPrefix = ".typhon-new-"
 
-	// defaultHandoffBackground is the dark theme's page colour, shown by the
-	// hidden window before the stylesheet loads.
-	defaultHandoffBackground = "#090d17"
+	// defaultHandoffBackground is the dark theme's page colour (--bg of the
+	// dark preset), shown by the hidden window before the stylesheet loads.
+	defaultHandoffBackground = "#0e0f11"
 )
 
 // Journal stages. The journal is written before the first change to the
@@ -185,7 +185,7 @@ func (s HandoffSpec) BackgroundRGB() (r, g, b uint8) {
 	raw, err := hex.DecodeString(c[1:])
 	if err != nil {
 		// Both inputs were validated above; the default is a constant.
-		return 9, 13, 23
+		return 14, 15, 17
 	}
 	return raw[0], raw[1], raw[2]
 }
