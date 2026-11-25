@@ -15,6 +15,14 @@ const (
 	KindUpdatePrevious  = "update_previous"
 	KindUpdateReplaced  = "update_replaced"
 	KindDownloadOrphan  = "download_orphan"
+	// The copies a move left (relocate.OrphanedCopies), by which folder of
+	// the move each is.
+	KindRelocateCopyStaging = "relocate_copy_staging"
+	KindRelocateCopyTarget  = "relocate_copy_target"
+	KindRelocateCopySource  = "relocate_copy_source"
+	// KindRemoval is a game folder a removal renamed to <dir>.removing[-N]
+	// before deleting it.
+	KindRemoval = "removal"
 )
 
 type GameUsage struct {
@@ -51,9 +59,13 @@ type DownloadUsage struct {
 	counted string
 }
 
+// Leftover is a folder or file the launcher left. GameID and Title name the
+// game a move's copy is of; they are empty for the other kinds.
 type Leftover struct {
 	Path        string `json:"path"`
 	Kind        string `json:"kind"`
+	GameID      string `json:"gameId,omitempty"`
+	Title       string `json:"title,omitempty"`
 	SizeBytes   int64  `json:"sizeBytes"`
 	SizeUnknown bool   `json:"sizeUnknown"`
 	Deletable   bool   `json:"deletable"`

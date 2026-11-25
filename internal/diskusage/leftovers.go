@@ -70,6 +70,15 @@ func (sc *scanner) scanLeftovers() error {
 	if err := sc.scanStagings(); err != nil {
 		return err
 	}
+	if err := sc.scanOrphanedCopies(); err != nil {
+		return err
+	}
+	if err := sc.scanRemovals(partialRoots.out); err != nil {
+		return err
+	}
+	if err := sc.scanStrayStagings(partialRoots.out); err != nil {
+		return err
+	}
 	return sc.scanUpdateDirs()
 }
 
@@ -274,7 +283,7 @@ func (sc *scanner) addLeftover(path, kind string, o entry) error {
 	if _, dup := sc.entries[key]; dup {
 		return nil
 	}
-	l := Leftover{Path: path, Kind: kind}
+	l := Leftover{Path: path, Kind: kind, GameID: o.gameID, Title: o.title}
 	info, err := os.Lstat(path)
 	switch {
 	case err != nil && errors.Is(err, fs.ErrNotExist):
@@ -292,6 +301,9 @@ func (sc *scanner) addLeftover(path, kind string, o entry) error {
 		l.SizeBytes, l.SizeUnknown = m.size, m.unknown || m.viaLink
 		l.counted = countedAt(path, m)
 		l.Deletable, l.ReasonCode, l.Reason = o.check()
+		if l.Deletable && sc.s.deps.Library.FolderHeld(path) {
+			l.Deletable, l.ReasonCode, l.Reason = false, reasonFolderHeld, "с этой папкой сейчас работает библиотека"
+		}
 		if l.Deletable {
 			l.ReasonCode, l.Reason = "", ""
 		} else if l.ReasonCode == "" {
@@ -320,4 +332,9 @@ func (p *pathSet) add(path string) {
 	}
 	p.seen[key] = true
 	p.out = append(p.out, filepath.Clean(path))
+}
+
+func (p *pathSet) has(path string) bool {
+	key, err := platform.PathKey(path)
+	return err == nil && p.seen[key]
 }

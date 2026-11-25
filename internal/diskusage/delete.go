@@ -106,6 +106,12 @@ func (s *Service) DeleteLeftover(ctx context.Context, path string) error {
 			return fmt.Errorf("%w: %s", errNotDeletable, reason)
 		}
 	}
+	// The library's holds are looked at last, with the owner's reservation
+	// held: a removal, a move, an update or a new card at, in or around the
+	// path stops the deletion.
+	if s.deps.Library.FolderHeld(found.Path) {
+		return fmt.Errorf("%w: a removal, move, update or new card works at %s", errNotDeletable, found.Path)
+	}
 	remove := func() error { return removeAll(found.Path) }
 	if owner.remove != nil {
 		remove = owner.remove

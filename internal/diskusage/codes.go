@@ -38,6 +38,23 @@ const (
 	// reasonGamesUnchecked: the installs could not compare a download with the
 	// game list (install.no_game_list).
 	reasonGamesUnchecked = "diskusage.reason.games_unchecked"
+	// reasonRelocateCopy: a copy a move left; only the move service may
+	// delete it, and it offers no way to yet.
+	reasonRelocateCopy = "diskusage.reason.relocate_copy"
+	// reasonRelocateUnjournaled: a staging folder no move journal names.
+	reasonRelocateUnjournaled = "diskusage.reason.relocate_unjournaled"
+	// reasonRemovalPending: the launcher finishes this removal at its next
+	// start.
+	reasonRemovalPending = "diskusage.reason.removal_pending"
+	// reasonRemovalUnjournaled: no removal journal names this folder, so
+	// nothing finishes it.
+	reasonRemovalUnjournaled = "diskusage.reason.removal_unjournaled"
+	// reasonRemovalsUnreadable: the removal journal cannot be read, so whose
+	// folder this is cannot be told.
+	reasonRemovalsUnreadable = "diskusage.reason.removals_unreadable"
+	// reasonFolderHeld: a removal, a move, an update or a new card is working
+	// at, in or around this folder.
+	reasonFolderHeld = "diskusage.reason.folder_held"
 )
 
 // reasonCodes is every reason code a report can carry. The frontend's table
@@ -58,4 +75,10 @@ var reasonCodes = []string{
 	diskreason.Unreadable,
 	diskreason.Unknown,
 	reasonGamesUnchecked,
+	reasonRelocateCopy,
+	reasonRelocateUnjournaled,
+	reasonRemovalPending,
+	reasonRemovalUnjournaled,
+	reasonRemovalsUnreadable,
+	reasonFolderHeld,
 }

@@ -19,6 +19,7 @@ import (
 type libraryPort interface {
 	GetGames() []library.Game
 	GetHistoryGames() []library.Game
+	FolderHeld(dir string) bool
 	IsRunning(id string) bool
 	UpdateMeasuredSize(id, installDir string, size int64, unknown bool) (bool, error)
 }
@@ -41,11 +42,14 @@ type installPort interface {
 	ReservePartial(path string) (func(), error)
 	GameBusy(game library.Game) bool
 	CheckDownloadDeletable(d download.Download) error
+	PendingRemovals() ([]string, error)
 }
 
 type relocatePort interface {
 	Stagings() ([]relocate.Staging, error)
 	ReserveStaging(path string) (func(), error)
+	OrphanedCopies() ([]relocate.OrphanedCopy, error)
+	List() []relocate.Job
 }
 
 type updatesPort interface {
@@ -84,6 +88,8 @@ type entry struct {
 	check   func() (bool, string, string)
 	reserve func() (func(), error)
 	remove  func() error
+	// gameID and title name the game a move's copy is of.
+	gameID, title string
 }
 
 type Service struct {

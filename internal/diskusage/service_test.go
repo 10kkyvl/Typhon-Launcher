@@ -27,6 +27,7 @@ type fakeLibrary struct {
 	mu       sync.Mutex
 	games    []library.Game
 	archived []library.Game
+	held     map[string]bool
 	running  map[string]bool
 	updates  map[string]int64
 	updErr   error
@@ -42,6 +43,17 @@ func (f *fakeLibrary) GetHistoryGames() []library.Game {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append(append([]library.Game(nil), f.games...), f.archived...)
+}
+
+func (f *fakeLibrary) FolderHeld(dir string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for held := range f.held {
+		if overlaps(held, dir) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *fakeLibrary) IsRunning(id string) bool {
@@ -162,6 +174,14 @@ type fakeInstalls struct {
 	released   []string
 	reserveErr error
 	inUse      map[string]bool
+	pending    []string
+	pendingErr error
+}
+
+func (f *fakeInstalls) PendingRemovals() ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.pending...), f.pendingErr
 }
 
 func (f *fakeInstalls) List() []install.Installation {
@@ -227,10 +247,25 @@ func (f *fakeUpdates) PathInUse(path string) bool {
 }
 
 type fakeRelocations struct {
-	mu       sync.Mutex
-	list     []relocate.Staging
-	err      error
-	reserved []string
+	mu        sync.Mutex
+	list      []relocate.Staging
+	err       error
+	reserved  []string
+	copies    []relocate.OrphanedCopy
+	copiesErr error
+	jobs      []relocate.Job
+}
+
+func (f *fakeRelocations) OrphanedCopies() ([]relocate.OrphanedCopy, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]relocate.OrphanedCopy(nil), f.copies...), f.copiesErr
+}
+
+func (f *fakeRelocations) List() []relocate.Job {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]relocate.Job(nil), f.jobs...)
 }
 
 func (f *fakeRelocations) ReserveStaging(path string) (func(), error) {
