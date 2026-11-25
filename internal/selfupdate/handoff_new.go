@@ -121,9 +121,9 @@ func (s *Service) settleIfDue() {
 
 // CompleteHandoff runs in the successor once its window is up or coming. It
 // waits for the old process to exit, takes over the single-instance role
-// through takeover, lets the held-back services start, becomes an ordinary
-// application (settleIfDue), settles the journal and removes the parked old
-// launcher.
+// through takeover, lets the held-back services start, shows its window if
+// the page has not, becomes an ordinary application (settleIfDue), settles
+// the journal and removes the parked old launcher.
 //
 //wails:ignore
 func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) error {
@@ -144,6 +144,14 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	s.handoffOldGone = true
 	s.handoffWaiting = false
 	s.mu.Unlock()
+	// Normally the window is up already: the old launcher left only after its
+	// ready marker. One that died before it leaves this window hidden, and a
+	// page that never reports its first frame would keep it so; nothing can
+	// show through any more, so it is revealed now, once, as HandoffRendered
+	// would, and settles there. A late HandoffRendered is then a no-op.
+	if err := s.HandoffRendered(); err != nil {
+		slog.Warn("selfupdate: show the window after the old launcher left", "error", err)
+	}
 	s.settleIfDue()
 
 	s.finishHandoff(ctx)

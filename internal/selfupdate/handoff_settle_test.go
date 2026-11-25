@@ -98,24 +98,35 @@ func TestSuccessorBecomesAnOrdinaryAppOnlyOnceTheOldLauncherIsGone(t *testing.T)
 	}
 }
 
-func TestSuccessorWhoseOldLauncherLeftFirstSettlesAtTheReveal(t *testing.T) {
-	r := newSuccessorRig(t, false)
+// The old launcher died before the successor's window was revealed (no ready
+// marker was ever seen) and the page never reports its first frame: once the
+// old process is known gone the successor shows its window and becomes an
+// ordinary app by itself; the page's late report changes nothing.
+func TestSuccessorWhoseOldLauncherDiedBeforeTheRevealShowsItself(t *testing.T) {
+	r := newSuccessorRig(t, true)
+	reveals := 0
+	revealWindow = func(*application.WebviewWindow, bool) error {
+		reveals++
+		r.revealed.Store(true)
+		return nil
+	}
 	r.oldAlive.Store(false)
 	if err := r.complete(t); err != nil {
 		t.Fatalf("CompleteHandoff() = %v", err)
 	}
-	if got := r.calls(); len(got) != 0 {
-		t.Fatalf("settled %v before the window was revealed", got)
+	if reveals != 1 {
+		t.Fatalf("revealed %d times without the page, want once", reveals)
+	}
+	want := settleCall{focus: true, oldGone: true, revealed: true}
+	if got := r.calls(); len(got) != 1 || got[0] != want {
+		t.Fatalf("settle calls = %+v, want one %+v", got, want)
 	}
 
-	for i := 0; i < 2; i++ {
-		if err := r.svc.HandoffRendered(); err != nil {
-			t.Fatalf("HandoffRendered() #%d = %v", i, err)
-		}
+	if err := r.svc.HandoffRendered(); err != nil {
+		t.Fatalf("the page's late HandoffRendered() = %v", err)
 	}
-	want := settleCall{focus: false, oldGone: true, revealed: true}
-	if got := r.calls(); len(got) != 1 || got[0] != want {
-		t.Fatalf("settle calls = %+v, want one %+v (no focus taken: the old window was not active)", got, want)
+	if reveals != 1 || len(r.calls()) != 1 {
+		t.Fatalf("the late report revealed %d times and settled %d times, want no more", reveals, len(r.calls()))
 	}
 }
 
