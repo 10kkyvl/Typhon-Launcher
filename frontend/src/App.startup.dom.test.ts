@@ -1,7 +1,9 @@
 import { render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHandoffInfo } from './lib/services/selfupdate';
+import { get } from 'svelte/store';
 import { loadHandoff } from './lib/stores/handoff';
+import { updateShow } from './lib/stores/updateShow';
 import App from './App.svelte';
 
 // The stores App.svelte starts as it mounts, by name and in order. Each init is replaced by a recorder
@@ -175,6 +177,20 @@ describe('a successor of a seamless restart', () => {
     expect(calls).toEqual([...EARLY, ...HELD]);
     handOver();
     expect(calls).toEqual([...EARLY, ...HELD]);
+    view.unmount();
+  });
+
+  it('whose old launcher never goes keeps the show held and starts nothing held, on no clock of its own', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    vi.mocked(getHandoffInfo).mockResolvedValue(ACTIVE);
+    await loadHandoff();
+
+    const view = render(App);
+    // Past Go's own limit (90 s for the old launcher to exit), after which Go quits this process.
+    vi.advanceTimersByTime(120_000);
+
+    expect(calls).toEqual(EARLY);
+    expect(get(updateShow)).toMatchObject({ held: true, phase: 'run' });
     view.unmount();
   });
 
