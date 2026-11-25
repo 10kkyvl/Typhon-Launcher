@@ -70,6 +70,27 @@ func (s *removalStore) load() ([]removalEntry, error) {
 	return append([]removalEntry(nil), s.entries...), nil
 }
 
+// paths lists the staged folders the journal names. It only reads: a journal
+// not loaded yet stays so, and one that cannot be read is not marked failed,
+// so the startup sweep and the removals decide on it as before.
+func (s *removalStore) paths() ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries := s.entries
+	if !s.loaded {
+		read, err := s.readLocked()
+		if err != nil {
+			return nil, err
+		}
+		entries = read
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Path)
+	}
+	return out, nil
+}
+
 // ready says whether a removal may be journaled now.
 func (s *removalStore) ready() error {
 	s.mu.Lock()
@@ -244,4 +265,14 @@ func (s *removalStore) saveLocked() error {
 		return err
 	}
 	return storage.WriteAtomic(s.path(), data)
+}
+
+// PendingRemovals lists the staged folders of the removals the journal names:
+// the launcher finishes them at its next start. An unreadable journal is
+// install.removals_unreadable. It only reads the journal, for the disk usage
+// screen to say what those folders are.
+//
+//wails:ignore
+func (s *Service) PendingRemovals() ([]string, error) {
+	return s.removals.paths()
 }
