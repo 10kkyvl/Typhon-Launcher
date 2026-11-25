@@ -1,4 +1,5 @@
-import type { DownloadUsage, GameUsage, GroupUsage, Leftover, LeftoverKind, Warning } from '../services/diskusage';
+import type { MeterSegment } from '../components/diskMeter';
+import type { DownloadUsage, GameUsage, GroupUsage, Leftover, LeftoverKind, Report, Warning } from '../services/diskusage';
 import { hasMessage, msg, type MessageKey } from '../i18n';
 import { clockTime, longDate } from '../utils/format';
 
@@ -57,6 +58,37 @@ export function gameBlockedKey(game: GameUsage): MessageKey | null {
   if (game.running) return 'diskusage.blockedRunning';
   if (game.busy) return 'diskusage.blockedBusy';
   return null;
+}
+
+/** The keys of the summary meter's segments; both leftover segments pick the leftovers section. */
+export type SummaryKey = 'games' | 'downloads' | 'leftovers-reclaim' | 'leftovers-kept' | 'screenshots' | 'snapshots';
+
+/**
+ * The summary meter's segments from the report, each byte once as Go counts it (Totals). Go sums the
+ * leftovers in one figure; the part that can be deleted is the sum of the deletable rows, held within
+ * that figure, and the rest is what cannot (a kept row's folder may hold a game whose bytes are the
+ * game's). A segment with no bytes and no unknown size is left out. Tones: the games and the files
+ * kept per game in the game steps, downloads as data, what can be freed as reclaimable; the leftovers
+ * that cannot go take the remaining tone ('more'), as DiskMeter has no tone of its own for them.
+ */
+export function summarySegments(report: Report): (MeterSegment & { key: SummaryKey })[] {
+  const { totals } = report;
+  const deletable = report.leftovers.filter((l) => l.deletable);
+  const kept = report.leftovers.filter((l) => !l.deletable);
+  const reclaim = Math.min(
+    deletable.reduce((sum, l) => sum + l.sizeBytes, 0),
+    totals.leftoversBytes,
+  );
+  const unknown = (rows: { sizeUnknown: boolean }[]) => rows.some((row) => row.sizeUnknown);
+  const all: (MeterSegment & { key: SummaryKey })[] = [
+    { key: 'games', label: msg('diskusage.gamesTitle'), bytes: totals.gamesBytes, tone: 'game', sizeUnknown: unknown(report.games) },
+    { key: 'screenshots', label: msg('diskusage.screenshotsTitle'), bytes: totals.screenshotsBytes, tone: 'game-2', sizeUnknown: unknown(report.screenshots) },
+    { key: 'snapshots', label: msg('diskusage.snapshotsTitle'), bytes: totals.snapshotsBytes, tone: 'game-3', sizeUnknown: unknown(report.snapshots) },
+    { key: 'downloads', label: msg('diskusage.segmentDownloads'), bytes: totals.downloadsBytes, tone: 'data', sizeUnknown: unknown(report.downloads) },
+    { key: 'leftovers-reclaim', label: msg('diskusage.segmentReclaim'), bytes: reclaim, tone: 'reclaim', sizeUnknown: unknown(deletable) },
+    { key: 'leftovers-kept', label: msg('diskusage.segmentKept'), bytes: totals.leftoversBytes - reclaim, tone: 'more', sizeUnknown: unknown(kept) },
+  ];
+  return all.filter((segment) => segment.bytes > 0 || segment.sizeUnknown);
 }
 
 /** What holds a game beyond the scan's flags: a move of it or of the whole library, its emulation. */

@@ -11,7 +11,11 @@
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
-  import { countUnknown, measuredWhen, sizeSorted, sortGames, type GameSort } from '../../lib/diskusage/usage';
+  import DiskMeter from '../../lib/components/DiskMeter.svelte';
+  import { countUnknown, measuredWhen, sizeSorted, sortGames, summarySegments, type GameSort, type SummaryKey } from '../../lib/diskusage/usage';
+  import { focusQuietly } from '../../lib/layers/focus';
+  import { refreshStorage, storageInfo } from '../../lib/stores/storage';
+  import { usageSectionIds, type UsageSection as UsageSectionKey } from './sections';
   import { isEmulated } from '../../lib/library/emulation';
   import { libraryGames, libraryLoaded } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
@@ -84,6 +88,33 @@
     seenFolders = folders;
   });
 
+  // The library disk as last measured; a disk with no size counts as not measured.
+  const disk = $derived($storageInfo && $storageInfo.totalBytes > 0 ? $storageInfo : null);
+
+  // The disk is measured with each report, so its free space and the report's sizes are of one moment.
+  $effect(() => {
+    if (page.report) void refreshStorage();
+  });
+
+  const SEGMENT_SECTIONS: Record<SummaryKey, UsageSectionKey> = {
+    games: 'games',
+    downloads: 'downloads',
+    'leftovers-reclaim': 'leftovers',
+    'leftovers-kept': 'leftovers',
+    screenshots: 'screenshots',
+    snapshots: 'snapshots',
+  };
+
+  // A picked segment leads to its section: its heading takes focus and is brought into view (focus
+  // moved by script does not scroll).
+  function pickSection(key: string) {
+    const section = SEGMENT_SECTIONS[key as SummaryKey];
+    const heading = section ? document.getElementById(usageSectionIds[section]) : null;
+    if (!heading) return;
+    focusQuietly(heading);
+    if (typeof heading.scrollIntoView === 'function') heading.scrollIntoView({ block: 'start' });
+  }
+
   // Where the removed game's row stood, read at the press: focus follows the row rule once it has gone.
   let removePlace: RowPlace | null = null;
 
@@ -129,19 +160,31 @@
   {:else}
     <Card>
       <div class="summary">
-        <span class="summary-icon"><HardDrive size="1.8rem" strokeWidth={1.8} /></span>
-        <div class="figure">
-          <span class="figure-label">{msg('diskusage.used')}</span>
-          <span class="figure-value">{total(page.report.totals.totalBytes, page.report.totals.unknownSizes)}</span>
+        <DiskMeter
+          segments={summarySegments(page.report)}
+          total={disk ? disk.totalBytes : page.report.totals.totalBytes}
+          free={disk ? disk.freeBytes : null}
+          label={disk ? msg('diskusage.meterVolume', { volume: disk.volume || disk.path }) : msg('diskusage.meterLauncher')}
+          onpick={pickSection}
+        />
+        <!-- Go's totals in words: the same numbers the meter draws, summed by Go, not by the page. -->
+        <div class="figures">
+          <div class="figure">
+            <span class="figure-label">{msg('diskusage.used')}</span>
+            <span class="figure-value">{total(page.report.totals.totalBytes, page.report.totals.unknownSizes)}</span>
+          </div>
+          <div class="figure">
+            <span class="figure-label">{msg('diskusage.reclaimable')}</span>
+            <span class="figure-value">{total(page.report.totals.reclaimableBytes, page.report.totals.unknownSizes)}</span>
+          </div>
         </div>
-        <div class="figure">
-          <span class="figure-label">{msg('diskusage.reclaimable')}</span>
-          <span class="figure-value">{total(page.report.totals.reclaimableBytes, page.report.totals.unknownSizes)}</span>
-        </div>
+        {#if page.report.totals.unknownSizes}
+          <p class="note">{msg('diskusage.unknownNote', { count: unknownCount })}</p>
+        {/if}
+        {#if !disk}
+          <p class="note">{msg('diskusage.freeUnknown')}</p>
+        {/if}
       </div>
-      {#if page.report.totals.unknownSizes}
-        <p class="note">{msg('diskusage.unknownNote', { count: unknownCount })}</p>
-      {/if}
     </Card>
 
     <UsageWarnings warnings={page.report.warnings} />
@@ -211,13 +254,14 @@
 
   .summary {
     display: flex;
-    align-items: center;
-    gap: var(--space-8);
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
-  .summary-icon {
-    display: inline-flex;
-    color: var(--text-2);
+  .figures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
   }
 
   .figure {

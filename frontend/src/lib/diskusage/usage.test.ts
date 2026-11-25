@@ -18,6 +18,7 @@ import {
   sizeSorted,
   sizeText,
   sortGames,
+  summarySegments,
   totalText,
   warningText,
 } from './usage';
@@ -248,6 +249,27 @@ describe('reason codes', () => {
     expect(reasonLabel('diskusage.reason.new_one')).toBe(msg('diskusage.cannotDelete'));
     expect(reasonLabel('')).toBe(msg('diskusage.cannotDelete'));
     expect(reasonLabel('diskusage.title')).toBe(msg('diskusage.cannotDelete'));
+  });
+});
+
+describe('summarySegments', () => {
+  const totals = { gamesBytes: 100, downloadsBytes: 0, leftoversBytes: 30, screenshotsBytes: 0, snapshotsBytes: 0, totalBytes: 130, reclaimableBytes: 20, unknownSizes: false };
+  const left = (bytes: number, deletable: boolean, sizeUnknown = false) => ({ path: `p${bytes}${deletable}`, kind: 'install_partial', sizeBytes: bytes, sizeUnknown, deletable, reason: '', reasonCode: '' });
+  const base = { games: [game({ sizeBytes: 100 })], downloads: [], screenshots: [], snapshots: [], warnings: [], scannedAt: '' };
+
+  it('splits Go’s leftovers figure into what can be deleted and the rest, and leaves out empty kinds', () => {
+    const segments = summarySegments({ ...base, leftovers: [left(20, true), left(25, false)], totals });
+    expect(segments.map((s) => [s.key, s.bytes, s.tone])).toEqual([
+      ['games', 100, 'game'],
+      ['leftovers-reclaim', 20, 'reclaim'],
+      ['leftovers-kept', 10, 'more'],
+    ]);
+  });
+
+  it('never draws more deletable leftovers than Go counted, and says an unmeasured row as at least', () => {
+    const segments = summarySegments({ ...base, leftovers: [left(40, true, true)], totals });
+    expect(segments.find((s) => s.key === 'leftovers-reclaim')).toMatchObject({ bytes: 30, sizeUnknown: true });
+    expect(segments.find((s) => s.key === 'leftovers-kept')).toBeUndefined();
   });
 });
 
