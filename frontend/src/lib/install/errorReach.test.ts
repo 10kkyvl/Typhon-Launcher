@@ -13,6 +13,7 @@ describe('library codes reach the table of the screen that receives them', () =>
     'library.moving',
     'library.no_executable',
     'library.removing',
+    'library.state_unreadable',
   ])('install and removal dialogs word %s', (code) => {
     expect(Object.keys(install)).toContain(code);
   });

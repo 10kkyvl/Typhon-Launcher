@@ -109,6 +109,26 @@ describe('confirming the restart of a downloaded update', () => {
     }
   });
 
+  // While an install, a removal, a move or a game update runs, Go refuses the update on both paths
+  // with one code: asking the worker too would only bring the same refusal a second time.
+  it('refused because work is running, says so once and does not ask for the restart', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { service, store, toasts, show } = await load();
+      const { msg } = await import('../i18n');
+      vi.mocked(service.beginHandoff).mockRejectedValue(new service.SelfUpdateError('typhon:selfupdate.work_running: selfupdate: an install is running'));
+      await store.requestHandoff();
+
+      expect(service.applyUpdate).not.toHaveBeenCalled();
+      expect(get(toasts.toasts).map((item) => item.message)).toEqual([msg('state.selfupdateReasonWorkRunning')]);
+      expect(get(show.updateShow)?.phase).toBe('home');
+      expect(get(store.selfUpdateApplying)).toBe(false);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('refused on both paths, says the worker\'s reason and sends the show home', async () => {
     const { service, store, show, toasts } = await load();
     vi.mocked(service.beginHandoff).mockRejectedValue(new service.SelfUpdateError(UNSUPPORTED));

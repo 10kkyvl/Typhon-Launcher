@@ -1043,9 +1043,14 @@ func main() {
 
 	selfupdateService.SetHandoffWindow(window)
 	selfupdateService.SetHandoffBackground(themeService.Background)
-	// An install, a removal or an elevated installer keeps the old launcher
-	// from exiting: the update then goes the ordinary way, with a restart.
-	selfupdateService.SetHandoffBlocker(installService.WorkRunning)
+	// An install, a removal, a move or a game update keeps the old launcher
+	// from exiting: the update is refused until that work is done.
+	selfupdateService.SetHandoffBlocker(func() bool {
+		return installService.WorkRunning() || relocateService.WorkRunning() || updateService.WorkRunning()
+	})
+	// Before any held-back service of a successor starts: one of them could
+	// otherwise save the library as it was read while the old launcher ran.
+	selfupdateService.SetBeforeGateOpens(libraryService.ReloadBeforeGateOpens)
 	selfupdateService.SetSuccessorQuit(wails.Quit)
 	if handoffMode {
 		// The native window appears inside wails.Run, so it is prepared from the

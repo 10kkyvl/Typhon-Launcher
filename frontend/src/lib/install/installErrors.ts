@@ -184,6 +184,7 @@ export const REASONS: Record<string, MessageKey> = {
   'library.image_outside_dir': 'library.image_outside_dir',
   'library.moving': 'library.moving',
   'library.no_executable': 'library.no_executable',
+  'library.state_unreadable': 'library.state_unreadable',
   'library.removing': 'library.removing',
 };
 

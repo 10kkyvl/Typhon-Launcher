@@ -320,6 +320,13 @@ export async function requestHandoff() {
     // BeginHandoff's contract: an error means nothing changed and the worker path is open. Whatever
     // the cause (another platform, a portable build, a busy service), that path says its own error.
     // A platform that cannot hand over is the expected case and is not worth a log line.
+    // Work that the old launcher's shutdown would wait for: Go refuses the worker path with the same
+    // code, so the reason is said here, once, and nothing restarts.
+    if (err instanceof Error && err.message.includes('selfupdate.work_running')) {
+      confirmed.set(null);
+      toast(updateReason(err), 'danger');
+      return;
+    }
     const unsupported = err instanceof Error && err.message.includes('selfupdate.handoff_unsupported');
     if (!unsupported) console.warn('seamless update refused, restarting instead', err);
   }
