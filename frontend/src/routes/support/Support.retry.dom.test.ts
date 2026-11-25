@@ -1,21 +1,22 @@
-import { fireEvent, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { getTicket, listTickets, ticketLimits, type Ticket, type TicketPage, type TicketThread } from '../../lib/services/support';
 import { unreadReplies } from '../../lib/stores/support';
 import { renderDom } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import NewTicket from './NewTicket.svelte';
 import TicketList from './TicketList.svelte';
 import TicketView from './TicketView.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../lib/services/support', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/support')>()),
-  ticketLimits: vi.fn(),
-  getTicket: vi.fn(),
-  listTickets: vi.fn(),
-}));
+vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('./supportTesting')).fakeService(await original(), 'support'));
+vi.mock('../../../bindings/typhon/internal/diagnostics', async (original) => (await import('./supportTesting')).fakeService(await original(), 'diagnostics'));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./supportTesting')).fakeService(await original(), 'account'));
+vi.mock('../../lib/services/support', async (original) => (await import('./supportTesting')).supportService(await original()));
+vi.mock('../../lib/services/logsUpload', async () => (await import('./supportTesting')).logsUpload());
+vi.mock('../../lib/services/account', async (original) => (await import('./supportTesting')).accountOpeners(await original()));
 
 const LIMITS = { maxSubjectRunes: 120, maxBodyRunes: 5000 };
 
@@ -48,12 +49,15 @@ function held<T>() {
 }
 
 beforeEach(() => {
+  resetBindings();
   unreadReplies.set(0);
   vi.mocked(ticketLimits).mockResolvedValue(LIMITS);
   vi.mocked(getTicket).mockResolvedValue(THREAD);
 });
 
 afterEach(() => {
+  cleanup();
+  expect(calls).toEqual([]);
   unreadReplies.set(0);
   vi.mocked(ticketLimits).mockReset();
   vi.mocked(getTicket).mockReset();

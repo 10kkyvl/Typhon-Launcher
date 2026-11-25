@@ -1,18 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/svelte';
+import { cleanup, screen } from '@testing-library/svelte';
 import { msg } from '../../lib/i18n';
 import { getTicket, ticketLimits, type TicketThread } from '../../lib/services/support';
 import { renderDom } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { description } from '../../lib/testing/hints';
 import NewTicket from './NewTicket.svelte';
 import TicketView from './TicketView.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../lib/services/support', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/support')>()),
-  ticketLimits: vi.fn(),
-  getTicket: vi.fn(),
-}));
+vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('./supportTesting')).fakeService(await original(), 'support'));
+vi.mock('../../../bindings/typhon/internal/diagnostics', async (original) => (await import('./supportTesting')).fakeService(await original(), 'diagnostics'));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./supportTesting')).fakeService(await original(), 'account'));
+vi.mock('../../lib/services/support', async (original) => (await import('./supportTesting')).supportService(await original()));
+vi.mock('../../lib/services/logsUpload', async () => (await import('./supportTesting')).logsUpload());
+vi.mock('../../lib/services/account', async (original) => (await import('./supportTesting')).accountOpeners(await original()));
 
 const THREAD: TicketThread = {
   ticket: {
@@ -32,11 +34,14 @@ const THREAD: TicketThread = {
 };
 
 beforeEach(() => {
+  resetBindings();
   vi.mocked(ticketLimits).mockResolvedValue({ maxSubjectRunes: 120, maxBodyRunes: 5000 });
   vi.mocked(getTicket).mockResolvedValue(THREAD);
 });
 
 afterEach(() => {
+  cleanup();
+  expect(calls).toEqual([]);
   vi.mocked(ticketLimits).mockReset();
   vi.mocked(getTicket).mockReset();
 });

@@ -1,5 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EmulatorHint from '../lib/components/EmulatorHint.svelte';
 import { locale, msg } from '../lib/i18n';
 import { cachedUsage, scanUsage } from '../lib/services/diskusage';
@@ -10,6 +10,7 @@ import { historyStatus } from '../lib/stores/history';
 import { profileFailed } from '../lib/stores/profile';
 import { authState } from '../lib/stores/user';
 import { user } from '../lib/testing/dom';
+import { calls } from '../lib/testing/fakeBinding';
 import Activity from './activity/Activity.svelte';
 import DiskUsage from './diskusage/DiskUsage.svelte';
 import History from './history/History.svelte';
@@ -30,10 +31,18 @@ vi.mock('../lib/services/emulators', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/services/emulators')>()),
   listPlatforms: vi.fn(),
 }));
-vi.mock('../lib/services/support', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/services/support')>()),
-  listTickets: vi.fn(),
-}));
+// The support list reaches the real support backend: the whole service, the log upload, the account
+// openers and their bindings are stand-ins (support/supportTesting.ts), and no call reaches a binding.
+vi.mock('../../bindings/typhon/internal/support', async (original) => (await import('./support/supportTesting')).fakeService(await original(), 'support'));
+vi.mock('../../bindings/typhon/internal/diagnostics', async (original) => (await import('./support/supportTesting')).fakeService(await original(), 'diagnostics'));
+vi.mock('../../bindings/typhon/internal/account', async (original) => (await import('./support/supportTesting')).fakeService(await original(), 'account'));
+vi.mock('../lib/services/support', async (original) => (await import('./support/supportTesting')).supportService(await original()));
+vi.mock('../lib/services/logsUpload', async () => (await import('./support/supportTesting')).logsUpload());
+vi.mock('../lib/services/account', async (original) => (await import('./support/supportTesting')).accountOpeners(await original()));
+
+afterEach(() => {
+  expect(calls).toEqual([]);
+});
 
 // Real pages: what used to be status-coloured text on the page, or a hand-made banner, is one Notice.
 describe('a status message of a page', () => {
