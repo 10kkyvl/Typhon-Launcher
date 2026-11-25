@@ -15,6 +15,11 @@
    * `onchange`, where the caller holds it and the list never writes it, so a choice the caller refuses
    * does not stay on screen. A value no row has chooses none.
    *
+   * `activation="manual"` is for a caller that applies the choice at once (`value` and `onchange`):
+   * the arrows, Home and End only move focus, and Space, Enter or a press choose, so walking the
+   * list writes nothing. The Tab stop is then the focused row while focus is in the list, else the
+   * chosen row, else the first that can be chosen.
+   *
    * A row draws its `title`, its `note` under it and its `fact` at its end; `row` draws the row's
    * content itself (a cover and a year), the list keeping the mark and the reason. A row is named by
    * its content and described by the rest. The list grows with its rows: a long one scrolls with the
@@ -36,6 +41,7 @@
     describedby,
     onchange,
     disabled = false,
+    activation = 'auto',
     row,
   }: Named & {
     options: T[];
@@ -45,6 +51,8 @@
     onchange?: (id: string) => void;
     /** The list is held while the caller writes the choice; the caller says why. */
     disabled?: boolean;
+    /** `auto`: the arrows choose. `manual`: they only move; Space, Enter and a press choose. */
+    activation?: 'auto' | 'manual';
     row?: Snippet<[T]>;
   } = $props();
 
@@ -53,8 +61,12 @@
 
   const off = (index: number) => Boolean(options[index]?.disabledReason);
   const chosen = $derived(options.findIndex((option) => option.id === value));
+  // The row focus is on, by id: in manual activation focus walks apart from the choice.
+  let focusedId = $state<string | null>(null);
+  const focused = $derived(activation === 'manual' && focusedId !== null ? options.findIndex((option) => option.id === focusedId) : -1);
   // The one Tab stop. With every row refused it is the first, so a keyboard still reaches the reasons.
   const stop = $derived.by(() => {
+    if (focused >= 0) return focused;
     if (chosen >= 0 && !off(chosen)) return chosen;
     return Math.max(0, options.findIndex((_, index) => !off(index)));
   });
@@ -81,7 +93,7 @@
     if (next === null) return;
     event.preventDefault();
     if (disabled) return;
-    choose(next);
+    if (activation === 'auto') choose(next);
     const target = all[next];
     if (!target) return;
     // Focus moved by script does not scroll: the dialog body brings the row in by the least movement.
@@ -132,6 +144,10 @@
           if (disabled) event.preventDefault();
         }}
         {onkeydown}
+        onfocus={() => (focusedId = option.id)}
+        onfocusout={(event) => {
+          if (!root?.contains(event.relatedTarget as Node | null)) focusedId = null;
+        }}
       >
         <span class="mark" class:on={checked} aria-hidden="true"></span>
         <span class="body">

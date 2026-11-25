@@ -28,4 +28,11 @@ describe('OptionList props', () => {
     const byRow: Props = { label: 'Save folder', options, onchange: (row: OptionItem) => row };
     expect([untitled, unkeyed, byRow]).toHaveLength(3);
   });
+
+  it('the arrows choose or only move, nothing else', () => {
+    const manual: Props = { label: 'Save folder', options, value: 'a', onchange: () => {}, activation: 'manual' };
+    // @ts-expect-error: no third way to activate a row
+    const typed: Props = { label: 'Save folder', options, activation: 'focus' };
+    expect([manual, typed]).toHaveLength(2);
+  });
 });

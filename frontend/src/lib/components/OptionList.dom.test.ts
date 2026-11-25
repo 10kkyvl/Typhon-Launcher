@@ -184,6 +184,119 @@ describe('OptionList: the value', () => {
   });
 });
 
+describe('OptionList: manual activation', () => {
+  const MANY = Array.from({ length: 5 }, (_, i) => ({ id: `x${i}`, title: `X${i}` }));
+
+  it('arrows walk the rows and report none; Enter reports the row walked to, once', async () => {
+    const onchange = vi.fn();
+    const { user } = renderDom(OptionList, { label: 'L', options: MANY, value: 'x0', onchange, activation: 'manual' });
+    radio('X0').focus();
+
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+
+    expect(onchange).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(radio('X3'));
+    expect(checked()).toEqual([radio('X0')]);
+
+    await user.keyboard('{Enter}');
+    expect(onchange.mock.calls).toEqual([['x3']]);
+  });
+
+  it('Space and a press choose; Home and End only move', async () => {
+    const { user } = renderDom(OptionListHarness, { options: FOLDERS, start: 'a', through: () => true, activation: 'manual' });
+    radio('C:/Saves/Hades').focus();
+
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(radio('E:/Cloud/Hades'));
+    expect(screen.getByRole('status').textContent).toBe('a');
+    await user.keyboard(' ');
+    expect(screen.getByRole('status').textContent).toBe('d');
+    expect(checked()).toEqual([radio('E:/Cloud/Hades')]);
+
+    await user.keyboard('{Home}');
+    expect(document.activeElement).toBe(radio('C:/Saves/Hades'));
+    expect(screen.getByRole('status').textContent).toBe('d');
+
+    await user.click(radio(LONG));
+    expect(screen.getByRole('status').textContent).toBe('b');
+  });
+
+  it('the arrows still pass a refused row, and bring the row they reach into view', async () => {
+    const reveal = vi.fn();
+    Element.prototype.scrollIntoView = reveal;
+    try {
+      const { user } = renderDom(OptionListHarness, { options: FOLDERS, start: 'b', through: () => true, activation: 'manual' });
+      radio(LONG).focus();
+      await user.keyboard('{ArrowDown}');
+      expect(document.activeElement).toBe(radio('E:/Cloud/Hades'));
+      expect(reveal.mock.contexts).toEqual([radio('E:/Cloud/Hades')]);
+      expect(reveal).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(screen.getByRole('status').textContent).toBe('b');
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+  });
+
+  it('the Tab stop is the focused row while focus is inside, then the chosen row, else the first that can be chosen', async () => {
+    const { user } = renderDom(OptionListHarness, { options: FOLDERS, start: 'a', through: () => true, activation: 'manual' });
+    radio('C:/Saves/Hades').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getAllByRole('radio').map((row) => row.tabIndex)).toEqual([-1, 0, -1, -1]);
+
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(before());
+    expect(screen.getAllByRole('radio').map((row) => row.tabIndex)).toEqual([0, -1, -1, -1]);
+    await user.tab();
+    expect(document.activeElement).toBe(radio('C:/Saves/Hades'));
+
+    await user.keyboard('{End}');
+    await user.tab();
+    expect(document.activeElement).toBe(after());
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(radio('C:/Saves/Hades'));
+  });
+
+  it('with no choice, Tab reaches the first row that can be chosen', async () => {
+    const refusedFirst = [{ id: 'x', title: 'X:/Gone', disabledReason: 'Gone' }, ...FOLDERS];
+    const { user } = renderDom(OptionListHarness, { options: refusedFirst, through: () => true, activation: 'manual' });
+    before().focus();
+    await user.tab();
+    expect(document.activeElement).toBe(radio('C:/Saves/Hades'));
+    expect(checked()).toEqual([]);
+  });
+
+  // Chromium sends focusout from inside the update that removes a focused row; jsdom sends none.
+  it('when the row walked to leaves, focus goes to the chosen row, with no error from the update', async () => {
+    const remove = Element.prototype.remove;
+    const spy = vi.spyOn(Element.prototype, 'remove').mockImplementation(function (this: Element) {
+      const active = document.activeElement;
+      if (active && active !== document.body && this.contains(active)) active.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      remove.call(this);
+    });
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => {
+      errors.push(event.error);
+      event.preventDefault();
+    };
+    window.addEventListener('error', onError);
+    try {
+      const through = () => true;
+      const { user, rerender } = renderDom(OptionListHarness, { options: FOLDERS, start: 'a', through, activation: 'manual' });
+      radio('C:/Saves/Hades').focus();
+      await user.keyboard('{End}');
+
+      await rerender({ options: FOLDERS.filter((folder) => folder.id !== 'd'), start: 'a', through, activation: 'manual' });
+
+      expect(errors).toEqual([]);
+      expect(document.activeElement).toBe(radio('C:/Saves/Hades'));
+      expect(screen.getAllByRole('radio').map((row) => row.tabIndex)).toEqual([0, -1, -1]);
+    } finally {
+      window.removeEventListener('error', onError);
+      spy.mockRestore();
+    }
+  });
+});
+
 describe('OptionList: held while the caller writes', () => {
   const group = () => screen.getByRole('radiogroup', { name: 'Folder' });
   const rowStates = () => screen.getAllByRole('radio').map((row) => row.getAttribute('aria-disabled'));
@@ -293,6 +406,7 @@ describe('OptionList: no warning', () => {
     const warn = vi.spyOn(console, 'warn');
     renderDom(OptionListHarness, { options: FOLDERS, start: 'c', custom: true });
     renderDom(OptionList, { labelledby: 'x', options: FOLDERS, value: 'zz', onchange: vi.fn() });
+    renderDom(OptionList, { label: 'Held', options: FOLDERS, value: 'a', onchange: vi.fn(), activation: 'manual', disabled: true });
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });

@@ -5,8 +5,9 @@
 
   // A caller of the option list between two plain buttons: it holds the choice through bind:value, or
   // through value and onchange (`through`, which may refuse by not writing), and draws its rows itself
-  // with `custom`. A test changes the rows under the focus, or holds the list, by rerendering with
-  // other `options` or `disabled`. For OptionList.dom.test.ts.
+  // with `custom`; `activation` goes to the list held through onchange. A test changes the rows under
+  // the focus, or holds the list, by rerendering with other `options` or `disabled`. For
+  // OptionList.dom.test.ts.
   let {
     options,
     start = '',
@@ -14,6 +15,7 @@
     custom = false,
     labelled = false,
     disabled = false,
+    activation,
   }: {
     options: OptionItem[];
     start?: string;
@@ -21,6 +23,7 @@
     custom?: boolean;
     labelled?: boolean;
     disabled?: boolean;
+    activation?: 'auto' | 'manual';
   } = $props();
 
   const rows = $derived(options);
@@ -35,6 +38,7 @@
     options={rows}
     {value}
     {disabled}
+    {activation}
     onchange={(id) => {
       if (through(id)) value = id;
     }}
