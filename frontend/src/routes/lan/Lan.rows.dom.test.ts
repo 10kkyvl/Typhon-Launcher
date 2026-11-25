@@ -15,6 +15,7 @@ import type { LibraryGame } from '../../lib/services/library';
 import { hashing, offers, shares, transfers } from '../../lib/stores/lan';
 import { libraryGames } from '../../lib/stores/library';
 import { route } from '../../lib/stores/router';
+import { ruleBody, styleOf } from '../../lib/testing/css';
 import { renderDom } from '../../lib/testing/dom';
 import { bytesSize } from '../../lib/utils/format';
 import Lan from './Lan.svelte';
@@ -180,5 +181,16 @@ describe('Lan: actions named after their game', () => {
     expect(page).not.toMatch(/<button\b/);
     const style = page.slice(page.indexOf('<style>'));
     expect(style.match(/(?:gap|margin[\w-]*|padding[\w-]*):[^;]*\b\d*\.?\d+(?:rem|px)\b[^;]*;/g) ?? []).toEqual([]);
+  });
+
+  // jsdom lays nothing out: what can be read here is that nothing refuses to shrink at the smallest
+  // window (1100 px). The frame itself is for a real browser.
+  it('lets a row’s words wrap and the figures move to a second line rather than widen the page', () => {
+    const css = styleOf(page, 'Lan');
+
+    expect(ruleBody(css, '.stats')['flex-wrap']).toBe('wrap');
+    expect(ruleBody(css, '.main')['min-width']).toBe('0');
+    expect(ruleBody(css, '.title')['overflow-wrap']).toBe('anywhere');
+    expect(ruleBody(css, '.title')['white-space']).toBeUndefined();
   });
 });
