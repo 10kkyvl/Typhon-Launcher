@@ -2,6 +2,8 @@
   import { FolderOpen, HardDrive } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import DiskMeter from '../../lib/components/DiskMeter.svelte';
+  import { gameTone, type MeterSegment } from '../../lib/components/diskMeter';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import { gamesOnVolume } from '../../lib/library/folders';
@@ -12,27 +14,19 @@
   import { bytesSize } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
-  // The disk of the library folder: what games and everything else take on it, or why it is not shown.
-  let { onchoosefolder }: { onchoosefolder: () => void } = $props();
+  // The disk of the library folder on the shared meter: each game on it, other files and the free
+  // space, or why it is not shown. `onpick` gets the id of a game picked on the meter.
+  let { onchoosefolder, onpick }: { onchoosefolder: () => void; onpick: (id: string) => void } = $props();
 
-  const volumeGames = $derived(gamesOnVolume($settings?.libraryPath ?? '', $installedGames));
-  const gamesBytes = $derived(volumeGames.reduce((sum, game) => sum + game.sizeBytes, 0));
-  const hasUnknownSize = $derived(volumeGames.some((game) => game.sizeUnknown));
-  const usedPct = $derived($storageInfo ? ($storageInfo.usedBytes / $storageInfo.totalBytes) * 100 : 0);
-  const otherBytes = $derived.by(() => {
-    if (!$storageInfo || hasUnknownSize) return null;
-    const value = $storageInfo.usedBytes - gamesBytes;
-    return value >= 0 ? value : null;
-  });
-  const segments = $derived.by(() => {
-    if (!$storageInfo || $storageInfo.totalBytes <= 0) return [];
-    if (otherBytes === null) return [{ id: 'used', pct: Math.min(100, usedPct) }];
-    const total = $storageInfo.totalBytes;
-    return [
-      { id: 'games', pct: (gamesBytes / total) * 100 },
-      { id: 'other', pct: (otherBytes / total) * 100 },
-    ].filter((segment) => segment.pct > 0);
-  });
+  // A game that measured nothing takes nothing on the disk; one not fully measured is the meter's
+  // "at least" (or "unknown" with no bytes at all).
+  const segments = $derived<MeterSegment[]>(
+    gamesOnVolume($settings?.libraryPath ?? '', $installedGames)
+      .filter((game) => game.sizeBytes > 0 || game.sizeUnknown)
+      .toSorted((a, b) => b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title))
+      .map((game, index) => ({ key: game.id, label: game.title, bytes: game.sizeBytes, tone: gameTone(index), sizeUnknown: game.sizeUnknown })),
+  );
+  const measured = $derived(($storageInfo?.totalBytes ?? 0) > 0);
 
   let storageRetrying = $state(false);
   let storageCard = $state<HTMLElement>();
@@ -71,49 +65,26 @@
           </span>
           <div class="disk-text">
             <span class="disk-name">{msg('games.installedStorageTitle')}</span>
-            <span class="disk-meta">
-              {msg('games.installedStorageUsage', {
-                used: bytesSize($storageInfo.usedBytes),
-                total: bytesSize($storageInfo.totalBytes),
-              })}
-            </span>
+            {#if measured}
+              <span class="disk-meta">
+                {msg('games.installedStorageUsage', {
+                  used: bytesSize($storageInfo.usedBytes),
+                  total: bytesSize($storageInfo.totalBytes),
+                })}
+                <span class="disk-pct">{Math.round(($storageInfo.usedBytes / $storageInfo.totalBytes) * 100)}%</span>
+              </span>
+            {/if}
           </div>
           <Button onclick={() => navigate('settings', { tab: 'general' })}>{msg('games.installedManageStorage')}</Button>
         </div>
-        <div class="storage-bar">
-          <div class="segments" aria-hidden="true">
-            {#each segments as segment (segment.id)}
-              <span class="segment {segment.id}" style:width="{segment.pct}%"></span>
-            {/each}
-            <span class="segment free"></span>
-          </div>
-          <span class="storage-pct">{Math.round(usedPct)}%</span>
-        </div>
-        <ul class="storage-legend">
-          {#if otherBytes !== null}
-            <li>
-              <span class="dot games"></span>
-              <span class="legend-label">{msg('games.installedLegendGames')}</span>
-              <span class="legend-value">{bytesSize(gamesBytes)}</span>
-            </li>
-            <li>
-              <span class="dot other"></span>
-              <span class="legend-label">{msg('games.installedLegendOther')}</span>
-              <span class="legend-value">{bytesSize(otherBytes)}</span>
-            </li>
-          {:else}
-            <li>
-              <span class="dot used"></span>
-              <span class="legend-label">{msg('games.installedLegendUsed')}</span>
-              <span class="legend-value">{bytesSize($storageInfo.usedBytes)}</span>
-            </li>
-          {/if}
-          <li>
-            <span class="dot free"></span>
-            <span class="legend-label">{msg('games.installedLegendFree')}</span>
-            <span class="legend-value">{bytesSize($storageInfo.freeBytes)}</span>
-          </li>
-        </ul>
+        <DiskMeter
+          {segments}
+          total={$storageInfo.totalBytes}
+          free={$storageInfo.freeBytes}
+          label={$storageInfo.volume ? msg('installed.meterDisk', { volume: $storageInfo.volume }) : msg('games.installedStorageTitle')}
+          foldLabel={(count) => msg('installed.meterMoreGames', { count })}
+          {onpick}
+        />
       </div>
     </Card>
   </div>
@@ -123,6 +94,12 @@
       {msg('games.installedStorageLoadFailed')}
     </Notice>
   </div>
+{:else}
+  <div class="storage-block">
+    <Card>
+      <p class="storage-loading">{msg('installed.storageLoading')}</p>
+    </Card>
+  </div>
 {/if}
 
 <style>
@@ -131,9 +108,6 @@
   }
 
   .storage {
-    --seg-games: var(--accent-bright);
-    --seg-other: var(--text-3);
-    --seg-free: color-mix(in srgb, var(--text-3) 28%, transparent);
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
@@ -177,112 +151,17 @@
   .disk-meta {
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .storage-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .segments {
-    display: flex;
-    gap: 0.2rem;
-    flex: 1;
-    min-width: 0;
-    height: 0.8rem;
-    border-radius: 99rem;
-    overflow: hidden;
-  }
-
-  .segment {
-    min-width: 0.4rem;
-    transform-origin: left center;
-    animation: segment-grow var(--dur-slow) var(--ease) backwards;
-  }
-
-  .segment.games {
-    background: var(--seg-games);
-  }
-
-  .segment.other {
-    background: var(--seg-other);
-    animation-delay: calc(var(--dur-fast) / 2);
-  }
-
-  .segment.used {
-    background: var(--seg-other);
-  }
-
-  .segment.free {
-    flex: 1;
-    min-width: 0;
-    background: var(--seg-free);
-    animation-name: segment-fade;
-  }
-
-  @keyframes segment-grow {
-    from {
-      transform: scaleX(0);
-    }
-  }
-
-  @keyframes segment-fade {
-    from {
-      opacity: 0;
-    }
-  }
-
-  .storage-pct {
-    font-size: var(--font-sm);
-    color: var(--text-2);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
   }
 
-  .storage-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-8);
+  .disk-pct {
+    margin-left: var(--space-2);
+    color: var(--text-2);
+  }
+
+  .storage-loading {
     margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .storage-legend li {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
     font-size: var(--font-sm);
-  }
-
-  .dot {
-    width: 1rem;
-    height: 1rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .dot.games {
-    background: var(--seg-games);
-  }
-
-  .dot.other,
-  .dot.used {
-    background: var(--seg-other);
-  }
-
-  .dot.free {
-    background: var(--seg-free);
-  }
-
-  .legend-label {
-    color: var(--text-2);
-  }
-
-  .legend-value {
-    padding-left: var(--space-2);
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
+    color: var(--text-3);
   }
 </style>

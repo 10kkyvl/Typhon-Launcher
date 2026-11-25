@@ -52,33 +52,87 @@ afterEach(() => {
   settings.set(null);
   storageInfo.set(null);
   storageFailed.set(false);
+  Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
   vi.clearAllMocks();
   document.body.replaceChildren();
 });
 
-const legend = () => [...document.querySelectorAll('.storage-legend li')].map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
+// Each legend entry of the meter as one line of words.
+const legend = () => [...document.querySelectorAll('.meter .legend > li')].map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
+const words = (key: Parameters<typeof msg>[0], size: number) => msg(key, { size: bytesSize(size) });
 
 describe('Installed: the storage card', () => {
-  it('says what the games on the library’s disk take, the rest and the free space', () => {
-    libraryGames.set([game('g-a', 'A', 10 * GB), game('g-b', 'B', 5 * GB), game('g-d', 'D', 7 * GB, { installDir: 'D:\\Other\\D' })]);
+  it('draws the games on the library’s disk on the shared meter, largest first, with other files and the free space', () => {
+    libraryGames.set([game('g-b', 'B', 5 * GB), game('g-a', 'A', 10 * GB), game('g-d', 'D', 7 * GB, { installDir: 'D:\\Other\\D' })]);
     storageInfo.set(info);
     renderDom(Installed);
 
     expect(screen.getByText(msg('games.installedStorageTitle'))).toBeTruthy();
     expect(screen.getByText(msg('games.installedStorageUsage', { used: bytesSize(60 * GB), total: bytesSize(100 * GB) }))).toBeTruthy();
     expect(legend()).toEqual([
-      `${msg('games.installedLegendGames')} ${bytesSize(15 * GB)}`,
-      `${msg('games.installedLegendOther')} ${bytesSize(45 * GB)}`,
-      `${msg('games.installedLegendFree')} ${bytesSize(40 * GB)}`,
+      `A ${bytesSize(10 * GB)}`,
+      `B ${bytesSize(5 * GB)}`,
+      `${msg('common.meterOther')} ${bytesSize(45 * GB)}`,
+      `${msg('common.meterFree')} ${bytesSize(40 * GB)}`,
+      msg('common.meterTotal', { total: bytesSize(100 * GB) }),
     ]);
+    const bar = screen.getByRole('group', { name: (name) => name.startsWith(msg('installed.meterDisk', { volume: 'C:' })) });
+    expect([...bar.querySelectorAll('.part')].map((part) => (part as HTMLElement).dataset.tone)).toEqual(['game', 'game-2', 'other']);
   });
 
-  it('with a game whose size is not known, says only what is used and free', () => {
-    libraryGames.set([game('g-a', 'A', 10 * GB), game('g-b', 'B', 0, { sizeUnknown: true })]);
+  it('a game whose size is not fully measured is said as “at least”, the rest as “at most”', () => {
+    libraryGames.set([game('g-a', 'A', 10 * GB), game('g-b', 'B', 2 * GB, { sizeUnknown: true })]);
     storageInfo.set(info);
     renderDom(Installed);
 
-    expect(legend()).toEqual([`${msg('games.installedLegendUsed')} ${bytesSize(60 * GB)}`, `${msg('games.installedLegendFree')} ${bytesSize(40 * GB)}`]);
+    expect(legend()).toEqual([
+      `A ${bytesSize(10 * GB)}`,
+      `B ${words('common.meterAtLeast', 2 * GB)}`,
+      `${msg('common.meterOther')} ${words('common.meterAtMost', 48 * GB)}`,
+      `${msg('common.meterFree')} ${bytesSize(40 * GB)}`,
+      msg('common.meterTotal', { total: bytesSize(100 * GB) }),
+    ]);
+  });
+
+  it('a total the disk did not give is the meter’s unknown total, never “NaN%”', () => {
+    libraryGames.set([game('g-a', 'A', 10 * GB)]);
+    storageInfo.set({ ...info, totalBytes: 0, usedBytes: 0 });
+    renderDom(Installed);
+
+    const card = screen.getByText(msg('games.installedStorageTitle')).closest('.storage') as HTMLElement;
+    expect(card.textContent).not.toMatch(/NaN|Infinity/);
+    expect(card.textContent).toContain(msg('common.meterTotalUnknown'));
+    expect(card.querySelector('.bar')?.getAttribute('data-state')).toBe('unknown');
+    expect(screen.queryByText(msg('games.installedStorageUsage', { used: bytesSize(0), total: bytesSize(0) }))).toBeNull();
+  });
+
+  it('many small games are folded into one part named by the games’ own words', () => {
+    libraryGames.set([game('g-big', 'Big', 80 * GB), ...Array.from({ length: 12 }, (_, i) => game(`g-${i}`, `Small ${i}`, 1024 ** 2))]);
+    storageInfo.set({ ...info, freeBytes: 10 * GB, usedBytes: 90 * GB });
+    renderDom(Installed);
+
+    expect(legend()[1]).toBe(`${msg('installed.meterMoreGames', { count: 12 })} ${bytesSize(12 * 1024 ** 2)}`);
+  });
+
+  it('picking a game on the meter brings its row into view and focuses it, clearing a search that hid it', async () => {
+    libraryGames.set([game('g-a', 'A', 10 * GB), game('g-b', 'B', 5 * GB)]);
+    storageInfo.set(info);
+    const { user } = renderDom(Installed);
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    await user.type(screen.getByRole('textbox', { name: msg('games.installedSearchPlaceholder') }), 'A');
+    expect(document.querySelector('[data-game-row="g-b"]')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: `B: ${bytesSize(5 * GB)}` }));
+
+    await vi.waitFor(() => expect(document.activeElement?.closest('[data-game-row]')?.getAttribute('data-game-row')).toBe('g-b'));
+    expect(scrolled).toHaveBeenCalled();
+  });
+
+  it('says it is reading the disk until the first answer, not nothing', () => {
+    renderDom(Installed);
+
+    expect(screen.getByText(msg('installed.storageLoading'))).toBeTruthy();
   });
 
   it('“Manage storage” leads to the general settings', async () => {

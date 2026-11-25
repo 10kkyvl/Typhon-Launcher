@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Page from '../../lib/components/Page.svelte';
   import { Gamepad2, Plus, RefreshCw, Search } from '@lucide/svelte';
   import AddImageModal from '../../lib/components/AddImageModal.svelte';
@@ -7,6 +8,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
   import { inWails } from '../../lib/services/backend';
   import type { LibraryGame } from '../../lib/services/library';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
@@ -53,6 +55,23 @@
   const loadFailed = $derived($libraryLoadError != null && !$libraryLoaded);
   let libraryRetrying = $state(false);
   let results = $state<HTMLElement>();
+
+  // A row is found by its game's id as data, never as a selector.
+  const rowOf = (id: string) => [...(results?.querySelectorAll<HTMLElement>('[data-game-row]') ?? [])].find((row) => row.dataset.gameRow === id);
+
+  // A game picked on the storage meter: its row brought into view and focused, after clearing a search
+  // that hid it.
+  async function revealGame(id: string) {
+    if (!rowOf(id)) {
+      search = '';
+      await tick();
+    }
+    const row = rowOf(id);
+    const target = row ? focusableIn(row)[0] : undefined;
+    if (!row || !target) return;
+    focusQuietly(target);
+    if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 
   function timeOf(value: string | null) {
     if (!value) return 0;
@@ -157,7 +176,7 @@
     {/snippet}
   </PageHeader>
 
-  <InstalledStorage onchoosefolder={() => (librarySetupOpen = true)} />
+  <InstalledStorage onchoosefolder={() => (librarySetupOpen = true)} onpick={revealGame} />
 
   <div bind:this={results}>
     {#if loadFailed || libraryRetrying}
