@@ -323,6 +323,7 @@ type fakeSnaps struct {
 	snaps   map[string][]savebackup.Snapshot
 	err     error
 	failDel map[string]error
+	listErr error
 }
 
 func (f *fakeSnaps) Usage(context.Context) ([]savebackup.Usage, error) { return f.usage, f.err }
@@ -330,6 +331,9 @@ func (f *fakeSnaps) Usage(context.Context) ([]savebackup.Usage, error) { return 
 func (f *fakeSnaps) List(_ context.Context, gameID string) ([]savebackup.Snapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return append([]savebackup.Snapshot(nil), f.snaps[gameID]...), nil
 }
 

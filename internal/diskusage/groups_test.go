@@ -9,6 +9,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/savebackup"
 	"typhon/internal/screenshots"
+	"typhon/internal/uierr"
 )
 
 func TestGroupOfAGameThatLeftTheLibraryHasItsArchivedTitle(t *testing.T) {
@@ -152,6 +153,46 @@ func TestDeleteAllSaysHowManyWentAndHowManyDidNot(t *testing.T) {
 	}
 	if want := (GroupDelete{Deleted: 1, Failed: 2, Code: DeletePartial}); shots != want {
 		t.Fatalf("DeleteScreenshots = %+v, want %+v", shots, want)
+	}
+}
+
+// savebackup answers "not found" also for a copy whose record cannot be read,
+// and that copy is still on disk: what is listed after the deletes decides.
+func TestDeleteAllCountsACopyStillListedAsNotDeleted(t *testing.T) {
+	r := snapshotsRig(t)
+	r.snaps.mu.Lock()
+	r.snaps.failDel["s1"] = uierr.New(snapshotNotFound, "резервная копия не найдена")
+	r.snaps.mu.Unlock()
+	got, err := r.svc.DeleteSnapshots(context.Background(), "g1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (GroupDelete{Deleted: 2, Failed: 1, Code: DeletePartial}); got != want {
+		t.Fatalf("DeleteSnapshots = %+v, want %+v", got, want)
+	}
+}
+
+// When what is left cannot be listed, the answers of the deletes are all
+// there is; the group's size is then unknown and it has no set to delete
+// until a scan lists it again.
+func TestDeleteAllThatCannotListWhatIsLeftCountsTheAnswers(t *testing.T) {
+	r := snapshotsRig(t)
+	r.snaps.mu.Lock()
+	r.snaps.snaps["g1"] = r.snaps.snaps["g1"][1:]
+	r.snaps.listErr = errors.New("snapshots folder locked")
+	r.snaps.mu.Unlock()
+	got, err := r.svc.DeleteSnapshots(context.Background(), "g1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (GroupDelete{Deleted: 2, Gone: 1}); got != want {
+		t.Fatalf("DeleteSnapshots = %+v, want %+v", got, want)
+	}
+	if groups := r.svc.Cached().Snapshots; len(groups) != 1 || !groups[0].SizeUnknown {
+		t.Fatalf("cached group = %+v, want its size unknown", groups)
+	}
+	if _, err := r.svc.DeleteSnapshots(context.Background(), "g1"); !errors.Is(err, errNotDeletable) {
+		t.Fatalf("second DeleteSnapshots = %v, want errNotDeletable until a scan lists the group", err)
 	}
 }
 

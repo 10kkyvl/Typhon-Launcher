@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -137,6 +138,40 @@ func TestDeleteDuringAWalkDoesNotWaitForIt(t *testing.T) {
 	for _, l := range got.rep.Leftovers {
 		if l.Path == path {
 			t.Fatalf("the report lists the leftover the delete removed: %+v", got.rep.Leftovers)
+		}
+	}
+}
+
+func TestWalkRequestedDuringADeleteMeasuresWhatTheDeleteLeft(t *testing.T) {
+	r := newRig(t)
+	path := filepath.Join(r.games, "Done.partial")
+	writeBytes(t, filepath.Join(path, "a.bin"), 4)
+	r.inst.partial[path] = true
+	if _, err := r.svc.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var scan <-chan scanResult
+	old := removeAll
+	t.Cleanup(func() { removeAll = old })
+	removeAll = func(p string) error {
+		watch := newDoneWatch(context.Background())
+		scan = scanAsync(r.svc, watch)
+		receive(t, watch.waiting, "the scan waiting on its walk")
+		for range 100 {
+			runtime.Gosched()
+		}
+		return old(p)
+	}
+	if err := r.svc.DeleteLeftover(context.Background(), path); err != nil {
+		t.Fatal(err)
+	}
+	got := receive(t, scan, "the scan")
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	for _, l := range got.rep.Leftovers {
+		if l.Path == path {
+			t.Fatalf("a walk asked for during the delete lists what the delete removed: %+v", l)
 		}
 	}
 }
