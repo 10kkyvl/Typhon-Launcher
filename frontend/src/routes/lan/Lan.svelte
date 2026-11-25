@@ -17,6 +17,8 @@
   import { rejectedSummary, sharedGameTitle, transferLabel } from '../../lib/lan/lanText';
   import type { Offer, Transfer } from '../../lib/services/lan';
   import { libraryGames, libraryGamesById } from '../../lib/stores/library';
+  import { navigate } from '../../lib/stores/router';
+  import { settings } from '../../lib/stores/settings';
   import {
     cancel,
     cancelTransfer,
@@ -47,6 +49,10 @@
   const uid = $props.id();
   const headings = { nearby: `${uid}-nearby`, sharing: `${uid}-sharing`, transfers: `${uid}-transfers` };
 
+  // Go has no offers while sharing is off (lan.Service.Available answers none): nothing nearby can be
+  // shown, and the screen says why instead. Settings not read yet count as not known, not as off.
+  const sharingOff = $derived($settings?.lanSharing === false);
+
   const loadFailed = $derived(!$lanLoaded && $lanLoadError != null);
   const loading = $derived(!$lanLoaded && !loadFailed);
 
@@ -71,6 +77,7 @@
     void preparing;
     void activeTransfers;
     void $lanLoaded;
+    void sharingOff;
     untrack(catchLeaving);
   });
 
@@ -156,6 +163,17 @@
     </div>
   {/if}
 
+  {#if sharingOff}
+    <div class="sharing-off">
+      <Notice tone="info" announce={false} title={msg('transfers.lanSharingOffTitle')}>
+        {msg('transfers.lanSharingOffText')}
+        {#snippet action()}
+          <Button size="sm" onclick={() => navigate('settings', { tab: 'general' })}>{msg('transfers.lanOpenSettings')}</Button>
+        {/snippet}
+      </Notice>
+    </div>
+  {/if}
+
   {#if !$lanLoaded}
     {#if loading}
       <EmptyState level={2} title={msg('transfers.lanLoading')} />
@@ -180,40 +198,42 @@
         </div>
       </div>
 
-      <section class="section" aria-labelledby={headings.nearby} data-lan-section="nearby">
-        <SectionHeader id={headings.nearby} title={msg('transfers.lanNearbyHeading')} count={$offers.length} />
-        {#if $offers.length === 0}
-          <EmptyState level={3}
-            title={msg('transfers.lanEmptyTitle')}
-            description={msg('transfers.lanEmptyDescription')}
-          >
-            {#snippet icon()}
-              <Wifi size="2rem" strokeWidth={1.8} />
-            {/snippet}
-          </EmptyState>
-          {#if rejectedNote}
-            <p class="note">{msg('transfers.lanRejectedPrefix', { summary: rejectedNote })}</p>
-          {/if}
-        {:else if groups.length === 1}
-          <ul class="list">
-            {#each $offers as offer (offerKey(offer))}
-              {@render offerRow(offer, false)}
+      {#if !sharingOff}
+        <section class="section" aria-labelledby={headings.nearby} data-lan-section="nearby">
+          <SectionHeader id={headings.nearby} title={msg('transfers.lanNearbyHeading')} count={$offers.length} />
+          {#if $offers.length === 0}
+            <EmptyState level={3}
+              title={msg('transfers.lanEmptyTitle')}
+              description={msg('transfers.lanEmptyDescription')}
+            >
+              {#snippet icon()}
+                <Wifi size="2rem" strokeWidth={1.8} />
+              {/snippet}
+            </EmptyState>
+            {#if rejectedNote}
+              <p class="note">{msg('transfers.lanRejectedPrefix', { summary: rejectedNote })}</p>
+            {/if}
+          {:else if groups.length === 1}
+            <ul class="list">
+              {#each $offers as offer (offerKey(offer))}
+                {@render offerRow(offer, false)}
+              {/each}
+            </ul>
+          {:else}
+            {#each groups as group (group.peerId)}
+              {@const id = `${uid}-host-${group.peerId}`}
+              <section class="group" aria-labelledby={id}>
+                <SectionHeader {id} level={3} title={msg('transfers.lanHostHeading', { host: group.host })} count={group.offers.length} />
+                <ul class="list">
+                  {#each group.offers as offer (offerKey(offer))}
+                    {@render offerRow(offer, true)}
+                  {/each}
+                </ul>
+              </section>
             {/each}
-          </ul>
-        {:else}
-          {#each groups as group (group.peerId)}
-            {@const id = `${uid}-host-${group.peerId}`}
-            <section class="group" aria-labelledby={id}>
-              <SectionHeader {id} level={3} title={msg('transfers.lanHostHeading', { host: group.host })} count={group.offers.length} />
-              <ul class="list">
-                {#each group.offers as offer (offerKey(offer))}
-                  {@render offerRow(offer, true)}
-                {/each}
-              </ul>
-            </section>
-          {/each}
-        {/if}
-      </section>
+          {/if}
+        </section>
+      {/if}
 
       <section class="section" aria-labelledby={headings.sharing} data-lan-section="sharing">
         <SectionHeader id={headings.sharing} title={msg('transfers.lanSharingHeading')} count={$shares.length} />
@@ -311,7 +331,8 @@
 </Page>
 
 <style>
-  .load-failed {
+  .load-failed,
+  .sharing-off {
     margin-bottom: var(--space-5);
   }
 
