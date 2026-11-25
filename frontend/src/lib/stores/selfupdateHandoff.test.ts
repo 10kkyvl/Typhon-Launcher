@@ -87,6 +87,28 @@ describe('confirming the restart of a downloaded update', () => {
     expect(get(store.selfUpdateApplying)).toBe(true);
   });
 
+  it('logs a refusal only when it is not the platform saying the seamless update is not for it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const first = await load();
+      vi.mocked(first.service.beginHandoff).mockRejectedValue(new first.service.SelfUpdateError(`typhon:selfupdate.handoff_unsupported: ${UNSUPPORTED}`));
+      vi.mocked(first.service.applyUpdate).mockResolvedValue(undefined);
+      await first.store.requestHandoff();
+      expect(first.service.applyUpdate).toHaveBeenCalledOnce();
+      expect(warn).not.toHaveBeenCalled();
+
+      vi.clearAllMocks();
+      const second = await load();
+      vi.mocked(second.service.beginHandoff).mockRejectedValue(new second.service.SelfUpdateError('typhon:selfupdate.busy: selfupdate: busy'));
+      vi.mocked(second.service.applyUpdate).mockResolvedValue(undefined);
+      await second.store.requestHandoff();
+      expect(second.service.applyUpdate).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('refused on both paths, says the worker\'s reason and sends the show home', async () => {
     const { service, store, show, toasts } = await load();
     vi.mocked(service.beginHandoff).mockRejectedValue(new service.SelfUpdateError(UNSUPPORTED));

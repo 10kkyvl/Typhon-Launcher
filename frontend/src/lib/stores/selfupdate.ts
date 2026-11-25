@@ -309,7 +309,9 @@ export async function requestHandoff() {
   } catch (err) {
     // BeginHandoff's contract: an error means nothing changed and the worker path is open. Whatever
     // the cause (another platform, a portable build, a busy service), that path says its own error.
-    console.warn('seamless update refused, restarting instead', err);
+    // A platform that cannot hand over is the expected case and is not worth a log line.
+    const unsupported = err instanceof Error && err.message.includes('selfupdate.handoff_unsupported');
+    if (!unsupported) console.warn('seamless update refused, restarting instead', err);
   }
   confirmed.update((c) => c && { ...c, handoff: false });
   await applyConfirmed();

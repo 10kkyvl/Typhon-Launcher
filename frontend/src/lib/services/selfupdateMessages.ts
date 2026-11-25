@@ -3,6 +3,7 @@ import type { MessageKey } from '../i18n';
 import type { RollbackInfo, SelfUpdateOutcome, SelfUpdateStatus } from './selfupdate';
 
 const REASONS: Record<string, MessageKey> = {
+  'selfupdate.handoff_unsupported': 'state.selfupdateReasonHandoffUnsupported',
   'selfupdate.not_replaced': 'state.selfupdateReasonBinaryUnchanged',
   'selfupdate.parent_still_running': 'state.selfupdateReasonLauncherDidNotExit',
   'selfupdate.hash_mismatch': 'state.selfupdateReasonCorruptDownload',

@@ -206,6 +206,7 @@ export const state = {
   'state.selfupdateCodeDownloadFailed': 'Не удалось загрузить обновление.',
   'state.selfupdateCodeApplyFailed': 'Не удалось установить обновление.',
   'state.selfupdateHandoffFailed': 'Лаунчер остался на прежней версии, обновление по-прежнему готово.',
+  'state.selfupdateReasonHandoffUnsupported': 'Обновление без перезапуска здесь недоступно.',
 
   'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
 

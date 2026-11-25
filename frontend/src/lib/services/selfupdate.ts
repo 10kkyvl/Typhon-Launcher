@@ -273,7 +273,7 @@ export async function getHandoffInfo(): Promise<HandoffInfo> {
 export async function beginHandoff(phaseStart: number): Promise<void> {
   if (!inWails) throw unavailable();
   try {
-    await SelfUpdateService.BeginHandoff(get(locale), phaseStart);
+    await SelfUpdateService.BeginHandoff(phaseStart);
   } catch (err) {
     throw toSelfUpdateError(err);
   }

@@ -205,7 +205,7 @@ describe('the seamless restart calls', () => {
     bindings.BeginHandoff.mockResolvedValueOnce(undefined);
 
     await expect(beginHandoff(1_700_000_000_123)).resolves.toBeUndefined();
-    expect(bindings.BeginHandoff).toHaveBeenCalledExactlyOnceWith('en', 1_700_000_000_123);
+    expect(bindings.BeginHandoff).toHaveBeenCalledExactlyOnceWith(1_700_000_000_123);
   });
 
   it('passes a refused hand-over on as an error, so the caller can restart instead', async () => {
