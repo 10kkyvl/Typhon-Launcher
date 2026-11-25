@@ -703,7 +703,7 @@ func TestBeginHandoffWithAWrongHashChangesNothing(t *testing.T) {
 	r.svc.readyArtifact = &art
 	r.svc.portable = true
 
-	err := r.svc.BeginHandoff("en", 1)
+	err := r.svc.BeginHandoff(1)
 	if !errors.Is(err, ErrHashMismatch) && !errors.Is(err, ErrSizeMismatch) {
 		t.Fatalf("BeginHandoff() error = %v, want a hash mismatch", err)
 	}
@@ -741,7 +741,7 @@ func TestBeginHandoffRejectsAnUnsupportedPlatformBeforeAnyChange(t *testing.T) {
 	r.svc.readyArtifact = &art
 	r.svc.portable = true
 
-	err := r.svc.BeginHandoff("en", 1)
+	err := r.svc.BeginHandoff(1)
 	if !errors.Is(err, ErrHandoffUnsupported) {
 		t.Fatalf("BeginHandoff() error = %v, want ErrHandoffUnsupported", err)
 	}

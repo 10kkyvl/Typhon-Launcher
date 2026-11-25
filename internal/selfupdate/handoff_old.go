@@ -128,13 +128,17 @@ func (s *Service) serviceContext() context.Context {
 // BeginHandoff updates without a visible restart: it swaps the launcher on
 // disk, starts the new build beside this one and, once the new window is on
 // screen, quits. phaseStart is when the update screen began animating (unix
-// ms) and is carried to the successor so the animation continues.
+// ms) and is carried to the successor so the animation continues. Unlike
+// ApplyUpdate it takes no language: there is no worker window to translate,
+// and the successor reads the language from the settings like any start.
 //
 // An error means nothing was changed and ApplyUpdate, the worker path that
-// restarts the launcher, is still available. After a nil return the outcome
-// arrives as status events: the process exits on success, and on failure the
-// swap is undone and the state is ready again with error code handoff_failed.
-func (s *Service) BeginHandoff(_ string, phaseStart int64) error {
+// restarts the launcher, is still available; ErrHandoffUnsupported (code
+// selfupdate.handoff_unsupported) says this build, platform or installation
+// cannot hand over at all. After a nil return the outcome arrives as status
+// events: the process exits on success, and on failure the swap is undone and
+// the state is ready again with error code handoff_failed.
+func (s *Service) BeginHandoff(phaseStart int64) error {
 	if err := s.acquire(); err != nil {
 		return err
 	}
