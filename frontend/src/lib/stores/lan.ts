@@ -23,6 +23,7 @@ import { toast } from './toasts';
 
 export const peers = writable<Peer[]>([]);
 export const offers = writable<Offer[]>([]);
+/** The games this computer shares now; one whose sharing was stopped is not among them. */
 export const shares = writable<Share[]>([]);
 export const transfers = writable<Transfer[]>([]);
 export const hashing = writable<Map<string, HashProgress>>(new Map());
@@ -77,10 +78,13 @@ type Snapshot = [Peer[], Offer[], Share[], Stats];
 
 const readSnapshot = (): Promise<Snapshot> => Promise.all([getPeers(), getOffers(), getShares(), getStats()]);
 
+// Go lists every game it ever prepared, a stopped one with `enabled: false`: the store holds the shared ones.
+const stillShared = (list: Share[] | null | undefined) => (list ?? []).filter((share) => share.enabled);
+
 function received([peersList, offersList, sharesList, statsResult]: Snapshot) {
   peers.set(peersList);
   offers.set(offersList);
-  shares.set(sharesList);
+  shares.set(stillShared(sharesList));
   lanStats.set(statsResult);
   lanLoaded.set(true);
   lanLoadError.set(null);
@@ -132,7 +136,7 @@ export async function initLan(): Promise<void> {
     peers.set((event.data as Peer[]) ?? []);
   });
   on('lan:shares', (event) => {
-    shares.set((event.data as Share[]) ?? []);
+    shares.set(stillShared(event.data as Share[] | null));
   });
   on('lan:hashing', (event) => {
     const progress = event.data as HashProgress;

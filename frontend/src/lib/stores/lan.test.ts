@@ -161,6 +161,34 @@ describe('lan store pins: events', () => {
   });
 });
 
+// Go's Shares and lan:shares list every game it ever prepared, a stopped one with `enabled: false`
+// (internal/lan store.list): only the games still shared are the store's.
+describe('lan store: games still shared', () => {
+  const listed = [
+    { gameId: 'g1', title: 'Игра', enabled: true },
+    { gameId: 'g2', title: 'Другая', enabled: false },
+  ];
+
+  it('the first read keeps only the games still shared', async () => {
+    vi.resetModules();
+    const service = await import('../services/lan');
+    vi.mocked(service.getShares).mockResolvedValueOnce(listed as never);
+    const store = await import('./lan');
+
+    await store.initLan();
+
+    expect(get(store.shares).map((s) => s.gameId)).toEqual(['g1']);
+  });
+
+  it('lan:shares keeps only the games still shared: a stopped one leaves', async () => {
+    const { store } = await load();
+
+    handlers['lan:shares']({ data: listed });
+
+    expect(get(store.shares).map((s) => s.gameId)).toEqual(['g1']);
+  });
+});
+
 describe('lan store pins: answers', () => {
   it('a transfer Go starts joins the list', async () => {
     const { service, store } = await load();
