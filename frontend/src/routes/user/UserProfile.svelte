@@ -33,6 +33,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
+  import type { SocialKey } from '../../lib/i18n/catalog/ru/social';
   import HiddenBadge from '../profile/HiddenBadge.svelte';
   import ProfilePlaying from '../profile/ProfilePlaying.svelte';
   import UserActivity from './UserActivity.svelte';
@@ -51,7 +52,19 @@
   let failure = $state('');
   let missing = $state(false);
   let busy = $state(false);
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  type Action = 'add' | 'cancel' | 'accept' | 'decline' | 'unfriend' | 'block';
+  let pending = $state<{ prompt: ConfirmPrompt; action: Action } | null>(null);
+
+  // What failed, when the answer carries no code of its own.
+  const FAILED: Record<Action, SocialKey> = {
+    add: 'social.friendsSendRequestFailed',
+    cancel: 'social.cancelRequestFailed',
+    accept: 'social.acceptRequestFailed',
+    decline: 'social.declineRequestFailed',
+    unfriend: 'social.friendsUnfriendFailed',
+    block: 'social.blockFailed',
+  };
+  const failedText = (action: Action, err: unknown) => accountErrorText(err, msg(FAILED[action]));
 
   const isGuest = $derived($authState === 'guest');
   const name = $derived(data ? data.displayName || data.username : '');
@@ -94,8 +107,9 @@
   );
   const autoArt = $derived(wideArt(data?.autoGame) || undefined);
 
-  // A retry keeps the failure on screen, its Retry busy, until the answer replaces it.
-  async function load(target: string, quiet = false, retry = false) {
+  // A retry keeps the failure on screen, its Retry busy, until the answer replaces it. A quiet read
+  // keeps the page as it is and answers its failure, for the caller to say.
+  async function load(target: string, quiet = false, retry = false): Promise<unknown> {
     if (quiet) {
       refreshing = true;
     } else {
@@ -115,10 +129,7 @@
       missing = false;
     } catch (err) {
       if (target !== username) return;
-      if (quiet) {
-        toast(accountErrorText(err, msg('social.userRefreshFailed')), 'danger');
-        return;
-      }
+      if (quiet) return err;
       data = null;
       missing = err instanceof AccountError && err.code === 'user_not_found';
       failure = accountErrorText(err, msg('social.userLoadFailed'));
@@ -144,53 +155,64 @@
 
   function act(id: string) {
     const current = data;
-    if (!current || busy) return;
-    if (id !== 'unfriend' && id !== 'block') {
-      void run(id);
+    const action = id as Action;
+    if (!current || busy || !(action in FAILED)) return;
+    if (action !== 'unfriend' && action !== 'block') {
+      perform(action).catch((err) => toast(failedText(action, err), 'danger'));
       return;
     }
     const label = current.displayName || current.username;
     pending = {
-      prompt: id === 'unfriend' ? unfriendPrompt(label) : blockPrompt(label, current.relation === 'friend'),
-      run: () => run(id),
+      prompt: action === 'unfriend' ? unfriendPrompt(label) : blockPrompt(label, current.relation === 'friend'),
+      action,
     };
   }
 
-  async function run(id: string) {
+  async function change(action: Action, current: PublicProfile): Promise<string> {
+    if (action === 'add') {
+      const result = await sendRequest(current.username);
+      return result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing');
+    }
+    if (action === 'cancel') {
+      await decline(current.id);
+      return msg('social.requestCancelled');
+    }
+    if (action === 'decline') {
+      await decline(current.id);
+      return msg('social.requestDeclined');
+    }
+    if (action === 'accept') {
+      await accept(current.id);
+      return msg('social.friendsNowFriends');
+    }
+    if (action === 'unfriend') {
+      await unfriend(current.id);
+      return msg('social.friendsUnfriended');
+    }
+    await block(current.id);
+    return msg('social.userBlocked');
+  }
+
+  // Rejects only when the action itself failed: the caller says that where the player looks. Once it is
+  // done it is said as done, and a failed re-read after it is said as a failed read.
+  async function perform(action: Action): Promise<void> {
     const current = data;
     if (!current || busy) return;
     busy = true;
     try {
-      let done = '';
-      if (id === 'add') {
-        const result = await sendRequest(current.username);
-        done = result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing');
-      } else if (id === 'cancel') {
-        await decline(current.id);
-        done = msg('social.requestCancelled');
-      } else if (id === 'decline') {
-        await decline(current.id);
-        done = msg('social.requestDeclined');
-      } else if (id === 'accept') {
-        await accept(current.id);
-        done = msg('social.friendsNowFriends');
-      } else if (id === 'unfriend') {
-        await unfriend(current.id);
-        done = msg('social.friendsUnfriended');
-      } else if (id === 'block') {
-        await block(current.id);
-        await refresh();
-        toast(msg('social.userBlocked'), 'success');
+      toast(await change(action, current), 'success');
+      if (action === 'block') {
+        // The blocked players are on the friends screen, and the friends list is what refresh reads.
+        await refresh().catch((err) => toast(accountErrorText(err, msg('social.friendsRefreshFailed')), 'danger'));
         navigate('friends', { tab: 'blocked' });
         return;
-      } else {
-        return;
       }
-      toast(done, 'success');
-      await refresh();
-      await load(current.username, true);
-    } catch (err) {
-      toast(accountErrorText(err, msg('social.actionFailed')), 'danger');
+      const listFailed = await refresh().then(
+        () => null,
+        (err: unknown) => err ?? new Error('refresh'),
+      );
+      const failed = (await load(current.username, true)) ?? listFailed;
+      if (failed) toast(accountErrorText(failed, msg('social.userRefreshFailed')), 'danger');
     } finally {
       busy = false;
     }
@@ -325,7 +347,13 @@
   {/if}
 
   {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+    {@const action = pending.action}
+    <ConfirmModal
+      prompt={pending.prompt}
+      onconfirm={() => perform(action)}
+      onclose={() => (pending = null)}
+      errorText={(err) => failedText(action, err)}
+    />
   {/if}
 </Page>
 
