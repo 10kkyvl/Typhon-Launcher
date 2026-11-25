@@ -103,15 +103,15 @@ export const ui = {
   'ui.downloadingUpdate': 'Загрузка обновления {version}',
   'ui.downloadingUpdatePatch': 'Загрузка обновления {version}: только изменения',
   'ui.installingUpdate': 'Устанавливаем обновление {version}',
-  'ui.launcherRestartShort': 'Лаунчер закроется и запустится заново.',
+  'ui.launcherRestartShort': 'Лаунчер переходит на новую версию.',
   'ui.updateReadyMessage': 'Обновление {version} загружено и готово к установке',
-  'ui.launcherRestartNewVersion': 'Лаунчер закроется и перезапустится с новой версией.',
+  'ui.launcherRestartNewVersion': 'Лаунчер перезапустится на новой версии, окно может ненадолго закрыться.',
   'ui.restartAndUpdate': 'Перезапустить и обновить',
   'ui.notNow': 'Не сейчас',
   'ui.versionAvailable': 'Доступна версия {version}',
   'ui.restartLauncherTitle': 'Перезапустить лаунчер?',
   'ui.restartLauncherWarning':
-    'Typhon Launcher закроется прямо сейчас, установит обновление {version} и запустится заново. Незавершённые загрузки и установки продолжатся после перезапуска.',
+    'Typhon Launcher установит обновление {version} и перезапустится на новой версии, окно может ненадолго закрыться. Незавершённые загрузки и установки продолжатся после перезапуска.',
 
   'ui.updateAvailable': 'Доступно обновление',
   'ui.updateAvailableHint': 'Вышла новая версия установленной игры.',

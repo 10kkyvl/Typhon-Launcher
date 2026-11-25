@@ -105,15 +105,15 @@ export const ui: Record<UiKey, Message> = {
   'ui.downloadingUpdate': 'Downloading update {version}',
   'ui.downloadingUpdatePatch': 'Downloading update {version}: changes only',
   'ui.installingUpdate': 'Installing update {version}',
-  'ui.launcherRestartShort': 'The launcher will close and restart.',
+  'ui.launcherRestartShort': 'The launcher is moving to the new version.',
   'ui.updateReadyMessage': 'Update {version} is downloaded and ready to install',
-  'ui.launcherRestartNewVersion': 'The launcher will close and restart on the new version.',
+  'ui.launcherRestartNewVersion': 'The launcher restarts on the new version; its window may close for a moment.',
   'ui.restartAndUpdate': 'Restart and update',
   'ui.notNow': 'Not now',
   'ui.versionAvailable': 'Version {version} is available',
   'ui.restartLauncherTitle': 'Restart the launcher?',
   'ui.restartLauncherWarning':
-    'Typhon Launcher will close right now, install update {version}, and restart. Unfinished downloads and installs will continue after the restart.',
+    'Typhon Launcher will install update {version} and restart on the new version; its window may close for a moment. Unfinished downloads and installs will continue after the restart.',
 
   'ui.updateAvailable': 'Update available',
   'ui.updateAvailableHint': 'A newer version of the installed game is out.',
