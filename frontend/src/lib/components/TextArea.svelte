@@ -112,10 +112,25 @@
     });
   });
 
+  // A growing field mounted hidden had no content height to read, and one laid out at another width
+  // wraps its text again: a change of its width measures it again. Its border box, so the height set
+  // below and a scrollbar coming or going do not count as one.
+  let width = $state(0);
+  $effect(() => {
+    const field = textarea;
+    if (!grow || !field || typeof ResizeObserver !== 'function') return;
+    const sizes = new ResizeObserver(() => {
+      width = field.offsetWidth;
+    });
+    sizes.observe(field);
+    return () => sizes.disconnect();
+  });
+
   // A growing field takes its text's height. Read on every change of the value, the caller's too (a
   // field cleared after a send shrinks back).
   $effect(() => {
     void value;
+    void width;
     const field = textarea;
     if (!grow || !field) return;
     field.style.height = 'auto';
