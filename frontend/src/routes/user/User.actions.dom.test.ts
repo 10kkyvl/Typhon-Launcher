@@ -123,7 +123,7 @@ describe("a user's page: a failed action is said where the player looks", () => 
 });
 
 describe("a user's page: a success stays a success", () => {
-  it('Add done and the friends list not re-read: the success, then the re-read failure, not "the action failed"', async () => {
+  it('Add done and the friends list not re-read: the success, then the list re-read failure, not "the action failed"', async () => {
     vi.mocked(sendRequest).mockResolvedValue({ accepted: false } as SendResult);
     vi.mocked(refresh).mockRejectedValue(new Error('offline'));
     const { user } = await mount(player(), player({ relation: 'outgoing' }));
@@ -133,9 +133,24 @@ describe("a user's page: a success stays a success", () => {
     await vi.waitFor(() => expect(said()).toHaveLength(2));
     expect(said()).toEqual([
       ['success', msg('social.relationOutgoing')],
-      ['danger', msg('social.userRefreshFailed')],
+      ['danger', msg('social.friendsRefreshFailed')],
     ]);
     await screen.findByRole('button', { name: msg('social.cancelRequestButton') });
+  });
+
+  it('Add done and neither the list nor the profile re-read: the success, then one read failure, the profile\'s', async () => {
+    vi.mocked(sendRequest).mockResolvedValue({ accepted: false } as SendResult);
+    vi.mocked(refresh).mockRejectedValue(new Error('offline'));
+    const { user } = await mount(player());
+    vi.mocked(fetchProfile).mockRejectedValue(new Error('offline'));
+
+    await user.click(button(msg('social.relationNone')));
+
+    await vi.waitFor(() => expect(said()).toHaveLength(2));
+    expect(said()).toEqual([
+      ['success', msg('social.relationOutgoing')],
+      ['danger', msg('social.userRefreshFailed')],
+    ]);
   });
 
   it('Accept done and the profile not re-read: the success, then the re-read failure once', async () => {
@@ -152,7 +167,7 @@ describe("a user's page: a success stays a success", () => {
     ]);
   });
 
-  it('a confirmed unfriend whose re-read fails closes its dialog: the success, then the re-read failure', async () => {
+  it('a confirmed unfriend whose list re-read fails closes its dialog: the success, then the list re-read failure', async () => {
     vi.mocked(unfriend).mockResolvedValue(undefined);
     vi.mocked(refresh).mockRejectedValue(new Error('offline'));
     const { user } = await mount(player({ relation: 'friend' }), player());
@@ -162,7 +177,7 @@ describe("a user's page: a success stays a success", () => {
     await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
     expect(said()).toEqual([
       ['success', msg('social.friendsUnfriended')],
-      ['danger', msg('social.userRefreshFailed')],
+      ['danger', msg('social.friendsRefreshFailed')],
     ]);
   });
 

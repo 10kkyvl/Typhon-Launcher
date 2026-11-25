@@ -219,8 +219,10 @@
         () => null,
         (err: unknown) => err ?? new Error('refresh'),
       );
-      const failed = (await load(current.username, true)) ?? listFailed;
-      if (failed) toast(accountErrorText(failed, msg('social.userRefreshFailed')), 'danger');
+      const profileFailed = await load(current.username, true);
+      // Both failing is said once, as the profile's: the page then shows the relation from before.
+      if (profileFailed) toast(accountErrorText(profileFailed, msg('social.userRefreshFailed')), 'danger');
+      else if (listFailed) toast(accountErrorText(listFailed, msg('social.friendsRefreshFailed')), 'danger');
     } finally {
       busy = '';
     }
