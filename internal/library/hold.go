@@ -475,3 +475,25 @@ func (s *Service) checkHoldsLocked() error {
 	}
 	return nil
 }
+
+// FolderHeld says whether a folder at, inside or around dir is held right
+// now: by a removal, a move or a move's recovery, by a card being added, or
+// by an update or a repair writing its game's folder. It only looks, for the
+// disk usage screen to refuse deleting a leftover there.
+//
+//wails:ignore
+func (s *Service) FolderHeld(dir string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, h := range s.holds {
+		if overlaps([]string{dir}, h.dir) {
+			return true
+		}
+	}
+	for id := range s.updating {
+		if game := s.findLocked(id); game != nil && overlaps(game.Footprint(), dir) {
+			return true
+		}
+	}
+	return false
+}
