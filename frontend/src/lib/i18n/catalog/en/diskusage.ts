@@ -112,7 +112,7 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.reason.relocate_unjournaled': "A move's temporary folder with no record of the move",
   'diskusage.reason.removal_pending': "The game's removal finishes at the next launch",
   'diskusage.reason.removal_unjournaled': "An unfinished removal's folder with no journal record: the launcher will not delete it",
-  'diskusage.reason.removals_unreadable': 'The removal journal cannot be read, so whose folder this is is unknown',
+  'diskusage.reason.removals_unreadable': 'The removal journal cannot be read, so it is unknown whose folder this is',
   'diskusage.reason.folder_held': 'A removal, move, update or game being added is using this folder right now',
   'diskusage.kindRelocateCopyStaging': 'Copy of a game from an unfinished move',
   'diskusage.kindRelocateCopyTarget': "Copy of a game at a move's destination",

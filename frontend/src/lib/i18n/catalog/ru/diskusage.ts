@@ -135,7 +135,7 @@ export const diskusage = {
   'diskusage.warning.size_not_saved': 'Размеры игр не сохранены в библиотеке',
   'diskusage.warning.folder_unreadable': 'Не удалось прочитать папку с остатками',
   'diskusage.warning.moves_unchecked': 'Остатки не сверены с переносами игр',
-  'diskusage.warning.removals_unreadable': 'Журнал удалений не читается: удалять файлы игр нельзя, пока его не прочитать',
+  'diskusage.warning.removals_unreadable': 'Журнал удалений не читается: удалять файлы игр нельзя, пока его не удастся прочитать',
   'diskusage.warning.screenshots_no_folder': 'Папка снимков экрана не настроена',
   'diskusage.warning.screenshots_unreadable': 'Не удалось прочитать снимки экрана',
   'diskusage.warning.snapshots_disabled': 'Резервные копии сохранений недоступны',
