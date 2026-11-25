@@ -448,4 +448,15 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.emulatorsChooseFor': 'Choose the {platform} emulator',
   'settings.emulatorsResetFor': 'Reset the {platform} emulator',
   // /7-S2 downloads
+  // 7-S3 about
+  'settings.aboutBuildLine': '{version} · {platform}/{arch}',
+  'settings.aboutBuildLineDevmock': '{version} · {platform}/{arch} · devmock',
+  'settings.aboutValueMissing': '—',
+  'settings.aboutCpuLine': '{cpu} · {cores} · {threads}',
+  'settings.aboutCpuLineNoCores': '{cpu} · {threads}',
+  'settings.aboutRuntimeCrossOver': 'CrossOver {version}',
+  'settings.aboutInstalledCheckedAt': '{installed} · {checked}',
+  'settings.aboutLogsBundleLine': '{name} · {size} {hint}',
+  'settings.aboutLegalOpenNamed': 'Open “{title}”',
+  // /7-S3 about
 };
