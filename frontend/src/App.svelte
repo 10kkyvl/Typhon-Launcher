@@ -123,13 +123,13 @@
   // CloudConflictModal below is mounted under the same gate.
   $effect(() => setWindowReady(linksReady));
 
-  let lastGamesPath: string | undefined;
+  let lastLibraryPath: string | undefined;
   settings.subscribe((value) => {
     if (!value) return;
-    if (lastGamesPath !== undefined && lastGamesPath !== value.gamesPath) {
+    if (lastLibraryPath !== undefined && lastLibraryPath !== value.libraryPath) {
       refreshStorage();
     }
-    lastGamesPath = value.gamesPath;
+    lastLibraryPath = value.libraryPath;
   });
 </script>
 
