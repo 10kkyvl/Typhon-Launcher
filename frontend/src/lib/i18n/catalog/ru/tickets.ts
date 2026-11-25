@@ -98,7 +98,7 @@ export const tickets = {
   'tickets.settingsHint': 'Ответ придёт в раздел «Поддержка». Логи можно приложить к обращению.',
   // 7-P support
   'tickets.counterNear': { one: 'Остался {count} символ', few: 'Осталось {count} символа', many: 'Осталось {count} символов' },
-  'tickets.counterAt': 'Достигнут предел длины',
+  'tickets.counterAt': 'Достигнут лимит длины',
   'tickets.counterOver': { one: 'Лимит превышен на {count} символ', few: 'Лимит превышен на {count} символа', many: 'Лимит превышен на {count} символов' },
   'tickets.sendHint': '{keys} — отправить',
   'tickets.thread': 'Сообщения',
