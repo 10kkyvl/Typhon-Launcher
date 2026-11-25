@@ -288,6 +288,36 @@ describe('AuthScreen: the account server out of reach', () => {
     expect(get(authState)).toBe('unauthenticated');
   });
 
+  it('keeps Retry under focus and busy while the server is asked, then hands focus to the login field', async () => {
+    let answer: (state: unknown) => void = () => {};
+    account.Bootstrap.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    const { user } = unavailable('network_error');
+    const retry = screen.getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    const asked = { connected: retry.isConnected, busy: retry.getAttribute('aria-busy'), focused: document.activeElement === retry };
+    // The store keeps one bootstrap in flight for every caller: it is answered before any assertion,
+    // so a failure here leaves none pending for the next test.
+    answer({ status: 'unauthenticated', user: null, reason: '' });
+
+    expect(asked).toEqual({ connected: true, busy: 'true', focused: true });
+    const login = await screen.findByLabelText(msg('transfers.authIdentifierLabel'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(login));
+  });
+
+  it('keeps focus on the same Retry when it fails again', async () => {
+    account.Bootstrap.mockRejectedValue(new Error('network_error'));
+    const { user } = unavailable('network_error');
+    const retry = screen.getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(account.Bootstrap).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(retry.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+  });
+
   it('stays on the out-of-reach state with the new reason when Retry fails again', async () => {
     account.Bootstrap.mockRejectedValue(new Error('rate_limited'));
     const { user } = unavailable('network_error');

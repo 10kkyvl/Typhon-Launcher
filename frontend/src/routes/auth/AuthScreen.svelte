@@ -36,8 +36,12 @@
   let guesting = $state(false);
   const busy = $derived(submitting || guesting);
 
+  // While Retry asks the server, the out-of-reach state stays with Retry busy under focus: the store
+  // passes through `bootstrapping`, which would take the button away.
+  let retrying = $state(false);
+
   const isRegister = $derived($authView === 'register');
-  const offline = $derived($authState === 'unavailable');
+  const offline = $derived($authState === 'unavailable' || retrying);
 
   const fieldId = (field: Field) => (field === 'username' && !isRegister ? `${uid}-identifier` : `${uid}-${field}`);
 
@@ -128,6 +132,18 @@
     }
   }
 
+  async function onRetry() {
+    if (retrying) return;
+    const hand = focusHandOff();
+    retrying = true;
+    try {
+      await retryBootstrap();
+    } finally {
+      retrying = false;
+    }
+    void hand(() => document.getElementById(isRegister ? `${uid}-email` : `${uid}-identifier`));
+  }
+
   function onSubmit(event: SubmitEvent) {
     event.preventDefault();
     if (isRegister) submitRegister();
@@ -146,7 +162,7 @@
       <h1 class="title">{msg('transfers.authOfflineTitle')}</h1>
       <p class="subtitle">{accountMessage($authReason, msg('transfers.authServerUnavailable'))}</p>
       <div class="offline-actions">
-        <Button variant="primary" size="lg" onclick={() => retryBootstrap()}>{msg('common.retry')}</Button>
+        <Button variant="primary" size="lg" busy={retrying} onclick={onRetry}>{msg('common.retry')}</Button>
       </div>
       <p class="note">{msg('transfers.authOfflineNote')}</p>
     {:else}
