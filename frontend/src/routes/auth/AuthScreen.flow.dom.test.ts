@@ -458,3 +458,11 @@ describe('AuthScreen: the gate itself', () => {
     expect([...container.querySelectorAll('img')].filter((img) => !img.closest('[data-logo-origin]'))).toEqual([]);
   });
 });
+
+describe('the app\'s gate around the sign-in screen', () => {
+  it('shows the boot splash by the store\'s answer, so a retry keeps the screen and its Retry mounted', async () => {
+    const app = (await import('../../App.svelte?raw')).default;
+    expect(app).toContain('{#if $bootSplash}');
+    expect(app).not.toMatch(/\$authState === 'bootstrapping'/);
+  });
+});

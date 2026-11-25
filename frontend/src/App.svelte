@@ -56,7 +56,7 @@
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
   import { initWindowState } from './lib/stores/window';
-  import { authState, initAuth } from './lib/stores/user';
+  import { authState, bootSplash, initAuth } from './lib/stores/user';
   import { refreshStorage } from './lib/stores/storage';
   import Activity from './routes/activity/Activity.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
@@ -139,7 +139,7 @@
 {:else}
 {#key $locale}
   <TitleBar />
-  {#if $authState === 'bootstrapping'}
+  {#if $bootSplash}
     <div class="boot">
       <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
     </div>

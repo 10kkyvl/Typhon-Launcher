@@ -33,6 +33,11 @@ export const uploadingAvatar = writable(false);
 export const removingAvatar = writable(false);
 export const isOffline = derived(authState, (state) => state === 'offline');
 
+// An out-of-reach sign-in asked again passes through 'bootstrapping' too, but the screen that holds
+// Retry must stay under the player's focus: the splash is for a check nobody asked for by hand.
+const retryingBootstrap = writable(false);
+export const bootSplash = derived([authState, retryingBootstrap], ([state, retrying]) => state === 'bootstrapping' && !retrying);
+
 let bootstrapping: Promise<void> | null = null;
 
 export function initAuth(): Promise<void> {
@@ -49,8 +54,9 @@ export function retryBootstrap(): Promise<void> {
     reconnectAttempt = 0;
     return performReconnectAttempt();
   }
+  retryingBootstrap.set(true);
   authState.set('bootstrapping');
-  return initAuth();
+  return initAuth().finally(() => retryingBootstrap.set(false));
 }
 
 async function runBootstrap(): Promise<void> {

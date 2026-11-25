@@ -175,6 +175,47 @@ describe('initAuth', () => {
   });
 });
 
+describe('the boot splash', () => {
+  it('covers the first sign-in check', async () => {
+    const { accountMock, userStore } = await loadModules();
+    let answer!: (state: unknown) => void;
+    vi.mocked(accountMock.bootstrapSession).mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
+
+    const started = userStore.initAuth();
+    expect(get(userStore.bootSplash)).toBe(true);
+
+    answer({ status: 'unavailable', user: emptyUser(), reason: 'network_error' });
+    await started;
+    expect(get(userStore.bootSplash)).toBe(false);
+  });
+
+  it('does not come back while an out-of-reach sign-in is asked again: the screen with Retry stays', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValueOnce({ status: 'unavailable', user: emptyUser(), reason: 'network_error' } as never);
+    await userStore.initAuth();
+    let answer!: (state: unknown) => void;
+    vi.mocked(accountMock.bootstrapSession).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+
+    const retried = userStore.retryBootstrap();
+    expect(get(userStore.authState)).toBe('bootstrapping');
+    expect(get(userStore.bootSplash)).toBe(false);
+
+    answer({ status: 'unavailable', user: emptyUser(), reason: 'network_error' });
+    await retried;
+    expect(get(userStore.authState)).toBe('unavailable');
+    expect(get(userStore.bootSplash)).toBe(false);
+
+    // The next cold check after that (a sign-out and a fresh start) is covered again.
+    let again!: (state: unknown) => void;
+    vi.mocked(accountMock.bootstrapSession).mockReturnValueOnce(new Promise((resolve) => (again = resolve)) as never);
+    userStore.authState.set('bootstrapping');
+    const cold = userStore.initAuth();
+    expect(get(userStore.bootSplash)).toBe(true);
+    again({ status: 'unauthenticated', user: emptyUser(), reason: '' });
+    await cold;
+  });
+});
+
 describe('guest mode', () => {
   it('enters the app as a guest without touching the profile', async () => {
     const { accountMock, userStore } = await loadModules();
