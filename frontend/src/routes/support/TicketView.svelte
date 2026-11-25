@@ -159,7 +159,7 @@
   }
 
   // The send that owns `sending` and `upload`: a sent reply lets go of them before its read back, so
-  // the next reply may start meanwhile, and only the send that owns them clears them.
+  // the next reply may start meanwhile and take the token; only the send holding it clears them.
   let sendRun = 0;
 
   // A refusal of the text is said at the box, which takes focus; any other once, in the reply form.
@@ -184,7 +184,6 @@
       attachLogs = false;
       sending = false;
       upload = null;
-      sendRun += 1;
       toast(msg('tickets.replySent'), 'success');
       if (fromForm) {
         await tick();
@@ -193,7 +192,7 @@
       refreshPending = false;
       await load();
     } catch (err) {
-      if (mine === sendRun) sending = false;
+      sending = false;
       const text = supportErrorText(err, msg('tickets.replyFailed'));
       if (accountErrorField(err) === 'body') {
         replyError = text;
