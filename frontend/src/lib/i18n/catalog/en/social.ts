@@ -335,4 +335,7 @@ export const social: Record<SocialKey, Message> = {
   // 7-F2 user
   'social.userNotFoundHiddenDesc': "Check the username. A profile also won't open when one of you has blocked the other.",
   'social.userActionsNeedConnection': 'Not available without a connection to the server',
+  // 7-F1 friends
+  'social.friendsPlayingNowHeading': 'Playing now',
+  'social.friendsOthersHeading': 'Other friends',
 };

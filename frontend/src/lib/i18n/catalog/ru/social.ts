@@ -333,6 +333,9 @@ export const social = {
   // 7-F2 user
   'social.userNotFoundHiddenDesc': 'Проверьте имя. Профиль не откроется и тогда, когда один из вас заблокировал другого.',
   'social.userActionsNeedConnection': 'Без связи с сервером это недоступно',
+  // 7-F1 friends
+  'social.friendsPlayingNowHeading': 'Играют сейчас',
+  'social.friendsOthersHeading': 'Остальные друзья',
 } as const;
 
 export type SocialKey = keyof typeof social;
