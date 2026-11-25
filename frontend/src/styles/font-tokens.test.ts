@@ -36,7 +36,8 @@ const MONO_RULE = /\{[^{}]*font-family\s*:\s*var\(--font-mono\)[^{}]*\}/g;
 const ALLOWED = /^(?:inherit|initial|unset|var\(--font-(?:sans|mono)\))$/;
 const WORDMARK = 'var(--font-wordmark)';
 const WORDMARK_RULE = /([^{}]*)\{[^{}]*font-family\s*:\s*var\(--font-wordmark\)[^{}]*\}/g;
-const WORDMARK_SITES = ['lib/components/Sidebar.svelte .wordmark'];
+// The product name beside the logo: in the sidebar, and on the sign-in screen, which is outside the shell.
+const WORDMARK_SITES = ['lib/components/Sidebar.svelte .wordmark', 'routes/auth/AuthScreen.svelte .wordmark'];
 
 function literals(text: string): string[] {
   const bad: string[] = [];

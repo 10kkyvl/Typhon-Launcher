@@ -3,6 +3,7 @@
   import { Eye, EyeOff } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import LogoMark from '../../lib/components/LogoMark.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import TextField from '../../lib/components/TextField.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
@@ -151,15 +152,15 @@
   }
 </script>
 
-<div class="auth" style="--wails-draggable: drag">
+<main class="auth" style="--wails-draggable: drag" aria-labelledby="{uid}-title">
   <div class="panel" style="--wails-draggable: no-drag">
     <div class="brand">
-      <img class="brand-mark" src="/typhon.png" alt="" draggable="false" />
-      <span class="brand-name">Typhon</span>
+      <LogoMark />
+      <span class="wordmark">Typhon</span>
     </div>
 
     {#if offline}
-      <h1 class="title">{msg('transfers.authOfflineTitle')}</h1>
+      <h1 class="title" id="{uid}-title">{msg('transfers.authOfflineTitle')}</h1>
       <p class="subtitle">{accountMessage($authReason, msg('transfers.authServerUnavailable'))}</p>
       <div class="offline-actions">
         <Button variant="primary" size="lg" busy={retrying} onclick={onRetry}>{msg('common.retry')}</Button>
@@ -168,7 +169,7 @@
     {:else}
       {#key isRegister}
       <div class="view">
-      <h1 class="title">{isRegister ? msg('transfers.authRegisterTitle') : msg('transfers.authLoginTitle')}</h1>
+      <h1 class="title" id="{uid}-title">{isRegister ? msg('transfers.authRegisterTitle') : msg('transfers.authLoginTitle')}</h1>
 
       <!-- While a request runs the fields refuse edits by being read-only, not disabled: a field that
            turns disabled loses the focus Enter was pressed in. -->
@@ -276,7 +277,7 @@
       </div>
     {/if}
   </div>
-</div>
+</main>
 
 <style>
   .auth {
@@ -315,15 +316,14 @@
     margin-bottom: var(--space-4);
   }
 
-  .brand-mark {
-    width: 3.6rem;
-    height: 3.6rem;
-  }
-
-  .brand-name {
-    font-size: 2.1rem;
-    font-weight: 600;
-    letter-spacing: var(--tracking-title);
+  /* The product name as the sidebar sets it beside the same logo. */
+  .wordmark {
+    font-family: var(--font-wordmark);
+    font-size: var(--font-lg);
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text);
   }
 
   .title {

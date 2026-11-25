@@ -436,3 +436,25 @@ describe('AuthScreen: a link that cannot open', () => {
   });
 });
 
+describe('AuthScreen: the gate itself', () => {
+  it('is the page, named by its heading, with one heading', () => {
+    screenIn('login');
+    const page = screen.getByRole('main', { name: msg('transfers.authLoginTitle') });
+    expect(page.querySelectorAll('h1, h2, h3, h4, h5, h6')).toHaveLength(1);
+    expect(page.contains(screen.getByRole('button', { name: msg('transfers.authGuestAction') }))).toBe(true);
+  });
+
+  it('is named by the out-of-reach heading when the server is out of reach', () => {
+    authReason.set('network_error');
+    authState.set('unavailable');
+    renderDom(AuthScreen);
+    expect(screen.getByRole('main', { name: msg('transfers.authOfflineTitle') })).toBeTruthy();
+  });
+
+  it("shows the shell's logo part, not a picture of its own", () => {
+    const { container } = screenIn('login');
+    const brand = container.querySelector('.brand');
+    expect(brand?.querySelector('[data-logo-origin] img.logo-mark')).not.toBeNull();
+    expect([...container.querySelectorAll('img')].filter((img) => !img.closest('[data-logo-origin]'))).toEqual([]);
+  });
+});
