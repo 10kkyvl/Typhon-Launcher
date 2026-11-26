@@ -113,27 +113,37 @@ export function forgetRequest(by: Writer): void {
   settle();
 }
 
-/** Listeners of a request given back by a failed send: a form open and untouched takes it. */
-const requestBack = new Set<(draft: RequestDraft) => void>();
+/**
+ * Listeners of a request given back by a failed send of `by`, `kept` when it is the draft again. A form
+ * that holds nothing takes it in; one that holds something offers it, and answers whether what it
+ * holds is text the player typed, which then stays in it.
+ */
+type RequestBack = (draft: RequestDraft, kept: boolean, by: Writer) => boolean;
+const requestBack = new Set<RequestBack>();
 
-export function onRequestBack(listener: (draft: RequestDraft) => void): () => void {
+export function onRequestBack(listener: RequestBack): () => void {
   requestBack.add(listener);
   return () => requestBack.delete(listener);
 }
 
 /**
- * A send of `draft` from `by`, started under the account `from`, failed: it is kept again, unless
- * something newer is kept by now or another account (or no one) is signed in. Answers whether it was.
+ * A send of `draft` from `by`, started under the account `from`, failed: it is kept again unless
+ * something newer is kept by now, and an open form hears of it either way. Answers whether the text is
+ * back as the form's content: kept, and no open form holds text typed after it. Nothing is kept or
+ * heard once another account (or no one) is signed in.
  */
 export function returnRequest(draft: RequestDraft, by: Writer, from: string | null): boolean {
   // The text is lost with its account's session rather than given to whoever signed in since.
   if (!from || owner() !== from) return false;
-  if (mine()?.request) return false;
-  const into = writable();
-  if (!into) return false;
-  into.request = { draft: copy(draft), by };
-  for (const listener of [...requestBack]) listener(copy(draft));
-  return true;
+  const kept = !mine()?.request;
+  if (kept) {
+    const into = writable();
+    if (!into) return false;
+    into.request = { draft: copy(draft), by };
+  }
+  let newer = false;
+  for (const listener of [...requestBack]) if (listener(copy(draft), kept, by)) newer = true;
+  return kept && !newer;
 }
 
 /** Keeps the reply typed in a request; an empty one keeps nothing. */

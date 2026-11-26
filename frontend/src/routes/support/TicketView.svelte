@@ -198,7 +198,8 @@
       if (!outcome.sent) return;
       // An answer that comes after another account signed in shows that account nothing of this reply.
       if (account() !== who) return;
-      reply = '';
+      // A reply given back meanwhile (an earlier send of it failed) is what the box holds now.
+      reply = keptReply(number);
       attachLogs = false;
       sending = false;
       upload = null;

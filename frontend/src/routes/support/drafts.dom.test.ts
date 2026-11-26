@@ -298,17 +298,30 @@ describe('the kept drafts themselves', () => {
     expect(keptRequest()).toEqual(DRAFT);
   });
 
-  it('take the text of a failed send back only while nothing newer is kept, and tell an open form', () => {
-    const heard: RequestDraft[] = [];
-    const off = onRequestBack((back) => heard.push(back));
+  it('take the text of a failed send back only while nothing newer is kept, tell an open form either way, and call it back only while that form holds nothing typed', () => {
+    const heard: [RequestDraft, boolean][] = [];
+    let typedInForm = false;
+    const off = onRequestBack((back, kept) => {
+      heard.push([back, kept]);
+      return typedInForm;
+    });
     try {
       expect(returnRequest(DRAFT, form, me)).toBe(true);
       expect(keptRequest()).toEqual(DRAFT);
+      forgetRequest(form);
+      typedInForm = true;
+      expect(returnRequest(DRAFT, form, me)).toBe(false);
+      expect(keptRequest()).toEqual(DRAFT);
+      typedInForm = false;
       const newer = { ...DRAFT, subject: 'Written after' };
       keepRequest(newer, {});
       expect(returnRequest(DRAFT, form, me)).toBe(false);
       expect(keptRequest()).toEqual(newer);
-      expect(heard).toEqual([DRAFT]);
+      expect(heard).toEqual([
+        [DRAFT, true],
+        [DRAFT, true],
+        [DRAFT, false],
+      ]);
     } finally {
       off();
     }
@@ -319,7 +332,13 @@ describe('the kept drafts themselves', () => {
 
   it('take nothing back for a guest, nor for an account other than the one the send started under', () => {
     const heard: unknown[] = [];
-    const off = [onRequestBack((back) => heard.push(back)), onReplyBack((...back) => heard.push(back))];
+    const off = [
+      onRequestBack((back) => {
+        heard.push(back);
+        return false;
+      }),
+      onReplyBack((...back) => heard.push(back)),
+    ];
     try {
       as(null);
       expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me)]).toEqual([false, false]);

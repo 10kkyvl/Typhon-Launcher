@@ -75,6 +75,9 @@
   // (a subject, a text, a game) or restored one. The topic and the logs switch are settings: they are
   // carried into the draft once there is one, and never make one. A prefill alone is never kept.
   let owns = $state(draft !== null);
+  // A topic and the logs switch are settings, not content.
+  const holdsNothing = $derived(!subject.trim() && !body.trim() && !game);
+  const holdsTyped = $derived(owns && !holdsNothing);
 
   let form = $state<HTMLElement>();
   let subjectField = $state<HTMLInputElement>();
@@ -102,6 +105,10 @@
 
   let onScreen = true;
 
+  function current(): RequestDraft {
+    return { topic, game: game ? { ...game } : null, subject, body, attachLogs, logsTouched };
+  }
+
   function fill(from: RequestDraft) {
     topic = from.topic;
     game = from.game;
@@ -116,16 +123,17 @@
     const off = onLogUploadStatus((status) => {
       if (sending) upload = status;
     });
-    // A request whose send failed after its form was left comes back into this one while the player
-    // has not edited it: as a prefilled form offers a draft, or into a plain one.
-    const offBack = onRequestBack((back) => {
-      if (owns) return;
-      if (prefilled) {
-        offered = back;
-        return;
+    // A request of another form whose send failed comes into this one when it holds nothing, kept as
+    // its content again; otherwise it is offered beside what it holds (one offer at a time).
+    const offBack = onRequestBack((back, kept, by) => {
+      if (by === me) return false;
+      if (kept && holdsNothing) {
+        fill(back);
+        owns = true;
+        return false;
       }
-      fill(back);
-      owns = true;
+      offered ??= back;
+      return holdsTyped;
     });
     return () => {
       onScreen = false;
@@ -142,19 +150,22 @@
     untrack(() => keepRequest({ ...now, logsTouched }, me));
   });
 
-  // From the first content the player gives it this form's content is the draft: the one offered is
-  // replaced.
+  // From the first content the player gives it this form's content is the draft: the draft offered
+  // then is replaced. One offered to a form that is the writer already stays until Restore.
   function edit() {
+    if (owns) return;
     owns = true;
     offered = null;
   }
 
+  // What the player typed is not lost to a restore: it is offered in turn.
   async function restore() {
-    if (!offered) return;
+    if (!offered || sending) return;
+    const typed = holdsTyped ? current() : null;
     fill(offered);
-    offered = null;
+    offered = typed;
     owns = true;
-    // The notice and its button leave: focus goes on to the subject, never to the page.
+    // The notice's button may leave: focus goes on to the subject, never to the page.
     await tick();
     subjectField?.focus();
   }
@@ -224,7 +235,7 @@
     if (focused instanceof HTMLButtonElement && focused !== send && form?.contains(focused) && send) focusQuietly(send);
     sending = true;
     upload = null;
-    const sent: RequestDraft = { topic, game: game ? { ...game } : null, subject, body, attachLogs, logsTouched };
+    const sent = current();
     let started = false;
     let who: string | null = null;
     try {
@@ -274,6 +285,7 @@
     {#if offered}
       <Notice tone="info" announce={false} action={restoreDraft}>
         {offered.subject.trim() ? msg('tickets.draftKept', { subject: offered.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
+        {#if holdsTyped}{msg('tickets.draftSwapNote')}{/if}
       </Notice>
     {/if}
 
@@ -371,7 +383,7 @@
 <LogsConfirm bind:this={confirm} />
 
 {#snippet restoreDraft()}
-  <Button size="sm" onclick={restore}>{msg('tickets.draftRestore')}</Button>
+  <Button size="sm" disabled={sending} onclick={restore}>{msg('tickets.draftRestore')}</Button>
 {/snippet}
 
 {#snippet signIn()}

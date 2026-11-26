@@ -114,7 +114,13 @@ async function requestOnItsWay() {
 
 function hearing() {
   const heard: unknown[] = [];
-  const offs = [onReplyBack((...back) => heard.push(back)), onRequestBack((back) => heard.push(back))];
+  const offs = [
+    onReplyBack((...back) => heard.push(back)),
+    onRequestBack((back) => {
+      heard.push(back);
+      return false;
+    }),
+  ];
   return { heard, off: () => offs.forEach((off) => off()) };
 }
 

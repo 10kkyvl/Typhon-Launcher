@@ -10,8 +10,8 @@ import { toasts } from '../../lib/stores/toasts';
 import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
-import { held, LIMITS, message, thread, ticket } from '../../lib/testing/supportTesting';
-import { keptRequest } from './drafts';
+import { held, LIMITS, message, thread, ticket, words } from '../../lib/testing/supportTesting';
+import { keptReply, keptRequest } from './drafts';
 import NewTicket from './NewTicket.svelte';
 import Support from './Support.svelte';
 import TicketView from './TicketView.svelte';
@@ -62,6 +62,10 @@ const topicBox = () => screen.getByRole('combobox', { name: msg('tickets.topicLa
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 const replies = () => vi.mocked(replyTicket).mock.calls.map((call) => call[1]);
 const said = () => get(toasts).map((t) => [t.kind, t.message]);
+const offer = () => {
+  const plate = screen.queryByRole('button', { name: msg('tickets.draftRestore') })?.closest('.notice');
+  return plate ? words(plate) : null;
+};
 
 async function opened() {
   const view = renderDom(TicketView, { number: 7 });
@@ -205,6 +209,33 @@ describe('a reply on its way', () => {
     expect(replyBox().value).toBe('Next.');
   });
 
+  it('that fails while the box holds a newer reply on its way stays out of the box until that one is sent, then is in it', async () => {
+    const first = held<ReturnType<typeof message>>();
+    const second = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const one = await opened();
+    await send(one.user, 'First.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    const two = await opened();
+    await send(two.user, 'Second.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const meanwhile = { said: said(), box: replyBox().value };
+    second.resolve(message(5, 'user', 'Second.', 'y'));
+    await settled();
+    await settled();
+    const after = replyBox().value;
+    await two.user.type(replyBox(), ' Third.');
+    expect({ meanwhile, after, kept: keptReply(7) }).toEqual({
+      meanwhile: { said: [['danger', msg('tickets.replyNotSentKept', { subject: 'Game will not start' })]], box: 'Second.' },
+      after: 'First.',
+      kept: 'First. Third.',
+    });
+  });
+
   it('that fails with its request on screen stays in the box and is kept, said in the form and not by a toast', async () => {
     vi.mocked(replyTicket).mockRejectedValue(new AccountError('network_error'));
     const { user } = await opened();
@@ -289,6 +320,113 @@ describe('a new request on its way', () => {
     cleanup();
     await newRequest();
     expect(subjectField().value).toBe('Another matter');
+  });
+
+  it('that fails while the plain form is open again with only its topic changed comes back into it, and is kept as the player goes on', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicOther') }));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const back = { said: said(), form: shownRequest() };
+    await user.type(subjectField(), ' again');
+    cleanup();
+    await newRequest();
+    expect({ ...back, later: subjectField().value }).toEqual({
+      said: [['danger', msg('tickets.requestNotSentKept', { subject: 'Cannot sign in' })]],
+      form: SENT,
+      later: 'Cannot sign in again',
+    });
+  });
+
+  it('that fails while the form holds text the player typed is offered beside it, not said to be back in the form', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const back = { subject: subjectField().value, said: said(), offered: offer() };
+    await user.type(bodyField(), 'Still typing.');
+    expect({ ...back, offeredWhileTyping: offer() !== null }).toEqual({
+      subject: 'Another matter',
+      said: [['danger', msg('tickets.requestNotSentNewer', { subject: 'Cannot sign in' })]],
+      offered: `${msg('tickets.draftKept', { subject: 'Cannot sign in' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+      offeredWhileTyping: true,
+    });
+  });
+
+  it('offered beside typed text swaps with it on "Restore it": the typed text is offered in turn, the restored one kept', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(offer()).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: msg('tickets.draftRestore') }));
+    await vi.waitFor(() => expect(document.activeElement).toBe(subjectField()));
+    const swapped = { form: shownRequest(), offered: offer() };
+    await user.click(screen.getByRole('button', { name: msg('tickets.draftRestore') }));
+    const back = { subject: subjectField().value, offered: offer() };
+    await user.click(screen.getByRole('button', { name: msg('tickets.draftRestore') }));
+    cleanup();
+    await newRequest();
+    expect({ swapped, back, later: shownRequest() }).toEqual({
+      swapped: { form: SENT, offered: `${msg('tickets.draftKept', { subject: 'Another matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}` },
+      back: { subject: 'Another matter', offered: `${msg('tickets.draftKept', { subject: 'Cannot sign in' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}` },
+      later: SENT,
+    });
+  });
+
+  it('that fails while the open form sends another is kept, offered there, and in the form once that one is created', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const second = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(second.promise);
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    await user.type(bodyField(), 'Also broken.');
+    if (logsSwitch().getAttribute('aria-checked') === 'true') await user.click(logsSwitch());
+    await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(2));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const meanwhile = {
+      said: said(),
+      offered: offer() !== null,
+      restoreHeld: (screen.getByRole('button', { name: msg('tickets.draftRestore') }) as HTMLButtonElement).disabled,
+      subject: subjectField().value,
+    };
+    second.resolve(ticket(24, 'Another matter'));
+    await settled();
+    await settled();
+    cleanup();
+    await newRequest();
+    expect({ meanwhile, later: shownRequest() }).toEqual({
+      meanwhile: {
+        said: [['danger', msg('tickets.requestNotSentNewer', { subject: 'Cannot sign in' })]],
+        offered: true,
+        restoreHeld: true,
+        subject: 'Another matter',
+      },
+      later: SENT,
+    });
+  });
+
+  it('that fails with its form on screen is said there and offers nothing to the form it came from', async () => {
+    vi.mocked(createTicket).mockRejectedValue(new AccountError('network_error'));
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Cannot sign in');
+    await user.type(bodyField(), 'The code never arrives.');
+    if (logsSwitch().getAttribute('aria-checked') === 'true') await user.click(logsSwitch());
+    await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await screen.findByRole('alert');
+    expect({ offered: offer(), said: said(), subject: subjectField().value }).toEqual({ offered: null, said: [], subject: 'Cannot sign in' });
   });
 
   it('takes no topic meanwhile, so nothing puts its text back in the draft and it is not created twice', async () => {
