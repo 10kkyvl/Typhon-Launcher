@@ -28,7 +28,15 @@
   import { presenceDot } from '../../lib/social/presence';
   import { commonLine, sentAt } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
-  import { friendsLoaded, friendsLoadError, friendsPage, incomingCount, needsSocialConsent, reloadFriends } from '../../lib/stores/social';
+  import {
+    friendsLoaded,
+    friendsLoadError,
+    friendsPage,
+    incomingCount,
+    needsSocialConsent,
+    reloadFriends,
+    showFriendsState,
+  } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { relativeDate } from '../../lib/utils/format';
@@ -241,6 +249,9 @@
     void $friendsLoaded;
     untrack(catchLeaving);
   });
+
+  // The screen says a failed first read in its notice: the store's own reads do not toast it too.
+  $effect(() => showFriendsState());
 
   // Read on arrival and again whenever the session changes under the screen (a guest signs in, the
   // connection comes back): the store forgets the lists of a session that ended.

@@ -64,10 +64,33 @@ function received(page: FriendsPage) {
   friendsLoadError.set(null);
 }
 
-/** Before any page a failed read is the state the screens show; after one the lists stay and a toast says it. */
-function readFailed(err: unknown, fallback: string) {
-  if (get(friendsLoaded)) report(err, fallback);
-  else friendsLoadError.set(err);
+// The screens mounted that show a failed first read themselves (the Friends screen, its notice).
+let shown = 0;
+
+/**
+ * Held while a screen that shows `friendsLoadError` is mounted: a failed first read of `loadFriends`
+ * (the consent dialog's) is then said by that screen, not in a toast too. Returns the release.
+ */
+export function showFriendsState(): () => void {
+  shown += 1;
+  let held = true;
+  return () => {
+    if (held) shown -= 1;
+    held = false;
+  };
+}
+
+/**
+ * Before any page a failed read is the state the Friends screen shows, and `said` asks for a toast
+ * too unless that screen is there; after a page the lists stay and a toast says it.
+ */
+function readFailed(err: unknown, fallback: string, said = false) {
+  if (get(friendsLoaded)) {
+    report(err, fallback);
+    return;
+  }
+  friendsLoadError.set(err);
+  if (said && shown === 0) report(err, fallback);
 }
 
 // Every page Go sent with `social:friends`: an answer asked for before one of them is older than it.
@@ -78,6 +101,10 @@ function answered(page: FriendsPage, before: number) {
   if (heard === before) received(page);
 }
 
+/**
+ * Reads the friends Go holds, for a screen that shows no state of its own (the consent dialog's read):
+ * a failure is kept as the state and said once in a toast, unless the Friends screen shows it.
+ */
 export async function loadFriends(): Promise<void> {
   const started = session;
   try {
@@ -85,7 +112,7 @@ export async function loadFriends(): Promise<void> {
     const page = await fetchFriends();
     if (started === session) answered(page, before);
   } catch (err) {
-    if (started === session) readFailed(err, msg('state.socialLoadFriendsFailed'));
+    if (started === session) readFailed(err, msg('state.socialLoadFriendsFailed'), true);
   }
 }
 
@@ -178,6 +205,7 @@ export async function initSocial(): Promise<void> {
     consentWithheld = needs;
     if (changed && needs) resetFeed();
   });
-
-  await loadFriends();
+  // Nothing is read here: a read in the unsettled start belongs to no account (the change of session
+  // drops or resets it). The kick of a signed-in session has Go read and send the page itself, and the
+  // Friends screen reads on arrival and on a change of session.
 }

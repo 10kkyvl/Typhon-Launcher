@@ -305,6 +305,20 @@ describe('the first read of the friends', () => {
     expect(get(friendsPage).friends.length).toBe(4);
   });
 
+  it('a start asks Go for nothing before the session is settled, and only kicks it once signed in', async () => {
+    vi.resetModules();
+    const service = await import('../services/social');
+    const social = await import('./social');
+    const { authState } = await import('./user');
+
+    await social.initSocial();
+    expect(get(authState)).toBe('bootstrapping');
+    authState.set('authenticated');
+    await Promise.resolve();
+
+    expect([service.kick, service.refresh, service.friends].map((call) => vi.mocked(call).mock.calls.length)).toEqual([1, 0, 0]);
+  });
+
   it('a session that ends forgets the read and its failure', async () => {
     const { authState, friendsLoaded, friendsLoadError, reloadFriends, service } = await signedIn();
     vi.mocked(service.friends).mockResolvedValueOnce(page(1, 0));
@@ -313,5 +327,66 @@ describe('the first read of the friends', () => {
     authState.set('guest');
 
     expect([get(friendsLoaded), get(friendsLoadError)]).toEqual([false, null]);
+  });
+});
+
+describe('the read after the sync consent (loadFriends)', () => {
+  async function signedIn() {
+    const store = await load();
+    const service = await import('../services/social');
+    const { toast } = await import('./toasts');
+    vi.mocked(service.friends).mockReset();
+    vi.mocked(toast).mockClear();
+    return { ...store, service, toast };
+  }
+
+  it('that fails before any page is kept as the state and said once in a toast', async () => {
+    const { friendsLoaded, friendsLoadError, loadFriends, service, toast } = await signedIn();
+    const failure = new Error('timeout');
+    vi.mocked(service.friends).mockRejectedValueOnce(failure);
+
+    await loadFriends();
+
+    expect([get(friendsLoaded), get(friendsLoadError)]).toEqual([false, failure]);
+    expect(vi.mocked(toast).mock.calls).toEqual([[msg('state.socialLoadFriendsFailed'), 'danger']]);
+  });
+
+  it('that fails while a screen shows the state itself is kept for it, without a toast', async () => {
+    const { friendsLoadError, loadFriends, service, showFriendsState, toast } = await signedIn();
+    const failure = new Error('timeout');
+    vi.mocked(service.friends).mockRejectedValueOnce(failure).mockRejectedValueOnce(failure);
+    const release = showFriendsState();
+
+    await loadFriends();
+    expect(get(friendsLoadError)).toBe(failure);
+    expect(toast).not.toHaveBeenCalled();
+
+    release();
+    await loadFriends();
+    expect(vi.mocked(toast).mock.calls).toEqual([[msg('state.socialLoadFriendsFailed'), 'danger']]);
+  });
+
+  it('that fails after a page keeps the lists and says it once, whoever shows the state', async () => {
+    const { friendsPage, friendsLoadError, loadFriends, service, showFriendsState, toast } = await signedIn();
+    vi.mocked(service.friends).mockResolvedValueOnce(page(2, 0)).mockRejectedValueOnce(new Error('timeout'));
+    await loadFriends();
+    const release = showFriendsState();
+
+    await loadFriends();
+    release();
+
+    expect([get(friendsPage).friends.length, get(friendsLoadError)]).toEqual([2, null]);
+    expect(vi.mocked(toast).mock.calls).toEqual([[msg('state.socialLoadFriendsFailed'), 'danger']]);
+  });
+
+  it('is not said when the session is gone', async () => {
+    const { AccountError } = await import('../services/account');
+    const { friendsLoadError, loadFriends, service, toast } = await signedIn();
+    vi.mocked(service.friends).mockRejectedValueOnce(new AccountError('unauthenticated'));
+
+    await loadFriends();
+
+    expect(get(friendsLoadError)).toBeInstanceOf(AccountError);
+    expect(toast).not.toHaveBeenCalled();
   });
 });

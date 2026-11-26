@@ -4,7 +4,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { Settings } from '../../lib/services/settings';
-import { blocks, friendCode, friends, refresh, type FriendsPage } from '../../lib/services/social';
+import { blocks, friendCode, friends, kick, refresh, type FriendsPage } from '../../lib/services/social';
 import { settings } from '../../lib/stores/settings';
 import { initSocial } from '../../lib/stores/social';
 import { toast } from '../../lib/stores/toasts';
@@ -181,6 +181,24 @@ describe('Friends: the first read of the friends', () => {
     expect(vi.mocked(toast).mock.calls[0]).toEqual([msg('social.friendsRefreshFailed'), 'danger']);
     expect(screen.getByText('Ana')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('Friends: the reads of a signed-in start', () => {
+  // The store asks nothing while the session is not settled (stores/social.test.ts pins a start with
+  // no screen: one kick, no read); Go's poll after the kick sends the page with social:friends.
+  it('the screen there at the sign-in reads once: one kick, one refresh, one Friends(), one blocked list', async () => {
+    authState.set('bootstrapping');
+    vi.clearAllMocks();
+    authState.set('authenticated');
+    mount();
+    expect(await screen.findByText('Ana')).toBeTruthy();
+    await vi.waitFor(() => expect(blocks).toHaveBeenCalled());
+    emitFriends(PAGE);
+    await tick();
+
+    const counts = [kick, refresh, friends, blocks].map((call) => vi.mocked(call).mock.calls.length);
+    expect(counts).toEqual([1, 1, 1, 1]);
   });
 });
 
