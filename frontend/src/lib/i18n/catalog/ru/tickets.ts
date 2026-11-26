@@ -111,5 +111,9 @@ export const tickets = {
   'tickets.draftKept': 'У вас есть неотправленное обращение «{subject}».',
   'tickets.draftKeptNoSubject': 'У вас есть неотправленное обращение без темы.',
   'tickets.draftRestore': 'Вернуть его',
+  'tickets.draftSwapNote': 'Если вернуть его, текст из формы не пропадёт: его можно будет вернуть отсюда же.',
+  'tickets.copyText': 'Скопировать текст',
+  'tickets.textCopied': 'Текст скопирован',
+  'tickets.textCopyFailed': 'Не удалось скопировать текст',
   // /7-P support
 } as const;

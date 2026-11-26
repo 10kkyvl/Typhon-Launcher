@@ -110,5 +110,9 @@ export const tickets = {
   'tickets.draftKept': 'You have an unsent request: “{subject}”.',
   'tickets.draftKeptNoSubject': 'You have an unsent request without a subject.',
   'tickets.draftRestore': 'Restore it',
+  'tickets.draftSwapNote': 'If you restore it, the text now in the form is not lost: you can restore it from here.',
+  'tickets.copyText': 'Copy text',
+  'tickets.textCopied': 'Text copied',
+  'tickets.textCopyFailed': 'Could not copy the text',
   // /7-P support
 } as const;
