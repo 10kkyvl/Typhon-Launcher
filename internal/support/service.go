@@ -167,12 +167,14 @@ func (s *Service) Create(input CreateInput) (Ticket, error) {
 	if err != nil {
 		return Ticket{}, err
 	}
+	session := ""
 	if input.AttachLogs {
-		bundleID, err := s.uploadBundle(base, createTarget)
+		bundleID, tok, err := s.uploadBundle(base, createTarget)
 		if err != nil {
 			return Ticket{}, err
 		}
 		req.LogBundleID = bundleID
+		session = tok
 	}
 
 	ctx, cancel, err := s.requestContext()
@@ -180,9 +182,14 @@ func (s *Service) Create(input CreateInput) (Ticket, error) {
 		return Ticket{}, err
 	}
 	defer cancel()
+	if input.AttachLogs {
+		if err := s.sameSession(createTarget, session); err != nil {
+			return Ticket{}, err
+		}
+	}
 	ticket, err := s.client.Create(ctx, req)
 	if input.AttachLogs {
-		s.settleBundle(createTarget, err)
+		s.settleBundle(createTarget, session, err)
 	}
 	return ticket, err
 }
@@ -200,9 +207,9 @@ func (s *Service) Reply(number int64, body string, attachLogs bool) (Message, er
 		return Message{}, err
 	}
 	target := replyTarget(number)
-	bundleID := ""
+	bundleID, session := "", ""
 	if attachLogs {
-		bundleID, err = s.uploadBundle(base, target)
+		bundleID, session, err = s.uploadBundle(base, target)
 		if err != nil {
 			return Message{}, err
 		}
@@ -213,9 +220,14 @@ func (s *Service) Reply(number int64, body string, attachLogs bool) (Message, er
 		return Message{}, err
 	}
 	defer cancel()
+	if attachLogs {
+		if err := s.sameSession(target, session); err != nil {
+			return Message{}, err
+		}
+	}
 	msg, err := s.client.Reply(ctx, number, body, bundleID)
 	if attachLogs {
-		s.settleBundle(target, err)
+		s.settleBundle(target, session, err)
 	}
 	return msg, err
 }
@@ -226,34 +238,67 @@ func replyTarget(number int64) string {
 	return "reply:" + strconv.FormatInt(number, 10)
 }
 
-func (s *Service) uploadBundle(ctx context.Context, target string) (string, error) {
+// uploadBundle returns the bundle id and the session token the send is pinned
+// to: the upload takes seconds, and the signed-in account may change meanwhile.
+func (s *Service) uploadBundle(ctx context.Context, target string) (string, string, error) {
 	if s.uploadLogs == nil {
-		return "", errLogsUnavailable
+		return "", "", errLogsUnavailable
 	}
-	tok, err := s.token()
-	if err != nil && !errors.Is(err, account.ErrNoCredential) {
-		return "", fmt.Errorf("resolve session token: %w", err)
+	tok, err := s.sessionToken()
+	if err != nil {
+		return "", "", err
 	}
-	if err != nil || tok == "" {
-		return "", &account.Error{Code: account.CodeUnauthenticated, Status: http.StatusUnauthorized}
+	if tok == "" {
+		return "", "", unauthenticated()
 	}
 	if id := s.keptFor(target, tok); id != "" {
-		return id, nil
+		return id, tok, nil
 	}
 	id, err := s.uploadLogs(ctx)
 	if err != nil {
 		if uierr.Code(err) == "" {
-			return "", uierr.Wrap(diagnostics.ErrCodeLogUploadFailed, err)
+			return "", "", uierr.Wrap(diagnostics.ErrCodeLogUploadFailed, err)
 		}
-		return "", err
+		return "", "", err
 	}
 	if strings.TrimSpace(id) == "" {
-		return "", uierr.New(diagnostics.ErrCodeLogUploadFailed, "log upload returned an empty bundle id")
+		return "", "", uierr.New(diagnostics.ErrCodeLogUploadFailed, "log upload returned an empty bundle id")
 	}
 	s.mu.Lock()
 	s.kept = &keptBundle{target: target, token: tok, id: id, at: s.now()}
 	s.mu.Unlock()
-	return id, nil
+	return id, tok, nil
+}
+
+// sessionToken is the signed-in account's token, "" when nobody is signed in.
+func (s *Service) sessionToken() (string, error) {
+	tok, err := s.token()
+	if errors.Is(err, account.ErrNoCredential) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve session token: %w", err)
+	}
+	return tok, nil
+}
+
+func unauthenticated() error {
+	return &account.Error{Code: account.CodeUnauthenticated, Status: http.StatusUnauthorized}
+}
+
+// sameSession refuses a send whose account changed while its logs were
+// uploading: posting it would put one account's text and logs into another
+// account's tickets. The refused send's bundle is dropped, not kept for a retry.
+func (s *Service) sameSession(target, pinned string) error {
+	current, err := s.sessionToken()
+	if err != nil {
+		return err
+	}
+	if current == pinned {
+		return nil
+	}
+	s.forgetBundle(target, pinned)
+	return unauthenticated()
 }
 
 func (s *Service) keptFor(target, token string) string {
@@ -266,12 +311,16 @@ func (s *Service) keptFor(target, token string) string {
 	return k.id
 }
 
-func (s *Service) settleBundle(target string, err error) {
+func (s *Service) settleBundle(target, token string, err error) {
 	if err != nil && !bundleSpent(err) {
 		return
 	}
+	s.forgetBundle(target, token)
+}
+
+func (s *Service) forgetBundle(target, token string) {
 	s.mu.Lock()
-	if s.kept != nil && s.kept.target == target {
+	if k := s.kept; k != nil && k.target == target && k.token == token {
 		s.kept = nil
 	}
 	s.mu.Unlock()
