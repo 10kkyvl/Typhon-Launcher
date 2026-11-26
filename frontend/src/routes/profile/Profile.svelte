@@ -429,8 +429,16 @@
               <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
             </Button>
             <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
-            <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. -->
-            <Button variant="primary" busy={saving} disabled={!saving && !canSave} onclick={save}>
+            <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Offline it stays
+                 in the Tab order, refused, and says why. Unchanged it is plainly disabled: only an edit
+                 elsewhere, which holds the focus, takes a draft back to unchanged. -->
+            <Button
+              variant="primary"
+              busy={saving}
+              disabled={!saving && !canSave}
+              reason={$isOffline ? msg('social.editRequiresConnection') : ''}
+              onclick={save}
+            >
               {saving ? msg('social.saving') : msg('common.save')}
             </Button>
           </div>

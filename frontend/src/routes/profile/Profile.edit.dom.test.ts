@@ -85,6 +85,7 @@ describe("the edit bar's Save", () => {
 
     expect(document.activeElement).toBe(save);
     expect(save.getAttribute('aria-busy')).toBe('true');
+    expect(save.matches(':disabled')).toBe(false);
     expect(updateProfile).toHaveBeenCalledTimes(1);
 
     answer.resolve(me);
@@ -105,6 +106,50 @@ describe("the edit bar's Save", () => {
     expect(alert.textContent?.trim()).toBe(accountErrorText(new AccountError('network'), msg('profile.saveFailed')));
     expect(alert.closest('.topbar')).not.toBeNull();
     expect(document.activeElement).toBe(save);
+  });
+
+  // Chromium drops focus to <body> from a control that turns natively disabled; jsdom keeps it, so the
+  // tests read the attributes that decide it.
+  it('the connection going while the save waits: the failed save leaves Save focused, refused with its reason', async () => {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const { user } = await editor();
+    await change(user);
+    const save = button(msg('common.save'));
+
+    await user.click(save);
+    authState.set('offline');
+    answer.reject(new AccountError('network'));
+
+    await waitFor(() => expect(save.getAttribute('aria-busy')).toBeNull());
+    expect(document.activeElement).toBe(save);
+    expect({ disabled: save.matches(':disabled'), ariaDisabled: save.getAttribute('aria-disabled') }).toEqual({ disabled: false, ariaDisabled: 'true' });
+    expect(description(save)).toBe(msg('social.editRequiresConnection'));
+  });
+
+  it('the connection going while Save holds focus: it stays focused, refused with its reason, and a press sends nothing', async () => {
+    const { user } = await editor();
+    await change(user);
+    const save = button(msg('common.save'));
+    save.focus();
+
+    authState.set('offline');
+
+    await waitFor(() => expect(save.getAttribute('aria-disabled')).toBe('true'));
+    expect(save.matches(':disabled')).toBe(false);
+    expect(document.activeElement).toBe(save);
+    expect(description(save)).toBe(msg('social.editRequiresConnection'));
+    await user.keyboard('{Enter}');
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('with nothing changed, online, Save is natively disabled and says no reason', async () => {
+    await editor();
+    const save = button(msg('common.save'));
+
+    expect(save.matches(':disabled')).toBe(true);
+    expect(save.hasAttribute('aria-disabled')).toBe(false);
+    expect(description(save)).toBe('');
   });
 });
 
