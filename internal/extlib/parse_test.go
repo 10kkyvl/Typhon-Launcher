@@ -285,3 +285,38 @@ func TestCleanTitle(t *testing.T) {
 		}
 	}
 }
+
+// Steam writes "appid_<id>" (or nothing) as the name of an app whose store
+// data it never fetched; such a title is only a stand-in.
+func TestScanSteamMarksAStandInTitleAsGuessed(t *testing.T) {
+	root := t.TempDir()
+	apps := filepath.Join(root, "steamapps")
+	for _, d := range []string{"Named", "Placeholder", "Blank"} {
+		if err := os.MkdirAll(filepath.Join(apps, "common", d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, filepath.Join(apps, "appmanifest_11.acf"), acf("11", "Named Game", "Named", "4"))
+	writeFile(t, filepath.Join(apps, "appmanifest_12.acf"), acf("12", "appid_12", "Placeholder", "4"))
+	writeFile(t, filepath.Join(apps, "appmanifest_13.acf"), acf("13", "", "Blank", "4"))
+
+	got := scanSteam(context.Background(), root)
+	if got.Err != nil {
+		t.Fatalf("scan error: %v", got.Err)
+	}
+	guessed := map[string]bool{}
+	for _, g := range got.Games {
+		guessed[g.AppID] = g.TitleGuessed
+	}
+	want := map[string]bool{"11": false, "12": true, "13": true}
+	for id, w := range want {
+		g, ok := guessed[id]
+		if !ok {
+			t.Errorf("app %s not imported: %+v", id, got.Games)
+			continue
+		}
+		if g != w {
+			t.Errorf("app %s TitleGuessed = %v, want %v", id, g, w)
+		}
+	}
+}

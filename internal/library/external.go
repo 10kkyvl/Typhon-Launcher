@@ -38,6 +38,9 @@ type ExternalGame struct {
 	Executable      string
 	LaunchURI       string
 	CanonicalGameID string
+	// TitleGuessed: the store gave no name of its own, so Title is a stand-in
+	// that names a new record but never replaces the title of a known one.
+	TitleGuessed bool
 }
 
 type ExternalSkip struct {
@@ -287,7 +290,9 @@ func (s *Service) updateExternalLocked(pos int, g ExternalGame, m measured) bool
 	ext := *cur.External
 	ext.LaunchURI = g.LaunchURI
 	next.External = &ext
-	next.Title = g.Title
+	if !g.TitleGuessed {
+		next.Title = g.Title
+	}
 	next.InstallDir = g.InstallDir
 	next.Executable = g.Executable
 	if next.CanonicalGameID == "" {
