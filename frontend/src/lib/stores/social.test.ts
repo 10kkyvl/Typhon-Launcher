@@ -275,6 +275,36 @@ describe('the first read of the friends', () => {
     expect(get(friendsLoaded)).toBe(true);
   });
 
+  it('a page Go sent while the read waited for Friends() is not replaced by the older answer', async () => {
+    const { friendsPage, reloadFriends, service, Events } = await signedIn();
+    const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as (event: { data: unknown }) => void;
+    let answer!: (value: ReturnType<typeof page>) => void;
+    vi.mocked(service.friends).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+    const reading = reloadFriends();
+    await vi.waitFor(() => expect(service.friends).toHaveBeenCalled());
+
+    handler({ data: page(3, 0) });
+    answer(page(2, 0));
+
+    expect(await reading).toBe(true);
+    expect(get(friendsPage).friends.length).toBe(3);
+  });
+
+  it('a page Go sent before the read asked for Friends() does not stop its answer', async () => {
+    const { friendsPage, reloadFriends, service, Events } = await signedIn();
+    const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as (event: { data: unknown }) => void;
+    let refreshed!: () => void;
+    vi.mocked(service.refresh).mockReturnValueOnce(new Promise<void>((resolve) => (refreshed = resolve)));
+    vi.mocked(service.friends).mockResolvedValueOnce(page(4, 0));
+    const reading = reloadFriends();
+
+    handler({ data: page(3, 0) });
+    refreshed();
+
+    expect(await reading).toBe(true);
+    expect(get(friendsPage).friends.length).toBe(4);
+  });
+
   it('a session that ends forgets the read and its failure', async () => {
     const { authState, friendsLoaded, friendsLoadError, reloadFriends, service } = await signedIn();
     vi.mocked(service.friends).mockResolvedValueOnce(page(1, 0));

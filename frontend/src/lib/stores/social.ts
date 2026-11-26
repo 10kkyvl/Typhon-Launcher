@@ -70,11 +70,20 @@ function readFailed(err: unknown, fallback: string) {
   else friendsLoadError.set(err);
 }
 
+// Every page Go sent with `social:friends`: an answer asked for before one of them is older than it.
+let heard = 0;
+
+/** Takes an answer of `Friends()` asked for when `heard` was `before`, unless a newer page came since. */
+function answered(page: FriendsPage, before: number) {
+  if (heard === before) received(page);
+}
+
 export async function loadFriends(): Promise<void> {
   const started = session;
   try {
+    const before = heard;
     const page = await fetchFriends();
-    if (started === session) received(page);
+    if (started === session) answered(page, before);
   } catch (err) {
     if (started === session) readFailed(err, msg('state.socialLoadFriendsFailed'));
   }
@@ -117,8 +126,9 @@ async function readAgain(): Promise<boolean> {
   const started = session;
   try {
     await refresh();
+    const before = heard;
     const page = await fetchFriends();
-    if (started === session) received(page);
+    if (started === session) answered(page, before);
   } catch (err) {
     if (started !== session) return get(friendsLoaded);
     readFailed(err, msg('social.friendsRefreshFailed'));
@@ -135,6 +145,7 @@ export async function initSocial(): Promise<void> {
   if (!inWails) return;
 
   Events.On('social:friends', (event) => {
+    heard += 1;
     received(toFriendsPage(event.data));
   });
   Events.On('social:requests', (event) => {
