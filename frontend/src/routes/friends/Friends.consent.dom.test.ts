@@ -3,7 +3,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { saveSettingsPatch, type Settings } from '../../lib/services/settings';
-import { friends, refresh } from '../../lib/services/social';
+import { blocks, friends, refresh, type FriendsPage } from '../../lib/services/social';
 import { settings } from '../../lib/stores/settings';
 import { friendsLoaded, friendsPage } from '../../lib/stores/social';
 import { toast } from '../../lib/stores/toasts';
@@ -11,12 +11,16 @@ import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { user } from '../../lib/testing/dom';
 import Friends from './Friends.svelte';
-import { NoResize } from './friendsTesting';
+import { NoResize, friend } from './friendsTesting';
 
 // The sync consent given on the Friends screen: the consent dialog of the screen saves it and reads
 // the friends (loadFriends). A failed read is said where the screen shows it, a notice with Retry, and
 // not a second time in a toast; a read on another screen, which shows no such state, is said in a toast
-// (stores/social.test.ts).
+// (stores/social.test.ts). Go learns the consent when the dialog's save lands, so the screen reads
+// nothing of its own before it: the dialog's read is the one read of the friends, and the blocked list
+// is read once the dialog closes.
+
+const PAGE: FriendsPage = { friends: [friend('u-ana', 'Ana', 'online')], incoming: [], outgoing: [] };
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -81,5 +85,41 @@ describe('Friends: the sync consent given on the screen', () => {
     expect(screen.getByRole('button', { name: msg('common.retry') })).toBeTruthy();
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('reads the friends once, after the save landed, and the blocked list once the dialog closed', async () => {
+    vi.mocked(friends).mockResolvedValue(PAGE);
+    let saved!: (value: Settings) => void;
+
+    await giveConsent(new Promise<Settings>((resolve) => (saved = resolve)));
+    await tick();
+    const beforeTheSave = [refresh, friends, blocks].map((call) => vi.mocked(call).mock.calls.length);
+
+    saved({ accountSync: true } as Settings);
+
+    expect(beforeTheSave).toEqual([0, 0, 0]);
+
+    expect(await screen.findByText('Ana')).toBeTruthy();
+    await vi.waitFor(() => expect(blocks).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect([refresh, friends, blocks].map((call) => vi.mocked(call).mock.calls.length)).toEqual([0, 1, 1]);
+  });
+
+  it('that is not saved reads nothing and leaves the dialog open', async () => {
+    let saved!: (value: Settings) => void;
+    vi.mocked(saveSettingsPatch).mockReturnValueOnce(new Promise<Settings>((_resolve, reject) => (saved = () => reject(new Error('disk full')))));
+    render(Friends, { target: document.getElementById('app') as HTMLElement, props: {} });
+    const keys = user();
+    await tick();
+    await keys.click(screen.getByRole('button', { name: msg('social.friendsEnableSync') }));
+    const dialog = screen.getByRole('dialog', { name: msg('modals.socialConsentTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('modals.socialConsentEnable') }));
+
+    saved({} as Settings);
+
+    await vi.waitFor(() => expect(screen.getByRole('heading', { name: msg('social.friendsConsentTitle') })).toBeTruthy());
+    expect(dialog.isConnected).toBe(true);
+    expect([refresh, friends, blocks].map((call) => vi.mocked(call).mock.calls.length)).toEqual([0, 0, 0]);
   });
 });
