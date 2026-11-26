@@ -6,41 +6,65 @@ import { messagingService, socialService } from './friendsTesting';
  * player's session. So every test of this folder that mounts one of its components replaces both
  * services whole (friendsTesting.ts) and fakes both generated bindings, so a call that slipped past
  * the mocks is recorded rather than sent, and asserts that none was. The mock of a service is the
- * factory's line and nothing else: a second mock of the module, or a function laid over the factory's
- * answer, would put a real call back, so either is refused. A source tripwire; what a mock answers is
- * each test's to get right.
+ * factory's line and nothing else: a second mock of the module (vi.mock, vi.doMock, vi.unmock, under
+ * any spelling of its path), a function laid over the factory's answer, the real module taken by
+ * vi.importActual, or a mock handed a function by reference would put a real call back, so each is
+ * refused. A source tripwire; what a mock answers is each test's to get right.
  */
 const tests = import.meta.glob<string>('./*.test.ts', { query: '?raw', import: 'default', eager: true });
 const services = import.meta.glob<string>(['../../lib/services/social.ts', '../../lib/services/messaging.ts'], { query: '?raw', import: 'default', eager: true });
 
 const MOUNTS = /\bimport\s+\w+\s+from\s+'\.\/\w+\.svelte'/;
 
-const SERVICE_LINES: [string, string, RegExp][] = [
+/** Where the tests of this folder sit: a module path in them is read from here. */
+const HERE = 'file:///src/routes/friends/';
+
+const SERVICE_LINES: [what: string, line: string, module: string][] = [
   [
     'the whole social service',
     "vi.mock('../../lib/services/social', async (original) => (await import('./friendsTesting')).socialService(await original()));",
-    /\bvi\.(?:do)?[mM]ock\(\s*['"][^'"]*lib\/services\/social['"]/g,
+    '/src/lib/services/social',
   ],
   [
     'the whole messaging service',
     "vi.mock('../../lib/services/messaging', async (original) => (await import('./friendsTesting')).messagingService(await original()));",
-    /\bvi\.(?:do)?[mM]ock\(\s*['"][^'"]*lib\/services\/messaging['"]/g,
+    '/src/lib/services/messaging',
   ],
   [
     'the social binding',
     "vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'social'));",
-    /\bvi\.(?:do)?[mM]ock\(\s*['"][^'"]*bindings\/typhon\/internal\/social['"]/g,
+    '/bindings/typhon/internal/social',
   ],
   [
     'the messaging binding',
     "vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./friendsTesting')).fakeService(await original(), 'messaging'));",
-    /\bvi\.(?:do)?[mM]ock\(\s*['"][^'"]*bindings\/typhon\/internal\/messaging['"]/g,
+    '/bindings/typhon/internal/messaging',
   ],
 ];
 
+/** The module a path names from this folder: the extension, a query and a trailing index dropped. */
+function moduleOf(path: string): string {
+  return new URL(path, HERE).pathname.replace(/\/index(?:\.[cm]?[jt]s)?$/, '').replace(/\.[cm]?[jt]s$/, '');
+}
+
+// Every call that mocks, unmocks or takes the real module, with the path it is given as a literal or as
+// `import('…')`; a call given anything else names a module the guard cannot read.
+const MODULE_CALL = /\bvi\s*\.\s*(mock|doMock|unmock|doUnmock|importActual)\s*(?:<[^>]*>)?\s*\(\s*(?:import\s*\(\s*)?(?:(['"`])((?:(?!\2).)*)\2)?/g;
+// A mock runs what the test writes in place, never a function handed over by reference.
+const BY_REFERENCE = /\.mockImplementation(?:Once)?\(\s*(?!async\b|function\b|\(|[\w$]+\s*=>|vi\.fn\b)/;
+
+function moduleCalls(source: string): { kind: string; module: string | null }[] {
+  return [...source.matchAll(MODULE_CALL)].map((match) => ({ kind: match[1], module: match[3] === undefined ? null : moduleOf(match[3]) }));
+}
+
 function missing(source: string): string[] {
   const lines = source.split('\n').map((line) => line.trim());
-  const gaps = SERVICE_LINES.filter(([, line, any]) => !lines.includes(line) || (source.match(any) ?? []).length !== 1).map(([what]) => what);
+  const found = moduleCalls(source);
+  const gaps = SERVICE_LINES.filter(
+    ([, line, module]) => !lines.includes(line) || found.filter((call) => call.module === module).length !== 1,
+  ).map(([what]) => what);
+  if (found.some((call) => call.module === null)) gaps.push('a module the guard cannot read');
+  if (BY_REFERENCE.test(source)) gaps.push('no real function behind a mock');
   if (!/expect\(calls\)\.toEqual\(\[\]\)/.test(source)) gaps.push('no call reached a binding');
   return gaps;
 }
@@ -77,10 +101,35 @@ describe('tests that mount a friends component', () => {
       socialLine,
       "vi.mock('../../lib/services/social', async (original) => ({ ...(await import('./friendsTesting')).socialService(await original()), friends: (await original<typeof import('../../lib/services/social')>()).friends }));",
     );
-    const twice = `${whole}\nvi.doMock('../../lib/services/social', async (original) => ({ ...(await original()) }));\n`;
     expect(missing(whole)).toEqual([]);
     expect(missing(spread)).toContain('the whole social service');
-    expect(missing(twice)).toContain('the whole social service');
+    for (const second of [
+      "vi.doMock('../../lib/services/social', async (original) => ({ ...(await original()) }));",
+      "vi.mock('../../lib/services/social.ts', async (original) => ({ ...(await original<object>()) }));",
+      'vi.mock("../../lib/services/social.js", async (original) => await original());',
+      'vi.doMock(`../../lib/services/../services/social`, async (original) => await original());',
+      "vi.mock(import('../../lib/services/social'), async (original) => await original());",
+      "vi.unmock('../../lib/services/social');",
+      "vi.doUnmock('./../../lib/services/social.ts');",
+      "const real = await vi.importActual<typeof import('../../lib/services/social')>('../../lib/services/social');",
+    ]) {
+      expect(missing(`${whole}\n${second}\n`), second).toContain('the whole social service');
+    }
+    expect(missing(`${whole}\nvi.mock('../../lib/stores/social', async (original) => await original());\n`)).toEqual([]);
+  });
+
+  it('refuse a module named by a path the guard cannot read, or a real function handed to a mock', () => {
+    const whole = mounting[0][1];
+    for (const line of [
+      "const path = '../../lib/services/social';\nconst real = await vi.importActual(path);",
+      'vi.doMock(socialPath, async (original) => await original());',
+    ]) {
+      expect(missing(`${whole}\n${line}\n`), line).toContain('a module the guard cannot read');
+    }
+    for (const line of ['vi.mocked(friends).mockImplementation(real.friends);', 'vi.mocked(accept).mockImplementationOnce(actual.accept);']) {
+      expect(missing(`${whole}\n${line}\n`), line).toContain('no real function behind a mock');
+    }
+    expect(missing(`${whole}\nvi.mocked(friends).mockImplementation(async () => PAGE);\n`)).toEqual([]);
   });
 });
 

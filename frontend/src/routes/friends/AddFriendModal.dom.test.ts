@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 async function search(result: () => Promise<PublicProfile>) {
-  vi.mocked(profile).mockImplementationOnce(result);
+  vi.mocked(profile).mockImplementationOnce(() => result());
   render(AddFriendModal, { target: app, props: { open: true } });
   const dialog = screen.getByRole('dialog', { name: msg('social.friendsAddFriend') });
   const keys = user();
