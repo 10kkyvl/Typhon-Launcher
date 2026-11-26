@@ -107,6 +107,9 @@
   let originalSource = $state('');
   let reading = $state(false);
   let uploading = $state(false);
+  // The cover control that started the read or the upload under way, and holds its focus: Upload, or
+  // "Edit crop" for the upload its crop starts.
+  let via = $state<'upload' | 'crop'>('upload');
   let error = $state('');
   let alive = true;
   let sequence = 0;
@@ -115,6 +118,7 @@
   // The remove button and the crop's leave with the cover: focus goes on to the upload.
   const uploadControl = () => panel?.querySelector<HTMLElement>('[data-cover-upload]');
   const locked = $derived(disabled || reading || uploading || cropOpen);
+  const working = $derived(reading || uploading);
   onDestroy(() => { alive = false; sequence++; });
 
   function patch(changes: Partial<ProfileAppearance>) {
@@ -325,33 +329,48 @@
       <div class="hex"><HexColorField label={msg('profile.accent')} describedby={accentBad ? hexError('accent') : undefined} value={accentText} onchange={(v) => setColor('accent', v)} disabled={locked} /></div>
       {#if accentBad}<p class="hint danger" id={hexError('accent')} role="alert">{msg('settings.accentInvalid')}</p>{/if}
     </section>
-
-    <section>
-      <h3>{msg('profile.cover')}</h3>
-      <input class="file" bind:this={input} type="file" accept={COVER_TYPES.join(',')} onchange={() => { void choose(input?.files?.[0]); if (input) input.value = ''; }} />
-      <Button data-cover-upload onclick={() => input?.click()}><Upload size="1.5rem" />{msg('profile.upload')}</Button>
-      <p class="hint">{msg('profileStyle.coverHint')}</p>
-      {#if a.coverUrl}
-        {#if originalSource}<Button size="sm" variant="ghost" onclick={() => { cropSource = originalSource; cropOpen = true; }}>{msg('profile.editCrop')}</Button>{/if}
-        <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: removeCoverPrompt(), run: removeCover, returnFocus: uploadControl })}>{msg('profile.removeCover')}</Button>
+  </fieldset>
+  <!-- Out of the fieldsets: the control that started a read or an upload is busy, not disabled, so it
+       keeps the focus it was pressed with; the others refuse by their own state. -->
+  <section>
+    <h3>{msg('profile.cover')}</h3>
+    <input class="file" bind:this={input} type="file" accept={COVER_TYPES.join(',')} disabled={locked} onchange={() => { void choose(input?.files?.[0]); if (input) input.value = ''; }} />
+    <Button
+      data-cover-upload
+      busy={working && via === 'upload'}
+      disabled={disabled || (working && via !== 'upload')}
+      onclick={() => { via = 'upload'; input?.click(); }}
+    ><Upload size="1.5rem" />{msg('profile.upload')}</Button>
+    <p class="hint">{msg('profileStyle.coverHint')}</p>
+    {#if a.coverUrl}
+      {#if originalSource}
+        <Button
+          size="sm"
+          variant="ghost"
+          busy={uploading && via === 'crop'}
+          disabled={disabled || (working && via !== 'crop')}
+          onclick={() => { via = 'crop'; cropSource = originalSource; cropOpen = true; }}
+        >{msg('profile.editCrop')}</Button>
       {/if}
-      <div class="slider">
-        <Slider
-          label={msg('profile.dim')}
-          valueText={`${a.coverDim}%`}
-          position={a.coverDim}
-          max={100}
-          page={10}
-          fill
-          disabled={locked}
-          oninput={(at) => at !== null && patch({ coverDim: at })}
-          onchange={(at) => patch({ coverDim: at })}
-        />
-      </div>
-      {#if reading || uploading}<div class="message"><Spinner size="sm" label={msg('profile.uploading')} /></div>{/if}
-      {#if error}<div class="message"><Notice tone="danger" compact>{error}</Notice></div>{/if}
-    </section>
-
+      <Button size="sm" variant="ghost" disabled={disabled || working} onclick={() => (pending = { prompt: removeCoverPrompt(), run: removeCover, returnFocus: uploadControl })}>{msg('profile.removeCover')}</Button>
+    {/if}
+    <div class="slider">
+      <Slider
+        label={msg('profile.dim')}
+        valueText={`${a.coverDim}%`}
+        position={a.coverDim}
+        max={100}
+        page={10}
+        fill
+        disabled={locked}
+        oninput={(at) => at !== null && patch({ coverDim: at })}
+        onchange={(at) => patch({ coverDim: at })}
+      />
+    </div>
+    {#if working}<div class="message"><Spinner size="sm" label={msg('profile.uploading')} /></div>{/if}
+    {#if error}<div class="message"><Notice tone="danger" compact>{error}</Notice></div>{/if}
+  </section>
+  <fieldset disabled={locked}>
     <section>
       <h3 id="{uid}-frame-label">{msg('profileStyle.frame')}</h3>
       <div class="frame-choices" role="radiogroup" aria-labelledby="{uid}-frame-label">
@@ -463,7 +482,7 @@
   </fieldset>
 </div>
 {#if cropOpen}
-  <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} />
+  <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} returnFocus={uploadControl} />
 {/if}
 {#if pending}
   <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} returnFocus={pending.returnFocus} />

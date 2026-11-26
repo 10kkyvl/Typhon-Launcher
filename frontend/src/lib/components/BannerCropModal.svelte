@@ -9,7 +9,18 @@
   import { msg } from '../i18n';
   import { minZoom, maxZoom } from '../utils/crop';
   import { bannerScale, clampBanner, zoomBanner, bannerCrop, type BannerView } from '../utils/bannerCrop';
-  let { open = $bindable(false), src, onsave }: { open?: boolean; src: string; onsave: (src: string) => void } = $props();
+  let {
+    open = $bindable(false),
+    src,
+    onsave,
+    returnFocus,
+  }: {
+    open?: boolean;
+    src: string;
+    onsave: (src: string) => void;
+    /** Where focus goes on close when the control that opened the dialog is gone. */
+    returnFocus?: () => HTMLElement | null | undefined;
+  } = $props();
   let stage: HTMLDivElement;
   let image: HTMLImageElement;
   let viewport = $state(0);
@@ -71,7 +82,7 @@
     finally { if (alive) saving = false; }
   }
 </script>
-<Modal dismissible={!saving} bind:open title={msg('profile.cropTitle')} width="72rem">
+<Modal dismissible={!saving} bind:open title={msg('profile.cropTitle')} width="72rem" {returnFocus}>
   <div class="crop">
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (Two-dimensional crop canvas supports focus and arrow-key panning.) -->
     <div class="stage" class:dragging bind:this={stage} bind:clientWidth={viewport} role="group" aria-label={msg('profile.cropTitle')} tabindex="0" onkeydown={key} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onwheel={wheel}>
