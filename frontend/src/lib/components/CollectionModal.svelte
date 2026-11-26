@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
@@ -8,13 +8,14 @@
   import Notice from './Notice.svelte';
   import Select from './Select.svelte';
   import TagEditor from './TagEditor.svelte';
+  import TextField from './TextField.svelte';
   import { GAME_STATUSES, STATUS_LABELS } from '../game/status';
   import { libraryErrorText } from '../library/errors';
   import { genreLabel } from '../metadata/labels';
   import type { ConfirmPrompt } from '../confirm/prompts';
   import { allTags, deleteCollection, saveCollection, type LibraryCollection } from '../services/library';
-  import { toast } from '../stores/toasts';
-  import { msg } from '../i18n';
+  import { focusHandOff } from '../utils/focusHandOff';
+  import { errorCode, msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -29,6 +30,9 @@
     returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
   const uid = $props.id();
+  const nameId = `${uid}-name`;
+  const failureId = `${uid}-failure`;
+  const deleteId = `${uid}-delete`;
 
   let name = $state(untrack(() => collection?.name ?? ''));
   let tags = $state<string[]>(untrack(() => [...(collection?.tags ?? [])]));
@@ -40,9 +44,19 @@
   let pressed = $state<'' | 'save' | 'remove'>('');
   let editor: TagEditor;
   let confirming = $state(false);
-  // Why the last save or delete was refused, in the launcher's words; cleared by the next try.
+  // Why the last save or delete was refused, in the launcher's words; cleared by the next try. A
+  // refused name is said at the name field.
   let failure = $state('');
+  let nameError = $state('');
   let noCriteria = $state(false);
+  let suggestionsFailure = $state('');
+  let retrying = $state(false);
+
+  // The editor is mounted for one opening: an answer that comes after it closed says nothing.
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase();
   const shownGenres = $derived(
@@ -55,17 +69,22 @@
     ...GAME_STATUSES.map((value) => ({ id: value, label: STATUS_LABELS[value] })),
   ]);
 
-  $effect(() => {
-    let current = true;
-    allTags().then(
-      (list) => {
-        if (current) suggestions = list;
-      },
-      (err) => toast(libraryErrorText(err, msg('modals.tagSuggestionsFailed')), 'danger'),
-    );
-    return () => {
-      current = false;
-    };
+  async function readSuggestions(): Promise<boolean | undefined> {
+    try {
+      const list = await allTags();
+      if (!alive || !open) return undefined;
+      suggestions = list;
+      suggestionsFailure = '';
+      return true;
+    } catch (err) {
+      if (!alive || !open) return undefined;
+      suggestionsFailure = libraryErrorText(err, msg('modals.tagSuggestionsFailed'));
+      return false;
+    }
+  }
+
+  onMount(() => {
+    void readSuggestions();
   });
 
   function toggleGenre(genre: string) {
@@ -78,14 +97,30 @@
     if (tags.length > 0 || picked.length > 0 || status) noCriteria = false;
   });
 
+  // The focus the pressed button holds at the press goes to the words of a refusal.
+  function refusal(err: unknown, fallback: string, hand: ReturnType<typeof focusHandOff>): Promise<void> | undefined {
+    if (!alive) return undefined;
+    if (errorCode(err) === 'library.collection_name_invalid') {
+      nameError = libraryErrorText(err, fallback);
+      return hand(() => document.getElementById(nameId));
+    }
+    failure = libraryErrorText(err, fallback);
+    return hand(() => document.getElementById(failureId));
+  }
+
   async function save() {
+    if (busy) return;
     editor.commit();
     failure = '';
+    nameError = '';
     // Without a criterion the collection would match every game (lib/library/collections.ts).
     if (tags.length === 0 && picked.length === 0 && !status) {
       noCriteria = true;
       return;
     }
+    const at = document.activeElement;
+    const hand = focusHandOff(() => at);
+    let refused: unknown = null;
     busy = true;
     pressed = 'save';
     try {
@@ -100,11 +135,12 @@
       });
       open = false;
     } catch (err) {
-      failure = libraryErrorText(err, msg('modals.collectionSaveFailed'));
+      refused = err;
     } finally {
       busy = false;
       pressed = '';
     }
+    if (refused) await refusal(refused, msg('modals.collectionSaveFailed'), hand);
   }
 
   const deletePrompt = $derived<ConfirmPrompt>({
@@ -121,35 +157,41 @@
   }
 
   async function remove() {
-    if (!collection) return;
+    if (!collection || busy) return;
+    // Asked from the confirmation: the focus it held comes back to Delete, and goes on from there.
+    const hand = focusHandOff(() => document.getElementById(deleteId));
+    let refused: unknown = null;
     failure = '';
+    nameError = '';
     busy = true;
     pressed = 'remove';
     try {
       await deleteCollection(collection.id);
       open = false;
     } catch (err) {
-      failure = libraryErrorText(err, msg('modals.collectionDeleteFailed'));
+      refused = err;
     } finally {
       busy = false;
       pressed = '';
     }
+    if (refused) await refusal(refused, msg('modals.collectionDeleteFailed'), hand);
   }
+
+  const heldReason = $derived(busy ? msg('modals.actionRunning') : '');
 </script>
 
 <Modal dismissible={!busy} bind:open title={collection ? msg('modals.collectionEditTitle') : msg('modals.collectionNewTitle')} width="52rem" {returnFocus}>
   <div class="form">
-    <label class="field">
-      <span class="field-label">{msg('modals.collectionNameLabel')}</span>
-      <input
-        class="input"
-        type="text"
-        maxlength="48"
-        placeholder={msg('modals.collectionNamePlaceholder')}
-        disabled={busy}
-        bind:value={name}
-      />
-    </label>
+    <TextField
+      id={nameId}
+      label={msg('modals.collectionNameLabel')}
+      maxlength={48}
+      placeholder={msg('modals.collectionNamePlaceholder')}
+      readonly={busy}
+      error={nameError}
+      oninput={() => (nameError = '')}
+      bind:value={name}
+    />
 
     <div class="field">
       <span class="field-label">{msg('modals.collectionTagsLabel')}</span>
@@ -176,23 +218,40 @@
       <Select options={statusOptions} bind:value={status} labelledby="{uid}-status-label" />
     </div>
 
-    <div role="alert">
-      {#if noCriteria}<span class="error">{msg('library.collectionNoCriteria')}</span>{/if}
-    </div>
+    {#if noCriteria}
+      <p class="error" role="alert">{msg('library.collectionNoCriteria')}</p>
+    {/if}
+
+    {#if suggestionsFailure || retrying}
+      <Notice tone="danger" compact bind:retrying retry={{ label: msg('common.retry'), run: readSuggestions }}>{suggestionsFailure}</Notice>
+    {/if}
 
     {#if failure}
-      <Notice tone="danger" compact>{failure}</Notice>
+      <Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice>
     {/if}
   </div>
 
   {#snippet footer()}
     {#if collection}
       <span class="remove">
-        <Button variant="danger" disabled={busy && pressed !== 'remove'} busy={pressed === 'remove'} onclick={() => (confirming = true)}>{msg('common.delete')}</Button>
+        <Button
+          id={deleteId}
+          variant="danger"
+          disabled={busy && pressed !== 'remove'}
+          reason={pressed === 'remove' ? '' : heldReason}
+          busy={pressed === 'remove'}
+          onclick={() => (confirming = true)}>{msg('common.delete')}</Button
+        >
       </span>
     {/if}
-    <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={(busy && pressed !== 'save') || !name.trim()} busy={pressed === 'save'} onclick={save}>{msg('common.save')}</Button>
+    <Button disabled={busy} reason={heldReason} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button
+      variant="primary"
+      disabled={(busy && pressed !== 'save') || !name.trim()}
+      reason={!name.trim() ? msg('modals.collectionNameRequired') : pressed === 'save' ? '' : heldReason}
+      busy={pressed === 'save'}
+      onclick={save}>{msg('common.save')}</Button
+    >
   {/snippet}
 </Modal>
 
@@ -237,6 +296,7 @@
   }
 
   .error {
+    margin: 0;
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--danger);

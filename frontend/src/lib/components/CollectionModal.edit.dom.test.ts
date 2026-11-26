@@ -5,10 +5,12 @@ import { msg } from '../i18n';
 import { deleteCollection, saveCollection, type LibraryCollection } from '../services/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import CollectionModal from './CollectionModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
-vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
+vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   allTags: vi.fn(async () => []),
@@ -27,9 +29,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   toasts.set([]);
   vi.clearAllMocks();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 function deferred() {
@@ -109,7 +114,7 @@ describe('CollectionModal: deleting a collection', () => {
   it.each([
     ['a code with text', new Error('typhon:library.collection_not_found: коллекция не найдена'), () => msg('library.collection_not_found')],
     ['no code', new Error('open collections.json: permission denied'), () => msg('modals.collectionDeleteFailed')],
-  ])('a failed delete (%s) says it in the editor, in the launcher words', async (_case, err, text) => {
+  ])('a failed delete (%s) says it in the editor, in the launcher words, and the focus goes there', async (_case, err, text) => {
     vi.mocked(deleteCollection).mockRejectedValueOnce(err);
     const editor = openEditor();
     const keys = user();
@@ -117,9 +122,10 @@ describe('CollectionModal: deleting a collection', () => {
 
     await keys.click(within(screen.getByRole('dialog', { name: msg('library.collectionDeleteTitle') })).getByRole('button', { name: msg('common.delete') }));
 
-    expect(await within(editor).findByText(text())).toBeTruthy();
+    const words = await within(editor).findByText(text());
     expect(editor.textContent).not.toContain(err.message);
     expect(get(toasts)).toEqual([]);
+    await vi.waitFor(() => expect(words.closest('[data-tone="danger"]')?.contains(document.activeElement)).toBe(true));
   });
 });
 

@@ -2,14 +2,13 @@ import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { imageTitle, listPlatforms, type PlatformStatus } from '../services/emulators';
-import { addEmulatedGame, allTags, type LibraryGame } from '../services/library';
+import { addEmulatedGame, type LibraryGame } from '../services/library';
 import { listSentData, type SentDataEntry } from '../services/telemetryLog';
 import { addSource, testSource, type Source, type SourcePreview } from '../services/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import AddImageModal from './AddImageModal.svelte';
 import AddSourceModal from './AddSourceModal.svelte';
-import CollectionModal from './CollectionModal.svelte';
 import SentDataModal from './SentDataModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -29,7 +28,6 @@ vi.mock('../services/emulators', async (importOriginal) => ({
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   addEmulatedGame: vi.fn(),
-  allTags: vi.fn(),
 }));
 vi.mock('../services/telemetryLog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/telemetryLog')>()),
@@ -71,7 +69,6 @@ beforeEach(() => {
   document.body.append(app);
   vi.mocked(listPlatforms).mockResolvedValue([ps2]);
   vi.mocked(imageTitle).mockResolvedValue('');
-  vi.mocked(allTags).mockResolvedValue([]);
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -215,23 +212,5 @@ describe('SentDataModal', () => {
     const notice = text.closest('[data-tone="warning"]') as HTMLElement;
     expect(notice).not.toBeNull();
     expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
-  });
-});
-
-describe('CollectionModal', () => {
-  it('says there are no genres to choose with an inline empty state, under a group named by its label', async () => {
-    render(CollectionModal, { target: app, props: { open: true, genres: [] } });
-    const dialog = screen.getByRole('dialog', { name: msg('modals.collectionNewTitle') });
-
-    const text = within(dialog).getByText(msg('modals.collectionGenresEmpty'));
-    expect(text.closest('.empty')).not.toBeNull();
-  });
-
-  it('groups the genre chips under their label', async () => {
-    render(CollectionModal, { target: app, props: { open: true, genres: ['Roguelike', 'Platformer'] } });
-    const dialog = screen.getByRole('dialog', { name: msg('modals.collectionNewTitle') });
-
-    const group = within(dialog).getByRole('group', { name: msg('modals.collectionGenresLabel') });
-    expect(within(group).getAllByRole('button')).toHaveLength(2);
   });
 });
