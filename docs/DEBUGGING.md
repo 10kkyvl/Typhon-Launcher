@@ -49,7 +49,7 @@ qa build only (`-tags qa`, `wails3 task build:qa`; Windows only, never with `pro
 | Variable | Default | Effect |
 |---|---|---|
 | `TYPHON_QA_CDP_PORT` | `9333` | WebView2 DevTools port on 127.0.0.1 (`qa_on.go`) |
-| `TYPHON_QA_MANIFEST_URL`, `TYPHON_QA_RELEASE_PUBKEY` | — | point self-update at `tools/devrelease -windows` (§4.2). Both or neither; the URL is accepted only as `http://127.0.0.1:<port>` or `http://localhost:<port>`, the key as base64 of 32 bytes; anything else fails the selfupdate service at construction, never falls back. A `slog.Warn` names the URL when the source is active (`internal/selfupdate/qa_source.go`, `url_qa.go`, `key_qa.go`) |
+| `TYPHON_QA_MANIFEST_URL`, `TYPHON_QA_RELEASE_PUBKEY` | — | point self-update at `tools/devrelease -windows` (§4.2). Both or neither; the URL is accepted only as `http://127.0.0.1:<port>` or `http://localhost:<port>`, the key as base64 of 32 bytes; anything else fails the selfupdate service at construction and the launcher exits at start with the reason in its log (no window), never falls back. The check is on the variable only: a local listener can redirect, and what it serves is trusted through the key and the signed hashes. A `slog.Warn` names the URL when the source is active (`internal/selfupdate/qa_source.go`, `url_qa.go`, `key_qa.go`) |
 
 Test gates (all skip by default): `TYPHON_WINE_LIVE=1` (+ `TYPHON_WINE_LIVE_INSTALLER`, `TYPHON_GUARD_FIXTURE_EXE`, `TYPHON_GUARD_X86_FIXTURE_EXE`, `TYPHON_INNO_COMPILER_INSTALLER`, `TYPHON_GUARD_REAL_INSTALLER`, `TYPHON_GUARD_FULL_INSTALL`, `TYPHON_GUARD_VISIBLE_INSTALL`), `TYPHON_KEYCHAIN_LIVE=1`, `TYPHON_PE_LIVE`, `TYPHON_LIVE_PICKER_DIR`/`_FILE`, `TYPHON_METADATA_API`/`TYPHON_METADATA_TOKEN` (`internal/metadata/live_test.go`), `TYPHON_STEAM_E2E_URL` (`typhonapi/steam_e2e_test.go`). See `TEST_MAP.md`.
 
@@ -179,11 +179,14 @@ On the Windows machine, from the repository root, after the usual frontend insta
 powershell -ExecutionPolicy Bypass -File scripts\qa-updates.ps1
 ```
 
-The script builds `bin\typhon.exe` at `VERSION`, starts `go run ./tools/devrelease -windows -version
+The script rebuilds the frontend (a `frontend\dist` left by another branch would otherwise be embedded),
+builds `bin\typhon.exe` at `VERSION`, starts `go run ./tools/devrelease -windows -version
 <next patch> -count 10 -seconds 5 -state %LOCALAPPDATA%\TyphonQAUpdates\devrelease` in a second window,
 waits for `http://127.0.0.1:8099/control`, dot-sources `update.ps1`, points `TYPHON_PORTABLE_DIR` at a
 fresh `%LOCALAPPDATA%\TyphonQAUpdates\portable-<time>` folder and starts the launcher. It never runs
-`npm ci`. Each run rebuilds `bin\typhon.exe`, which the chain replaces in place.
+`npm ci`. Each run rebuilds `bin\typhon.exe`, which the chain replaces in place, and leaves its
+`portable-<time>` folder behind. If devrelease stops before it serves, the second window keeps its
+output and the script stops with a sentence instead of waiting.
 
 ## 5. State on disk
 
