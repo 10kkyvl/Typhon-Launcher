@@ -80,11 +80,40 @@ export async function loadFriends(): Promise<void> {
   }
 }
 
+// The read in flight, and the one more asked while it runs: an answer may predate what asked (an action
+// Go answered after the read began), so any number of asks during a read make one read after it.
+let inFlight: Promise<boolean> | null = null;
+let followUp: Promise<boolean> | null = null;
+
 /**
  * Has Go read the friends again and takes the page it then holds. Never rejects: answers whether a
- * page is there now (a failure is kept or said as `readFailed` does).
+ * page is there now (a failure is kept or said as `readFailed` does). Asked while a read runs, it
+ * waits for one read that starts after it.
  */
-export async function reloadFriends(): Promise<boolean> {
+export function reloadFriends(): Promise<boolean> {
+  const running = inFlight;
+  if (!running) return startRead();
+  if (!followUp) {
+    const asked = session;
+    const next = running.then(() => {
+      if (followUp === next) followUp = null;
+      return asked === session ? startRead() : false;
+    });
+    followUp = next;
+  }
+  return followUp;
+}
+
+function startRead(): Promise<boolean> {
+  const flight = readAgain();
+  inFlight = flight;
+  void flight.then(() => {
+    if (inFlight === flight) inFlight = null;
+  });
+  return flight;
+}
+
+async function readAgain(): Promise<boolean> {
   const started = session;
   try {
     await refresh();
@@ -119,6 +148,9 @@ export async function initSocial(): Promise<void> {
     previous = state;
     if (!changed) return;
     session += 1;
+    // A read of the session that ended does not hold the next one's.
+    inFlight = null;
+    followUp = null;
     friendsLoaded.set(false);
     friendsLoadError.set(null);
     resetFeed();

@@ -243,6 +243,38 @@ describe('the first read of the friends', () => {
     expect([get(friendsLoaded), get(friendsPage).friends.length]).toEqual([false, 0]);
   });
 
+  it('reads asked while one runs make one more read after it, which all of them wait for', async () => {
+    const { friendsPage, reloadFriends, service } = await signedIn();
+    let first!: () => void;
+    vi.mocked(service.refresh).mockReturnValueOnce(new Promise<void>((resolve) => (first = resolve)));
+    vi.mocked(service.friends).mockResolvedValueOnce(page(1, 0)).mockResolvedValueOnce(page(3, 0));
+
+    const running = reloadFriends();
+    const asked = [reloadFriends(), reloadFriends(), reloadFriends()];
+    await Promise.resolve();
+    expect(service.refresh).toHaveBeenCalledTimes(1);
+
+    first();
+    expect(await running).toBe(true);
+    expect(await Promise.all(asked)).toEqual([true, true, true]);
+
+    expect([vi.mocked(service.refresh).mock.calls.length, vi.mocked(service.friends).mock.calls.length]).toEqual([2, 2]);
+    expect(get(friendsPage).friends.length).toBe(3);
+  });
+
+  it('a read of an ended session does not hold the next session’s', async () => {
+    const { authState, friendsLoaded, reloadFriends, service } = await signedIn();
+    vi.mocked(service.refresh).mockReturnValueOnce(new Promise<void>(() => {}));
+    void reloadFriends();
+
+    authState.set('unauthenticated');
+    authState.set('authenticated');
+    vi.mocked(service.friends).mockResolvedValueOnce(page(2, 0));
+
+    expect(await reloadFriends()).toBe(true);
+    expect(get(friendsLoaded)).toBe(true);
+  });
+
   it('a session that ends forgets the read and its failure', async () => {
     const { authState, friendsLoaded, friendsLoadError, reloadFriends, service } = await signedIn();
     vi.mocked(service.friends).mockResolvedValueOnce(page(1, 0));

@@ -171,7 +171,7 @@ describe('Friends: the list part', () => {
 });
 
 describe('Friends: the card lists', () => {
-  it('dims the card whose action runs and holds a press on any card until it answers', async () => {
+  it('dims the card whose action runs, and only that one: another card’s press is sent at once', async () => {
     let answer!: () => void;
     vi.mocked(accept).mockReturnValueOnce(new Promise<void>((resolve) => (answer = resolve)));
     await mount();
@@ -183,11 +183,12 @@ describe('Friends: the card lists', () => {
     expect(cardOf('Inna').classList.contains('settling')).toBe(true);
     expect(cardOf('Kirill').classList.contains('settling')).toBe(false);
     await keys.click(within(cardOf('Kirill')).getByRole('button', { name: msg('social.declineButton') }));
-    expect(decline).not.toHaveBeenCalled();
+    expect(decline).toHaveBeenCalledWith('r-kirill');
+    expect(cardOf('Inna').classList.contains('settling')).toBe(true);
 
     answer();
-    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(cardOf('Inna').classList.contains('settling')).toBe(false));
+    expect(cardOf('Kirill').classList.contains('settling')).toBe(false);
   });
 
   it('sends a card’s action for that card, not for the first of its list', async () => {

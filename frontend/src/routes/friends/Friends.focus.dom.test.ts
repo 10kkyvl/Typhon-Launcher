@@ -79,7 +79,7 @@ afterEach(() => {
 });
 
 describe('Friends: a pressed card button', () => {
-  it('keeps the focus, busy and not disabled, and a press on another card waits for its answer', async () => {
+  it('keeps the focus, busy and not disabled, and a press on another card sends its own action at once', async () => {
     pages({ friends: [ANA], incoming: [INNA, KIRILL], outgoing: [] }, { friends: [ANA], incoming: [INNA, KIRILL], outgoing: [] });
     let answer!: () => void;
     vi.mocked(accept).mockReturnValueOnce(new Promise<void>((resolve) => (answer = resolve)));
@@ -94,7 +94,9 @@ describe('Friends: a pressed card button', () => {
     const other = within(cardOf('Kirill')).getByRole('button', { name: msg('social.relationIncoming') }) as HTMLButtonElement;
     expect(other.disabled).toBe(false);
     await keys.click(other);
-    expect(vi.mocked(accept).mock.calls).toEqual([['r-inna']]);
+    expect(vi.mocked(accept).mock.calls).toEqual([['r-inna'], ['r-kirill']]);
+    expect(document.activeElement).toBe(other);
+    expect(pressed.getAttribute('aria-busy')).toBe('true');
     answer();
     await vi.waitFor(() => expect(pressed.getAttribute('aria-busy')).not.toBe('true'));
   });

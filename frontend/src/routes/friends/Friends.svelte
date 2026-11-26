@@ -1,6 +1,7 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import { untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import { LogIn, ShieldCheck, UserPlus, Users } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -59,8 +60,11 @@
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void>; errorText: (err: unknown) => string } | null>(null);
   // The row a confirmation was asked from: focus goes back by the row rule when the dialog closes.
   let askedFrom: RowPlace | null = null;
-  // The action in flight, `<action>:<user id>`: its button is busy and every other press waits for it.
-  let busy = $state('');
+  // The actions Go has not answered yet (with the read after them), by the user of their card or row:
+  // that card's pressed button is busy and a second press on it sends nothing; other cards act at once.
+  const pressed = new SvelteMap<string, string>();
+  const busyAs = (action: string, id: string) => pressed.get(id) === action;
+  const settling = (id: string) => pressed.has(id);
   let myCode = $state('');
   let search = $state('');
   let sortBy = $state<'name' | 'status'>('status');
@@ -136,14 +140,21 @@
     toast(accountErrorText(err, fallback), 'danger');
   }
 
+  // The last read of the blocked list asked: the answer of an older one that comes later is dropped.
+  let blocksAsked = 0;
+
   /** Reads the blocked list; answers whether it is there. A failure before any list is kept as state. */
   async function loadBlocks(): Promise<boolean> {
+    const mine = ++blocksAsked;
     try {
-      blocked = await fetchBlocks();
+      const list = await fetchBlocks();
+      if (mine !== blocksAsked) return blockedLoaded;
+      blocked = list;
       blockedLoaded = true;
       blockedError = null;
       return true;
     } catch (err) {
+      if (mine !== blocksAsked) return blockedLoaded;
       if (blockedLoaded) report(err, msg('social.friendsBlockedLoadFailed'));
       else blockedError = err;
       return false;
@@ -151,16 +162,18 @@
   }
 
   /**
-   * Runs one action at a time. Its failure is said once in a toast, or thrown to the confirmation that
-   * asked (`confirmed`), which says it and offers Retry. Once the action went through its success is
-   * said and the lists are read again: a failed read is said as a read failure, not as the action's.
+   * Runs a card's or a row's action, once per card until it is answered and the lists are read again.
+   * Its failure is said once in a toast, or thrown to the confirmation that asked (`confirmed`), which
+   * says it and offers Retry; a confirmation's action is always sent (the dialog holds its own second
+   * press). Once the action went through its success is said and the lists are read again: a failed
+   * read is said as a read failure, not as the action's.
    */
-  async function run(id: string, action: () => Promise<void>, fallback: string, done?: string, confirmed = false) {
-    if (busy) return;
-    busy = id;
+  async function run(action: string, id: string, call: () => Promise<void>, fallback: string, done?: string, confirmed = false) {
+    if (pressed.has(id) && !confirmed) return;
+    pressed.set(id, action);
     try {
       try {
-        await action();
+        await call();
       } catch (err) {
         if (confirmed) throw err;
         report(err, fallback);
@@ -168,9 +181,9 @@
       }
       if (done) toast(done, 'success');
       await reloadFriends();
-      if (id.startsWith('block:') || id.startsWith('unblock:')) await loadBlocks();
+      if (action === 'block' || action === 'unblock') await loadBlocks();
     } finally {
-      busy = '';
+      if (pressed.get(id) === action) pressed.delete(id);
     }
   }
 
@@ -186,7 +199,8 @@
         prompt: unfriendPrompt(name),
         run: () =>
           run(
-            `unfriend:${user.id}`,
+            'unfriend',
+            user.id,
             () => unfriend(user.id),
             msg('social.friendsUnfriendFailed'),
             msg('social.friendsUnfriended'),
@@ -198,7 +212,7 @@
     }
     pending = {
       prompt: blockPrompt(name, true),
-      run: () => run(`block:${user.id}`, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked'), true),
+      run: () => run('block', user.id, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked'), true),
       errorText: (err) => accountErrorText(err, msg('social.blockFailed')),
     };
   }
@@ -241,23 +255,23 @@
 </script>
 
 {#snippet incomingCards()}
-  <RequestCards users={page.incoming} {busy} reserve={incomingReserve} stats={incomingStats} onopen={openProfile}>
+  <RequestCards users={page.incoming} busy={settling} reserve={incomingReserve} stats={incomingStats} onopen={openProfile}>
     {#snippet actions(request)}
       <Button
         variant="primary"
         size="sm"
         data-row-control="accept"
-        busy={busy === `accept:${request.id}`}
+        busy={busyAs('accept', request.id)}
         onclick={() =>
-          run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
+          run('accept', request.id, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
       >
         {msg('social.relationIncoming')}
       </Button>
       <Button
         size="sm"
         data-row-control="decline"
-        busy={busy === `decline:${request.id}`}
-        onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
+        busy={busyAs('decline', request.id)}
+        onclick={() => run('decline', request.id, () => decline(request.id), msg('social.declineRequestFailed'))}
       >
         {msg('social.declineButton')}
       </Button>
@@ -367,14 +381,14 @@
             {#if page.outgoing.length > 0}
               <section class="group" data-friends-section="outgoing" aria-labelledby={outgoingHeading}>
                 <SectionHeader id={outgoingHeading} title={msg('social.friendsSentHeading')} count={page.outgoing.length} />
-                <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
+                <RequestCards users={page.outgoing} busy={settling} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
                   {#snippet actions(request)}
                     <Button
                       variant="ghost"
                       size="sm"
                       data-row-control="cancel"
-                      busy={busy === `cancel:${request.id}`}
-                      onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
+                      busy={busyAs('cancel', request.id)}
+                      onclick={() => run('cancel', request.id, () => decline(request.id), msg('social.cancelRequestFailed'))}
                     >
                       {msg('social.cancelRequestButton')}
                     </Button>
@@ -418,14 +432,14 @@
               description={msg('social.friendsEmptyBlockedDesc')}
             />
           {:else}
-            <RequestCards users={blocked} {busy} reserve={blockedReserve}>
+            <RequestCards users={blocked} busy={settling} reserve={blockedReserve}>
               {#snippet actions(user)}
                 <Button
                   size="sm"
                   data-row-control="unblock"
-                  busy={busy === `unblock:${user.id}`}
+                  busy={busyAs('unblock', user.id)}
                   onclick={() =>
-                    run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
+                    run('unblock', user.id, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
                 >
                   {msg('social.unblockButton')}
                 </Button>

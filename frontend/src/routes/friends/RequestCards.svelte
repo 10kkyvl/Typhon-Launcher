@@ -14,8 +14,8 @@
     actions: cardActions,
   }: {
     users: T[];
-    /** The page's action in flight, `<action>:<user id>`: its card dims while it runs. */
-    busy: string;
+    /** Whether a card's action is in flight: that card dims while it runs. */
+    busy: (id: string) => boolean;
     reserve: FrameReserve;
     stats?: (user: T) => string[];
     onopen?: (user: T) => void;
@@ -27,10 +27,6 @@
     if (root.classList.contains('no-anim') || matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
     return parseFloat(getComputedStyle(root).getPropertyValue(token)) || 0;
   }
-
-  function settling(id: string): boolean {
-    return busy.endsWith(`:${id}`);
-  }
 </script>
 
 <!-- A card that leaves goes at once, with no fade: a fading card would still hold the focus of its
@@ -40,7 +36,7 @@
     <div
       class="request"
       data-friends-row={user.id}
-      class:settling={settling(user.id)}
+      class:settling={busy(user.id)}
       in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
     >
       <FriendRow {user} variant="card" {reserve} stats={stats?.(user)} onopen={onopen && (() => onopen(user))}>
