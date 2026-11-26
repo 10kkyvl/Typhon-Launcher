@@ -17,13 +17,14 @@ const FIXTURES = String.raw`\(await import\('[^']*\/supportTesting'\)\)`;
 /**
  * The module is mocked once, by exactly the factory of the fixtures and nothing around it: a spread, an
  * Object.assign, a second vi.mock or vi.doMock after it (or an unmock) could put one real function back
- * over the whole mock, and vi.importActual hands the test the real module. `\1` is the factory's own
- * parameter, the original module.
+ * over the whole mock, and vi.importActual hands the test the real module. A path counts in any of the
+ * three quotes. `\1` is the factory's own parameter, the original module.
  */
 function only(path: string, call: string): (source: string) => boolean {
-  const any = new RegExp(String.raw`vi\.(?:mock|doMock|unmock|doUnmock)\(\s*'[^']*${path}'`, 'g');
+  const quoted = String.raw`(['"\x60])[^'"\x60]*${path}\1`;
+  const any = new RegExp(String.raw`vi\.(?:mock|doMock|unmock|doUnmock)\(\s*${quoted}`, 'g');
   const exact = new RegExp(String.raw`^vi\.mock\('[^']*${path}', async \((\w*)\) => ${FIXTURES}\.${call}\);$`, 'm');
-  const actual = new RegExp(String.raw`importActual\b[^(]*\(\s*'[^']*${path}'`);
+  const actual = new RegExp(String.raw`importActual\b[^(]*\(\s*${quoted}`);
   return (source) => (source.match(any) ?? []).length === 1 && exact.test(source) && !actual.test(source);
 }
 
@@ -31,6 +32,8 @@ function only(path: string, call: string): (source: string) => boolean {
 // taken from vi.importActual), and no module is taken whole by a path the guard cannot read.
 const BY_REFERENCE = /\.mockImplementation(?:Once)?\(\s*(?!async\b|function\b|\(|[\w$]+\s*=>|vi\.fn\b)/;
 const ACTUAL_BY_NAME = /importActual(?:<[^>]*>)?\(\s*(?!['"`])/;
+const BY_NAME = 'a mock runs a function written in place: a named one is refused (write the fake inline, or as a vi.fn in the fixtures)';
+const UNREAD_PATH = 'no module taken by a path the guard cannot read';
 
 const NEEDED: [string, (source: string) => boolean][] = [
   ['the whole support service', only(String.raw`lib\/services\/support`, String.raw`supportService\(await \1\(\)\)`)],
@@ -40,7 +43,8 @@ const NEEDED: [string, (source: string) => boolean][] = [
   ['the diagnostics binding', only(String.raw`bindings\/typhon\/internal\/diagnostics`, String.raw`fakeService\(await \1\(\), 'diagnostics'\)`)],
   ['the account binding', only(String.raw`bindings\/typhon\/internal\/account`, String.raw`fakeService\(await \1\(\), 'account'\)`)],
   ['no call reached a binding', (source) => /expect\(calls\)\.toEqual\(\[\]\)/.test(source)],
-  ['no real function behind a mock', (source) => !BY_REFERENCE.test(source) && !ACTUAL_BY_NAME.test(source)],
+  [BY_NAME, (source) => !BY_REFERENCE.test(source)],
+  [UNREAD_PATH, (source) => !ACTUAL_BY_NAME.test(source)],
 ];
 
 const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source)).map(([what]) => what);
@@ -105,14 +109,30 @@ describe('tests that mount a support screen', () => {
     expect(missing(`${sound}\nconst real = await vi.importActual<typeof import('${path}')>('${path}');`)).toContain(what);
   });
 
-  it('refuse a mock given a real function to run, by reference rather than written in the test', () => {
+  const QUOTES = ['"', '`'];
+
+  it.each(MODULES)('refuse a vi.doMock or a vi.importActual of %s in double quotes or backticks', (what, path) => {
+    for (const q of QUOTES) {
+      const doMock = `${sound}\nvi.doMock(${q}${path}${q}, async (original) => await original());`;
+      const actual = `${sound}\nconst real = await vi.importActual(${q}${path}${q});`;
+      expect(missing(doMock), doMock).toContain(what);
+      expect(missing(actual), actual).toContain(what);
+    }
+  });
+
+  it('refuse a mock given a function to run by reference, and say so', () => {
     for (const line of [
       'vi.mocked(getTicket).mockImplementation(real.getTicket);',
       'vi.mocked(createTicket).mockImplementationOnce(actual.createTicket);',
-      "const path = '../../lib/services/support';\nconst real = await vi.importActual(path);",
+      'const fakeGet = async (n: number) => thread(ticket(n, "x"), []);\nvi.mocked(getTicket).mockImplementation(fakeGet);',
     ]) {
-      expect(missing(`${sound}\n${line}`), line).toContain('no real function behind a mock');
+      expect(missing(`${sound}\n${line}`), line).toContain(BY_NAME);
     }
+  });
+
+  it('refuse a module taken by a path the guard cannot read', () => {
+    const line = "const path = '../../lib/services/support';\nconst real = await vi.importActual(path);";
+    expect(missing(`${sound}\n${line}`)).toContain(UNREAD_PATH);
   });
 
   it('mock the whole support service, the log upload and the account openers, and fake the bindings', () => {
