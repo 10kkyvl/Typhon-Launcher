@@ -217,5 +217,3 @@ func swapInstaller(ctx context.Context, p handoffPlan, j handoffJournal) (func()
 	}
 	return undo, nil
 }
-
-func pathDir(p string) string { return filepath.Dir(p) }

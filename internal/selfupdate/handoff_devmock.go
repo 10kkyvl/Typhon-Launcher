@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -21,7 +22,7 @@ func handoffMethodFor(art Artifact, _ bool) handoffMethod {
 
 func handoffTargetFor(exe string, _ handoffMethod) (string, error) { return exe, nil }
 
-func handoffOldDir(exe string) string { return pathDir(exe) }
+func handoffOldDir(exe string) string { return filepath.Dir(exe) }
 
 func handoffProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
 

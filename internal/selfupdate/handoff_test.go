@@ -165,6 +165,7 @@ func newHandoffDisk(t *testing.T) handoffDisk {
 	d := handoffDisk{cfg: t.TempDir(), install: t.TempDir()}
 	d.exe = filepath.Join(d.install, "typhon.exe")
 	writeTestFile(t, d.exe, []byte(oldBody))
+	//nolint:gosec // G302: the file stands for the launcher's executable and must be one
 	if err := os.Chmod(d.exe, 0o755); err != nil {
 		t.Fatal(err)
 	}

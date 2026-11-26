@@ -137,10 +137,11 @@ func ParseHandoffArgs(args []string) (spec HandoffSpec, found bool, err error) {
 		if args[i] != handoffFlag {
 			continue
 		}
-		if i+1 >= len(args) {
+		value := args[i+1:]
+		if len(value) == 0 {
 			return HandoffSpec{}, true, fmt.Errorf("%w: no value", errHandoffBadSpec)
 		}
-		if err := windowhandoff.Decode(args[i+1], &spec); err != nil {
+		if err := windowhandoff.Decode(value[0], &spec); err != nil {
 			return HandoffSpec{}, true, fmt.Errorf("%w: %w", errHandoffBadSpec, err)
 		}
 		if err := spec.validate(); err != nil {

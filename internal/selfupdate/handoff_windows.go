@@ -5,6 +5,7 @@ package selfupdate
 import (
 	"context"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -22,7 +23,7 @@ func handoffMethodFor(art Artifact, portable bool) handoffMethod {
 
 func handoffTargetFor(exe string, _ handoffMethod) (string, error) { return exe, nil }
 
-func handoffOldDir(exe string) string { return pathDir(exe) }
+func handoffOldDir(exe string) string { return filepath.Dir(exe) }
 
 func handoffProcAttr() *syscall.SysProcAttr { return detachedProcAttr() }
 
