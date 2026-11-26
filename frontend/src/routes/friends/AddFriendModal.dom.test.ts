@@ -63,6 +63,27 @@ describe('AddFriendModal: Enter while an input method composes', () => {
   });
 });
 
+describe('AddFriendModal: a send that fails after the player typed on', () => {
+  it('is not said under the player found since, whose request can still be sent', async () => {
+    const mira = { ...lena, username: 'mira', displayName: 'Mira' } as PublicProfile;
+    let failed!: (err: unknown) => void;
+    vi.mocked(sendRequest).mockReturnValueOnce(new Promise<SendResult>((_resolve, reject) => (failed = reject)));
+    const { dialog, keys } = await search(async () => lena);
+    await keys.click(await within(dialog).findByRole('button', { name: msg('social.friendsSendRequest') }));
+    vi.mocked(profile).mockImplementationOnce(async () => mira);
+    const field = within(dialog).getByRole('textbox', { name: msg('social.friendsSearchLabel') });
+
+    await keys.clear(field);
+    await keys.type(field, 'mira');
+    expect(await within(dialog).findByText('@mira')).toBeTruthy();
+    failed(new Error('server said no'));
+    await vi.waitFor(() => expect(within(dialog).getByRole('button', { name: msg('social.friendsSendRequest') }).getAttribute('aria-busy')).not.toBe('true'));
+
+    expect(within(dialog).queryByText(msg('social.friendsSendRequestFailed'))).toBeNull();
+    expect(within(dialog).getByText('@mira')).toBeTruthy();
+  });
+});
+
 describe('AddFriendModal', () => {
   it('says a failed lookup in a danger notice', async () => {
     const { dialog } = await search(() => Promise.reject(new Error('offline')));

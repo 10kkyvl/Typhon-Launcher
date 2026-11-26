@@ -20,7 +20,8 @@
   let query = $state('');
   let found = $state<PublicProfile | null>(null);
   let error = $state('');
-  let sendError = $state('');
+  // A failed send, with the player it was sent to: said only while that player is the one shown.
+  let sendError = $state<{ username: string; text: string } | null>(null);
   let searching = $state(false);
   let sending = $state(false);
 
@@ -36,7 +37,7 @@
     query = '';
     found = null;
     error = '';
-    sendError = '';
+    sendError = null;
     searching = false;
     attempt += 1;
     clearTimeout(timer);
@@ -54,7 +55,7 @@
     }
     searching = true;
     lookingFor = term;
-    sendError = '';
+    sendError = null;
     try {
       const result = isFriendCode(term)
         ? await profileByCode(term)
@@ -97,15 +98,16 @@
   async function send() {
     if (!found || !canSend || sending) return;
     sending = true;
-    sendError = '';
+    sendError = null;
+    const username = found.username;
     try {
-      const result = await sendRequest(found.username);
+      const result = await sendRequest(username);
       toast(result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing'), 'success');
       open = false;
       reset();
       onsent?.();
     } catch (err) {
-      sendError = accountErrorText(err, msg('social.friendsSendRequestFailed'));
+      sendError = { username, text: accountErrorText(err, msg('social.friendsSendRequestFailed')) };
     } finally {
       sending = false;
     }
@@ -141,8 +143,8 @@
       {#if hint}
         <p class="hint">{hint}</p>
       {/if}
-      {#if sendError}
-        <Notice tone="danger" compact>{sendError}</Notice>
+      {#if sendError?.username === found.username}
+        <Notice tone="danger" compact>{sendError.text}</Notice>
       {/if}
     {:else if error}
       <Notice tone="danger" compact>{error}</Notice>
