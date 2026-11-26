@@ -81,12 +81,12 @@ describe('Friends: playing now', () => {
     expect(nowHeading.compareDocumentPosition(screen.getByText('Boris')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('adds no heading when nobody is in a game', async () => {
+  it('names the rows with the tab’s own words and count when nobody is in a game', async () => {
     seed({ friends: [friend('u-ana', 'Ana', 'online'), friend('u-gleb', 'Gleb', 'offline')], incoming: [], outgoing: [] });
     await mount();
     await screen.findByText('Ana');
 
-    expect(headingTexts()).toEqual([]);
+    expect(headingTexts()).toEqual([`${msg('social.friendsTabAll')} 2`]);
     expect(rowNames()).toEqual(['Ana', 'Gleb']);
   });
 });

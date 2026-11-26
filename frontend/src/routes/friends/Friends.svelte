@@ -142,6 +142,7 @@
     { id: 'requests', label: msg('social.friendsTabRequests'), count: counted($incomingCount + page.outgoing.length) },
     { id: 'blocked', label: msg('social.friendsTabBlocked'), count: blockedLoaded ? blocked.length : undefined },
   ]);
+  const tabLabel = $derived(tabs.find((option) => option.id === tab)?.label ?? '');
 
   function report(err: unknown, fallback: string) {
     if (err instanceof AccountError && err.code === 'unauthenticated') return;
@@ -371,6 +372,7 @@
                 friends={page.friends}
                 group={groupFor}
                 {tab}
+                heading={tabLabel}
                 reserve={listReserve}
                 bind:search
                 bind:sortBy

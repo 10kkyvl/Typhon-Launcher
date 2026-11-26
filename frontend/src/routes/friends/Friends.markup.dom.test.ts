@@ -59,10 +59,14 @@ afterEach(() => {
 });
 
 describe('Friends: headings', () => {
-  it('names the incoming requests over the list with an h2 and its count, and the section by it', async () => {
+  it('names the incoming requests and the friends under them with h2s and counts, and the incoming section by its heading', async () => {
     await mount();
 
-    expect(headings()).toEqual([`H1 ${msg('social.friendsTitle')}`, `H2 ${msg('social.friendsIncomingHeading')} 2`]);
+    expect(headings()).toEqual([
+      `H1 ${msg('social.friendsTitle')}`,
+      `H2 ${msg('social.friendsIncomingHeading')} 2`,
+      `H2 ${msg('social.friendsTabAll')} 1`,
+    ]);
     expect(screen.getByRole('region', { name: `${msg('social.friendsIncomingHeading')} 2` })).toBeTruthy();
   });
 
@@ -76,6 +80,16 @@ describe('Friends: headings', () => {
       `H2 ${msg('social.friendsSafetyTitle')}`,
     ]);
     expect(screen.getByRole('region', { name: `${msg('social.friendsSentHeading')} 1` })).toBeTruthy();
+  });
+
+  it('names the friends of a presence tab with that tab’s words when nobody is in a game', async () => {
+    await mount('online');
+
+    expect(headings()).toEqual([
+      `H1 ${msg('social.friendsTitle')}`,
+      `H2 ${msg('social.friendsIncomingHeading')} 2`,
+      `H2 ${msg('social.presenceOnline')} 1`,
+    ]);
   });
 });
 

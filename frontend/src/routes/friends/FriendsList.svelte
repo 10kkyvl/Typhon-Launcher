@@ -20,6 +20,7 @@
     friends,
     group,
     tab,
+    heading,
     reserve,
     search = $bindable(),
     sortBy = $bindable(),
@@ -32,6 +33,8 @@
     /** The friends of the chosen presence tab, before the search. */
     group: FriendView[];
     tab: string;
+    /** The rows' heading when nobody is in a game: the chosen tab's own words. */
+    heading: string;
     reserve: FrameReserve;
     search: string;
     sortBy: 'name' | 'status';
@@ -190,6 +193,7 @@
     {@render rows(others)}
   {/if}
 {:else}
+  <SectionHeader title={heading} count={visibleFriends.length} />
   {@render rows(visibleFriends)}
 {/if}
 
