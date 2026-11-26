@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -47,7 +48,7 @@ func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOp
 		reread := s.rereadBeforeGate
 		s.mu.Unlock()
 		if deferred && !reread {
-			if err := s.reload(); err != nil {
+			if err := s.reload(ctx, 1); err != nil {
 				return err
 			}
 		}
@@ -64,20 +65,42 @@ func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOp
 // whatever this returned. An error leaves every later save refused; the
 // files are not touched.
 //
+// A failed read is tried again, up to reloadAttempts reads: on Windows another
+// program may hold the file for a moment as the old launcher exits, and one
+// refusal would cost the whole session its saves. Nothing is held back while
+// it waits, so the retry races no save; the end of ctx stops the wait.
+//
 //wails:ignore
-func (s *Service) ReloadBeforeGateOpens(_ context.Context) error {
+func (s *Service) ReloadBeforeGateOpens(ctx context.Context) error {
 	s.mu.Lock()
 	s.rereadBeforeGate = true
 	s.mu.Unlock()
-	return s.reload()
+	return s.reload(ctx, reloadAttempts)
 }
 
+const (
+	reloadAttempts   = 3
+	reloadRetryDelay = 250 * time.Millisecond
+)
+
 // reload replaces what the constructor read with what the files hold now, by
-// the constructor's own reading. Files it cannot read leave the constructor's
-// snapshot in place and every later save refused: the file on disk stays the
-// only copy of the player's library, as when the constructor's read fails.
-func (s *Service) reload() error {
+// the constructor's own reading, in at most attempts reads. Files it cannot
+// read leave the constructor's snapshot in place and every later save
+// refused: the file on disk stays the only copy of the player's library, as
+// when the constructor's read fails.
+func (s *Service) reload(ctx context.Context, attempts int) error {
 	fresh, err := NewServiceAt(s.path)
+	first := err
+	for read := 1; err != nil && read < attempts; read++ {
+		if werr := waitBeforeReread(ctx); werr != nil {
+			err = errors.Join(err, werr)
+			break
+		}
+		fresh, err = NewServiceAt(s.path)
+		if err == nil {
+			slog.Warn("library: the files were read again after a failed read", "attempts", read+1, "error", first)
+		}
+	}
 	if err != nil {
 		s.mu.Lock()
 		s.loadErr = err
@@ -91,6 +114,17 @@ func (s *Service) reload() error {
 	s.savedNative, s.savedEmulated = fresh.savedNative, fresh.savedEmulated
 	s.emitUpdated()
 	return nil
+}
+
+func waitBeforeReread(ctx context.Context) error {
+	timer := time.NewTimer(reloadRetryDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
