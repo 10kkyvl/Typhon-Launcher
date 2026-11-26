@@ -44,8 +44,9 @@ func setTransitions(hwnd w32.HWND, disabled bool) error {
 	if disabled {
 		v = 1
 	}
+	//nolint:gosec // G103: address of the local v, live for the call. G115: an HRESULT is a 32-bit pattern, printed as one.
 	if hr := w32.DwmSetWindowAttribute(hwnd, dwmwaTransitionsForceDisabled, unsafe.Pointer(&v), unsafe.Sizeof(v)); hr != 0 {
-		return fmt.Errorf("DwmSetWindowAttribute(TRANSITIONS_FORCEDISABLED): HRESULT 0x%x", uint32(hr))
+		return fmt.Errorf("DwmSetWindowAttribute(TRANSITIONS_FORCEDISABLED): HRESULT 0x%x", uint32(hr)) //nolint:gosec // G115: as above
 	}
 	return nil
 }
@@ -70,7 +71,7 @@ func paintHidden(w *application.WebviewWindow) error {
 		return err
 	}
 	return application.InvokeSyncWithError(func() error {
-		old := uint32(w32.GetWindowLong(hwnd, w32.GWL_EXSTYLE))
+		old := uint32(w32.GetWindowLong(hwnd, w32.GWL_EXSTYLE)) //nolint:gosec // G115: the extended style is a 32-bit mask read through a signed API
 		savedMu.Lock()
 		if _, ok := savedStyle[hwnd]; !ok {
 			savedStyle[hwnd] = old
@@ -113,7 +114,7 @@ func reveal(w *application.WebviewWindow) error {
 type win32Window w32.HWND
 
 func (h win32Window) exStyle() uint32 {
-	return uint32(w32.GetWindowLong(w32.HWND(h), w32.GWL_EXSTYLE))
+	return uint32(w32.GetWindowLong(w32.HWND(h), w32.GWL_EXSTYLE)) //nolint:gosec // G115: the extended style is a 32-bit mask read through a signed API
 }
 
 func (h win32Window) setExStyle(style uint32) {
