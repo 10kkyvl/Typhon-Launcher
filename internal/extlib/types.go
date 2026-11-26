@@ -17,6 +17,8 @@ type Candidate struct {
 	InstallDir string
 	Executable string
 	LaunchURI  string
+	// TitleGuessed: see library.ExternalGame.TitleGuessed.
+	TitleGuessed bool
 }
 
 type Skipped struct {

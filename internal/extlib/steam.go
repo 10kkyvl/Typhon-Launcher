@@ -253,6 +253,7 @@ func scanSteamLibrary(ctx context.Context, libDir string, types map[string]strin
 			continue
 		}
 		title := cleanTitle(app.Name)
+		guessed := title == "" || title == "appid_"+app.AppID
 		if title == "" {
 			title = name
 		}
@@ -267,11 +268,12 @@ func scanSteamLibrary(ctx context.Context, libDir string, types map[string]strin
 		}
 		seen[app.AppID] = true
 		res.Games = append(res.Games, Candidate{
-			Provider:   library.ProviderSteam,
-			AppID:      app.AppID,
-			Title:      title,
-			InstallDir: dir,
-			LaunchURI:  "steam://rungameid/" + app.AppID,
+			Provider:     library.ProviderSteam,
+			AppID:        app.AppID,
+			Title:        title,
+			InstallDir:   dir,
+			LaunchURI:    "steam://rungameid/" + app.AppID,
+			TitleGuessed: guessed,
 		})
 	}
 	return nil

@@ -330,3 +330,40 @@ func TestRemovedExternalGameCanBeImportedAgain(t *testing.T) {
 		t.Fatalf("summary = %+v, want the game imported again", sum)
 	}
 }
+
+// Steam names a game it has no name for "appid_<id>". The catalog's title
+// for the matched record must survive the next scan that brings the stand-in
+// again, while the stand-in still names a record that is new.
+func TestApplyExternalKeepsTheTitleWhenTheScannerOnlyGuessesOne(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	item, _ := externalFixture(t)
+	item.Title, item.TitleGuessed = "appid_42", true
+
+	sum, err := s.ApplyExternal(context.Background(), []ExternalGame{item})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Added != 1 || s.GetGames()[0].Title != "appid_42" {
+		t.Fatalf("summary = %+v, games = %+v: a guessed title must still name a new record", sum, s.GetGames())
+	}
+	if err := s.SyncTitles(func(canonical, _ string) string {
+		if canonical == "cat-1" {
+			return "Game One"
+		}
+		return ""
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	again, err := s.ApplyExternal(context.Background(), []ExternalGame{item})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Updated != 0 {
+		t.Fatalf("summary = %+v, want no update from a guessed title", again)
+	}
+	games := mustServiceAt(t, s.path).GetGames()
+	if len(games) != 1 || games[0].Title != "Game One" {
+		t.Fatalf("reloaded = %+v, want the catalog title kept", games)
+	}
+}

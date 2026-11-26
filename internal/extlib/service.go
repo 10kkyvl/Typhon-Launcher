@@ -322,5 +322,6 @@ func externalOf(c Candidate, canonicalID string) library.ExternalGame {
 		Executable:      c.Executable,
 		LaunchURI:       c.LaunchURI,
 		CanonicalGameID: canonicalID,
+		TitleGuessed:    c.TitleGuessed,
 	}
 }
