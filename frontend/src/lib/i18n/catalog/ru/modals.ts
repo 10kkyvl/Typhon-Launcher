@@ -6,6 +6,8 @@ export const modals = {
   'modals.gameStatusUpdateFailed': 'Не удалось изменить статус',
   'modals.gameStatusTitle': 'Статус игры',
   'modals.gameCompletedAt': 'Дата прохождения',
+  'modals.actionRunning': 'Дождитесь, пока закончится текущее действие',
+  'modals.gameCompletedAtInvalid': 'Укажите дату с 1 января 1980 года по сегодняшний день',
 
   // ReleaseNotesModal.svelte
   'modals.releaseNotesTitle': 'Что нового в версии {version}',
@@ -242,6 +244,7 @@ export const modals = {
   'modals.metadataMatchNoCandidatesDesc': 'Найдите игру вручную по названию ниже.',
   'modals.metadataMatchManualSearch': 'Поиск вручную',
   'modals.metadataMatchNamePlaceholder': 'Название игры',
+  'modals.metadataMatchSearchEmpty': 'По запросу «{query}» ничего не нашлось',
   'modals.metadataMatchApplying': 'Применение…',
   'modals.metadataMatchReplace': 'Заменить сопоставление',
 
@@ -389,6 +392,7 @@ export const modals = {
   'modals.collectionEditTitle': 'Коллекция',
   'modals.collectionNameLabel': 'Название',
   'modals.collectionNamePlaceholder': 'Например, «Уютные игры»',
+  'modals.collectionNameRequired': 'Введите название коллекции',
   'modals.collectionTagsLabel': 'Теги (нужны все)',
   'modals.collectionGenresLabel': 'Жанры (подойдёт любой)',
   'modals.collectionGenresEmpty': 'В каталоге пока нет жанров для игр библиотеки',

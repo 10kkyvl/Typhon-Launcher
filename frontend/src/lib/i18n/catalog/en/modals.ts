@@ -9,6 +9,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.gameStatusUpdateFailed': 'Failed to change status',
   'modals.gameStatusTitle': 'Game status',
   'modals.gameCompletedAt': 'Completion date',
+  'modals.actionRunning': 'Wait until the current action finishes',
+  'modals.gameCompletedAtInvalid': 'Enter a date from 1 January 1980 to today',
 
   // ReleaseNotesModal.svelte
   'modals.releaseNotesTitle': "What's new in version {version}",
@@ -245,6 +247,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.metadataMatchNoCandidatesDesc': 'Find the game manually by name below.',
   'modals.metadataMatchManualSearch': 'Manual search',
   'modals.metadataMatchNamePlaceholder': 'Game name',
+  'modals.metadataMatchSearchEmpty': 'Nothing found for “{query}”',
   'modals.metadataMatchApplying': 'Applying…',
   'modals.metadataMatchReplace': 'Replace match',
 
@@ -391,6 +394,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.collectionEditTitle': 'Collection',
   'modals.collectionNameLabel': 'Name',
   'modals.collectionNamePlaceholder': 'For example, Cozy games',
+  'modals.collectionNameRequired': 'Enter a name for the collection',
   'modals.collectionTagsLabel': 'Tags (all required)',
   'modals.collectionGenresLabel': 'Genres (any of them)',
   'modals.collectionGenresEmpty': 'The catalog has no genres for your library games yet',

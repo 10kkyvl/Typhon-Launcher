@@ -61,6 +61,7 @@ export const redist = {
   'redist.crashReport': 'Собрать отчёт',
   'redist.crashReportSaved': 'Отчёт сохранён',
   'redist.crashReportFailed': 'Не удалось собрать отчёт',
+  'redist.crashReportRunning': 'Дождитесь, пока соберётся отчёт',
 } as const;
 
 export type RedistKey = keyof typeof redist;

@@ -64,4 +64,5 @@ export const redist: Record<RedistKey, Message> = {
   'redist.crashReport': 'Collect a report',
   'redist.crashReportSaved': 'Report saved',
   'redist.crashReportFailed': 'Could not collect the report',
+  'redist.crashReportRunning': 'Wait until the report is collected',
 };

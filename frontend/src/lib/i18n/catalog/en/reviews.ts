@@ -85,6 +85,8 @@ export const reviews: Record<ReviewsKey, Message> = {
   'reviews.report': 'Report',
   'reviews.reportSent': 'Report sent',
   'reviews.reportTitle': 'Report this review',
+  'reviews.reportChooseReason': 'Choose a reason first',
+  'reviews.reportReasonLabel': 'Reason for the report',
   'reviews.reportReasonSpam': 'Spam',
   'reviews.reportReasonOffensive': 'Offensive',
   'reviews.reportReasonSpoilers': 'Spoilers',

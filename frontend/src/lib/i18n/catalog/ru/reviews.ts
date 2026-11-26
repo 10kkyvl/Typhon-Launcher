@@ -82,6 +82,8 @@ export const reviews = {
   'reviews.report': 'Пожаловаться',
   'reviews.reportSent': 'Жалоба отправлена',
   'reviews.reportTitle': 'Пожаловаться на отзыв',
+  'reviews.reportChooseReason': 'Сначала выберите причину',
+  'reviews.reportReasonLabel': 'Причина жалобы',
   'reviews.reportReasonSpam': 'Спам',
   'reviews.reportReasonOffensive': 'Оскорбления',
   'reviews.reportReasonSpoilers': 'Спойлеры',

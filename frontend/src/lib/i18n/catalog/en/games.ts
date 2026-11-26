@@ -506,6 +506,7 @@ export const games: Record<GamesKey, Message> = {
   'games.randomNotInstalled': 'Not installed',
   'games.randomNeverPlayed': 'Never played',
   'games.randomFilters': 'Filters',
+  'games.randomLaunching': 'The game is starting',
 
   'library.menuFolderFailed': 'Could not open the game folder',
   'library.menuSavesFailed': 'Could not open the save folder',

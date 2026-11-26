@@ -504,6 +504,7 @@ export const games = {
   'games.randomNotInstalled': 'Не установлена',
   'games.randomNeverPlayed': 'Ещё не запускалась',
   'games.randomFilters': 'Фильтры',
+  'games.randomLaunching': 'Игра запускается',
 
   'library.menuFolderFailed': 'Не удалось открыть папку игры',
   'library.menuSavesFailed': 'Не удалось открыть папку сохранений',
