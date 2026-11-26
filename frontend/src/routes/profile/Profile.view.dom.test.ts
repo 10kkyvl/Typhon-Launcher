@@ -108,7 +108,8 @@ describe('the profile page', () => {
     expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
 
     authState.set('offline');
-    const offline = await within(dialog).findByText('Profile settings can only change while connected to the server.');
-    expect(offline.closest('[data-tone="warning"]')).not.toBeNull();
+    // Said in the notice, and as the reason of the refused Save.
+    const offline = await within(dialog).findAllByText('Profile settings can only change while connected to the server.');
+    expect(offline.some((text) => text.closest('[data-tone="warning"]'))).toBe(true);
   });
 });

@@ -141,8 +141,16 @@
 
   {#snippet footer()}
     {#if error}<div class="failure"><Notice tone="danger" compact>{error}</Notice></div>{/if}
-    <Button variant="ghost" disabled={$savingProfile} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={$savingProfile || $isOffline} onclick={save}>
+    <!-- Busy, not disabled, while the save waits: Save keeps the focus it was pressed with, and Cancel,
+         refused meanwhile, stays reachable and says why. Offline, Save is refused the same way. -->
+    <Button variant="ghost" disabled={$savingProfile} reason={$savingProfile ? msg('social.saving') : ''} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button
+      variant="primary"
+      busy={$savingProfile}
+      disabled={!$savingProfile && $isOffline}
+      reason={$isOffline ? msg('social.settingsRequireConnection') : ''}
+      onclick={save}
+    >
       {$savingProfile ? msg('social.saving') : msg('common.save')}
     </Button>
   {/snippet}
