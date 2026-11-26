@@ -161,6 +161,57 @@ describe('a reply of A that fails once B is signed in', () => {
     expect({ said: said(), reads: vi.mocked(getTicket).mock.calls.length - reads }).toEqual({ said: [], reads: 0 });
   });
 
+  it('that is sent once B is signed in reads nothing, even with a reload held back for it', async () => {
+    const first = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise);
+    const { user } = await opened();
+    await user.type(replyBox(), 'From A.');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    unreadReplies.set(1);
+    await settled();
+    cleanup();
+    signOut();
+    signIn(`${a}-b`);
+    const reads = vi.mocked(getTicket).mock.calls.length;
+    first.resolve(message(4, 'user', 'From A.', 'x'));
+    await settled();
+    expect({ said: said(), reads: vi.mocked(getTicket).mock.calls.length - reads }).toEqual({ said: [], reads: 0 });
+  });
+
+  it('that fails once B is signed in, its request still on screen, reads nothing for a reload held back for it', async () => {
+    const first = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise);
+    const { user } = await opened();
+    await user.type(replyBox(), 'From A.');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    unreadReplies.set(1);
+    await settled();
+    signOut();
+    signIn(`${a}-b`);
+    const reads = vi.mocked(getTicket).mock.calls.length;
+    first.reject(new AccountError('network_error'));
+    await settled();
+    expect({ said: said(), reads: vi.mocked(getTicket).mock.calls.length - reads }).toEqual({ said: [], reads: 0 });
+  });
+
+  it('that is sent after its request was left reads nothing, under the same account too', async () => {
+    const first = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise);
+    const { user } = await opened();
+    await user.type(replyBox(), 'From A.');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    unreadReplies.set(1);
+    await settled();
+    cleanup();
+    const reads = vi.mocked(getTicket).mock.calls.length;
+    first.resolve(message(4, 'user', 'From A.', 'x'));
+    await settled();
+    expect({ said: said(), reads: vi.mocked(getTicket).mock.calls.length - reads }).toEqual({ said: [['success', msg('tickets.replySent')]], reads: 0 });
+  });
+
   it('that fails with no one signed in is kept for no one and says nothing', async () => {
     const first = await replyOnItsWay();
     signOut();

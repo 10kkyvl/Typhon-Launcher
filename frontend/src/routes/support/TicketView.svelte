@@ -183,6 +183,7 @@
     // Focus in the reply form at the press (the box or Reply) goes to the cleared box once it is sent.
     const fromForm = Boolean(replyBox?.contains(document.activeElement));
     const mine = ++sendRun;
+    const asked = account();
     sending = true;
     upload = null;
     const text = reply;
@@ -209,7 +210,7 @@
         replyField?.focus();
       }
       refreshPending = false;
-      await load();
+      if (onScreen) await load();
     } catch (err) {
       const changed = started && account() !== who;
       const back = started && !changed && returnReply(number, text, who);
@@ -232,7 +233,8 @@
         sending = false;
         upload = null;
       }
-      settle();
+      // A late answer reads nothing once the request was left or another account signed in.
+      if (onScreen && account() === asked) settle();
     }
   }
 
