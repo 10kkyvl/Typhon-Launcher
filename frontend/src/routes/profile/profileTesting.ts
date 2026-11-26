@@ -66,8 +66,15 @@ export function accountService<T extends object>(original: T) {
   return { ...original, ...mocks(ACCOUNT_CALLS) };
 }
 
+/** The reads answer an empty profile until a test says otherwise, as the service does outside Wails. */
 export function profileService<T extends object>(original: T) {
-  return { ...original, ...mocks(PROFILE_CALLS) };
+  const empty = (original as { EMPTY_SNAPSHOT?: unknown }).EMPTY_SNAPSHOT;
+  return {
+    ...original,
+    getProfileSnapshot: vi.fn(async () => empty),
+    getProfilePreview: vi.fn(async () => empty),
+    igdbIdsOf: vi.fn(async () => ({})),
+  };
 }
 
 export function coverService<T extends object>(original: T) {

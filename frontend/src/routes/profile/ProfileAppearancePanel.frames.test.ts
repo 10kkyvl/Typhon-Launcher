@@ -1,12 +1,28 @@
 import { render } from 'svelte/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./profileTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../bindings/typhon/internal/profile', async (original) => (await import('./profileTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./profileTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/account', async (original) => (await import('./profileTesting')).accountService(await original()));
+vi.mock('../../lib/services/profile', async (original) => (await import('./profileTesting')).profileService(await original()));
+vi.mock('../../lib/services/profileCover', async (original) => (await import('./profileTesting')).coverService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./profileTesting')).messagingStore(await original()));
 import Panel from './ProfileAppearancePanel.svelte';
 import raw from './ProfileAppearancePanel.svelte?raw';
 import { currentUser } from '../../lib/stores/user';
 import { DEFAULT_PROFILE, AccountError, type CurrentUser } from '../../lib/services/account';
 import { accountErrorText } from '../../lib/services/accountMessages';
 import { locale } from '../../lib/i18n/locale';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
+
+beforeEach(() => {
+  resetBindings();
+});
+
+afterEach(() => {
+  expect(calls).toEqual([]);
+});
 
 const id = '3f2b8c1e-9a4d-4e57-b0aa-1c2d3e4f5a6b';
 const frames = [{ id, name: 'Dachshund <b>', url: 'https://cdn/dog.png', hole: 0.5 }];

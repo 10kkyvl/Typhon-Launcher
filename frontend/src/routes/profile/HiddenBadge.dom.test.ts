@@ -1,10 +1,24 @@
 import { render } from '@testing-library/svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
 import HiddenBadge from './HiddenBadge.svelte';
 
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./profileTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../bindings/typhon/internal/profile', async (original) => (await import('./profileTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./profileTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/account', async (original) => (await import('./profileTesting')).accountService(await original()));
+vi.mock('../../lib/services/profile', async (original) => (await import('./profileTesting')).profileService(await original()));
+vi.mock('../../lib/services/profileCover', async (original) => (await import('./profileTesting')).coverService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./profileTesting')).messagingStore(await original()));
+
+beforeEach(() => {
+  resetBindings();
+});
+
 afterEach(() => {
+  expect(calls).toEqual([]);
   document.body.replaceChildren();
 });
 

@@ -3,6 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./profileTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../bindings/typhon/internal/profile', async (original) => (await import('./profileTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./profileTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/account', async (original) => (await import('./profileTesting')).accountService(await original()));
+vi.mock('../../lib/services/profile', async (original) => (await import('./profileTesting')).profileService(await original()));
+vi.mock('../../lib/services/profileCover', async (original) => (await import('./profileTesting')).coverService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./profileTesting')).messagingStore(await original()));
 vi.mock('../../lib/stores/profileAccent', async (actual) => ({
   ...(await actual<typeof import('../../lib/stores/profileAccent')>()),
   launcherAccent: vi.fn(() => null),
@@ -17,6 +24,7 @@ import { launcherAccent } from '../../lib/stores/profileAccent';
 import { authState, currentUser } from '../../lib/stores/user';
 import { toasts } from '../../lib/stores/toasts';
 import Profile from './Profile.svelte';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 
 // The profile page of a signed-in user, in its editor: the appearance panel is the side panel while no
 // block is selected.
@@ -32,12 +40,14 @@ const me: CurrentUser = {
 };
 
 beforeEach(() => {
+  resetBindings();
   locale.set('en');
   authState.set('authenticated');
   currentUser.set(me);
 });
 
 afterEach(() => {
+  expect(calls).toEqual([]);
   currentUser.set(null);
   authState.set('bootstrapping');
   toasts.set([]);

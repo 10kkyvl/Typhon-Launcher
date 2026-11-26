@@ -3,6 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./profileTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../bindings/typhon/internal/profile', async (original) => (await import('./profileTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./profileTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/account', async (original) => (await import('./profileTesting')).accountService(await original()));
+vi.mock('../../lib/services/profile', async (original) => (await import('./profileTesting')).profileService(await original()));
+vi.mock('../../lib/services/profileCover', async (original) => (await import('./profileTesting')).coverService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./profileTesting')).messagingStore(await original()));
 vi.mock('../../lib/stores/user', async (actual) => ({
   ...(await actual<typeof import('../../lib/stores/user')>()),
   saveProfile: vi.fn(),
@@ -14,6 +21,7 @@ import { accountErrorText } from '../../lib/services/accountMessages';
 import { renderDom } from '../../lib/testing/dom';
 import { authState, currentUser, saveProfile } from '../../lib/stores/user';
 import Profile from './Profile.svelte';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 
 // The profile page of a signed-in user with the header's own editor open (More → Edit): name, username,
 // about.
@@ -29,6 +37,7 @@ const me: CurrentUser = {
 };
 
 beforeEach(() => {
+  resetBindings();
   locale.set('en');
   authState.set('authenticated');
   currentUser.set(me);
@@ -36,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  expect(calls).toEqual([]);
   currentUser.set(null);
   authState.set('bootstrapping');
   document.body.replaceChildren();
