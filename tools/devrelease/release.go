@@ -158,6 +158,15 @@ func artifactName() string {
 // the release manifest carries the CHANGELOG, so a launcher that skips a
 // version still gets the history of the ones it skipped.
 func prepareReleases(versions, paths []string, port int, templates []noteTemplate, published time.Time, priv ed25519.PrivateKey) ([]release, error) {
+	return prepareChain(versions, paths, templates, published, func(version, path, summary string, history []selfupdate.ReleaseNote) (release, error) {
+		return newRelease(version, path, port, summary, history, published, priv)
+	})
+}
+
+// releaseFunc signs the release of one version from its built launcher.
+type releaseFunc func(version, path, summary string, history []selfupdate.ReleaseNote) (release, error)
+
+func prepareChain(versions, paths []string, templates []noteTemplate, published time.Time, newRel releaseFunc) ([]release, error) {
 	if len(versions) != len(paths) {
 		return nil, fmt.Errorf("devrelease: %d versions for %d artifacts", len(versions), len(paths))
 	}
@@ -171,7 +180,7 @@ func prepareReleases(versions, paths []string, port int, templates []noteTemplat
 		for j := i; j >= 0; j-- {
 			history = append(history, notes[j])
 		}
-		rel, err := newRelease(v, paths[i], port, templateFor(templates, i).Summary, history, published, priv)
+		rel, err := newRel(v, paths[i], templateFor(templates, i).Summary, history)
 		if err != nil {
 			return nil, err
 		}
