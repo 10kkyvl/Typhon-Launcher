@@ -12,6 +12,7 @@
   import { commonLine, isFriendCode, relationHint } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { composing } from '../../lib/utils/shortcut';
   import { msg } from '../../lib/i18n';
 
   let { open = $bindable(false), onsent }: { open?: boolean; onsent?: () => void } = $props();
@@ -76,7 +77,7 @@
   }
 
   function submit(event: KeyboardEvent) {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || composing(event)) return;
     // A press while the same lookup or the send runs: the answer on its way stands.
     if (sending || (searching && query.trim() === lookingFor)) return;
     clearTimeout(timer);

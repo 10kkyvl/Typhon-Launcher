@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { profile, sendRequest, type PublicProfile, type SendResult } from '../../lib/services/social';
@@ -39,6 +39,29 @@ async function search(result: () => Promise<PublicProfile>) {
   await keys.type(within(dialog).getByRole('textbox', { name: msg('social.friendsSearchLabel') }), 'lena{Enter}');
   return { dialog, keys };
 }
+
+describe('AddFriendModal: Enter while an input method composes', () => {
+  it.each([
+    ['isComposing', { isComposing: true }],
+    ['key code 229 (WebKit after the composition)', { keyCode: 229 }],
+  ])('commits the text and looks nothing up (%s)', async (_how, init) => {
+    vi.useFakeTimers();
+    try {
+      render(AddFriendModal, { target: app, props: { open: true } });
+      const field = screen.getByRole('textbox', { name: msg('social.friendsSearchLabel') });
+      await fireEvent.input(field, { target: { value: 'lena' } });
+
+      await fireEvent.keyDown(field, { key: 'Enter', ...init });
+      expect(profile).not.toHaveBeenCalled();
+
+      await fireEvent.keyDown(field, { key: 'Enter' });
+      expect(vi.mocked(profile).mock.calls).toEqual([['lena']]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe('AddFriendModal', () => {
   it('says a failed lookup in a danger notice', async () => {
