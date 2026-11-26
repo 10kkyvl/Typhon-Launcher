@@ -26,3 +26,16 @@ host="$(go env GOHOSTOS)"
 if [ "$host" != windows ]; then
   check_guard "$host" production,devmock "$(go env GOHOSTARCH)" 1
 fi
+
+# The qa tag compiles only for Windows, so the production half of its guard
+# is checked there, after proving that qa alone compiles.
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet -tags qa .
+if GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags qa,production -o "$check_tmp/typhon.exe" . >"$check_tmp/output" 2>&1; then
+  echo "qa unexpectedly compiled for windows with tags qa,production" >&2
+  exit 1
+fi
+if ! grep -q 'undefined: qaMustNotBeCompiledIntoProductionOrNonWindowsBuilds' "$check_tmp/output"; then
+  cat "$check_tmp/output" >&2
+  echo "Build failed for a reason other than the qa guard" >&2
+  exit 1
+fi

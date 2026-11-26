@@ -1,4 +1,4 @@
-//go:build !devmock
+//go:build !devmock && !(qa && windows)
 
 package selfupdate
 
