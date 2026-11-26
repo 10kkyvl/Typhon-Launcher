@@ -23,8 +23,9 @@ vi.mock('../../lib/services/account', async (original) => (await import('../../l
 
 // The ways into the new-request form, as the route gives them to the support page: the list's "New
 // request" sets nothing; the Beta badge sets the topic and a subject; the Move dialog and Settings set
-// a topic. A draft exists only once the player edits the form; a plain way in gives it back whole; a
-// way in with a prefill opens with the prefill and offers the draft.
+// a topic. A draft exists only once the player types or chooses content (a subject, a text, a game) or
+// restores one; the topic and the logs switch are settings, carried into a draft that exists. A plain
+// way in gives the draft back whole; a way in with a prefill opens with the prefill and offers it.
 
 const BETA = { view: 'new', topic: 'launcher', subject: 'Beta 2.0: ' };
 const MOVE = { view: 'new', topic: 'other' };
@@ -92,7 +93,7 @@ const EMPTY = { topic: msg('tickets.topicInstall'), logs: 'true', subject: '', b
 const BETA_FORM = { topic: msg('tickets.topicLauncher'), logs: 'true', subject: 'Beta 2.0: ', body: '' };
 const OFFER = `${msg('tickets.draftKept', { subject: 'Old matter' })} ${msg('tickets.draftRestore')}`;
 
-describe('1. a draft exists only once the player edits the form', () => {
+describe('1. a draft exists only once the player types or chooses content', () => {
   it('a prefill left untouched is not kept: the next way in shows its own prefill, the plain one nothing', async () => {
     await open(BETA);
     cleanup();
@@ -103,13 +104,27 @@ describe('1. a draft exists only once the player edits the form', () => {
     expect(shown()).toEqual(EMPTY);
   });
 
-  it('the logs switch set by hand is an edit: the prefilled form, as it is then, is kept', async () => {
+  it('the logs switch and the topic are settings: a prefilled form changed only there keeps nothing', async () => {
     const { user } = await open(BETA);
     await user.click(logsSwitch());
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicOther') }));
     cleanup();
     await open(PLAIN);
-    expect(shown()).toEqual({ ...BETA_FORM, logs: 'false', offered: null });
+    expect(shown()).toEqual(EMPTY);
   });
+
+  it('a topic and a logs switch set before the first key are carried into the draft it makes', async () => {
+    const { user } = await open(BETA);
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicOther') }));
+    await user.click(logsSwitch());
+    await user.type(bodyField(), 'Crashes on start.');
+    cleanup();
+    await open(PLAIN);
+    expect(shown()).toEqual({ topic: msg('tickets.topicOther'), logs: 'true', subject: 'Beta 2.0: ', body: 'Crashes on start.', offered: null });
+  });
+
 
   it('a field the player changes is an edit: the prefilled form, as it is then, is kept', async () => {
     const { user } = await open(MOVE);
@@ -197,6 +212,39 @@ describe('4. a prefilled way in while a draft is kept', () => {
     cleanup();
     await open(PLAIN);
     expect(shown()).toEqual(EMPTY);
+  });
+
+  it('a logs click in a topic-only prefilled form leaves the older draft kept and offered', async () => {
+    await oldDraft();
+    const { user } = await open(MOVE);
+    await user.click(logsSwitch());
+    const offered = shown().offered;
+    cleanup();
+    await open(PLAIN);
+    expect({ offered, later: shown() }).toEqual({ offered: OFFER, later: OLD });
+  });
+
+  it('a topic picked in the Beta form leaves the older draft kept and offered, never the prefill', async () => {
+    await oldDraft();
+    const { user } = await open(BETA);
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicOther') }));
+    const offered = shown().offered;
+    cleanup();
+    await open(PLAIN);
+    expect({ offered, later: shown() }).toEqual({ offered: OFFER, later: OLD });
+  });
+
+  it('a field edited after a topic pick makes the form the writer: the old draft is replaced, the topic kept', async () => {
+    await oldDraft();
+    const { user } = await open(MOVE);
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicAccount') }));
+    await user.type(subjectField(), 'New matter');
+    expect(notice()).toBeNull();
+    cleanup();
+    await open(PLAIN);
+    expect(shown()).toEqual({ topic: msg('tickets.topicAccount'), logs: 'false', subject: 'New matter', body: '', offered: null });
   });
 
   it('an edit makes this form the draft: the old one is replaced and the notice leaves', async () => {

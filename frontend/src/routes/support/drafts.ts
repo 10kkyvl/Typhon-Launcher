@@ -85,12 +85,13 @@ function copy(draft: RequestDraft): RequestDraft {
   return { ...draft, game: draft.game ? { ...draft.game } : null };
 }
 
-/** Keeps the new request as the player has it now in `by`; a form with nothing typed keeps nothing. */
+/**
+ * Keeps the new request as the player has it now in `by`; a form with nothing typed keeps nothing, and
+ * forgets what it wrote itself.
+ */
 export function keepRequest(draft: RequestDraft, by: Writer): void {
   if (!typed(draft)) {
-    const from = mine();
-    if (from) from.request = null;
-    settle();
+    forgetRequest(by);
     return;
   }
   const into = writable();

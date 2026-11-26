@@ -334,12 +334,16 @@ describe('the kept drafts themselves', () => {
     expect([keptRequest(), keptReply(7)]).toEqual([null, '']);
   });
 
-  it('keep nothing for a form with nothing typed in it, and an emptied form forgets what was kept', () => {
+  it('keep nothing for a form with nothing typed in it, and an emptied form forgets only what it wrote', () => {
     keepRequest({ ...DRAFT, game: null, subject: '  ', body: '' }, form);
     expect(keptRequest()).toBeNull();
     keepRequest(DRAFT, form);
     keepRequest({ ...DRAFT, game: null, subject: '', body: '' }, form);
     expect(keptRequest()).toBeNull();
+    keepRequest(DRAFT, form);
+    keepRequest({ ...DRAFT, game: null, subject: '', body: '' }, {});
+    expect(keptRequest()).toEqual(DRAFT);
+    forgetRequest(form);
     keepReply(7, 'Text');
     keepReply(7, '');
     expect(keptReply(7)).toBe('');

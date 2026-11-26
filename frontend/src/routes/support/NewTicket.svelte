@@ -71,8 +71,9 @@
 
   // This form, as the writer of what is kept: its Cancel and its own send forget only what it wrote.
   const me: Writer = {};
-  // This form's content is what is kept: it gave back the draft, or the player edited it. A prefill
-  // alone is never kept.
+  // This form's content is what is kept: it gave back the draft, or the player typed or chose content
+  // (a subject, a text, a game) or restored one. The topic and the logs switch are settings: they are
+  // carried into the draft once there is one, and never make one. A prefill alone is never kept.
   let owns = $state(draft !== null);
 
   let form = $state<HTMLElement>();
@@ -141,7 +142,8 @@
     untrack(() => keepRequest({ ...now, logsTouched }, me));
   });
 
-  // From the player's first edit this form's content is the draft: the one offered is replaced.
+  // From the first content the player gives it this form's content is the draft: the one offered is
+  // replaced.
   function edit() {
     owns = true;
     offered = null;
@@ -163,7 +165,6 @@
   }
 
   function changeTopic(id: string) {
-    edit();
     topic = id;
     if (!logsTouched && isTopic(id)) attachLogs = attachLogsByDefault(id);
   }
@@ -179,7 +180,6 @@
   }
 
   function setLogs() {
-    edit();
     logsTouched = true;
   }
 
