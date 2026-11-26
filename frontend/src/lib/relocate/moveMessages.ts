@@ -39,6 +39,7 @@ export const REASONS: Record<string, MessageKey> = {
   'library.executable_outside': 'transfers.moveErrExecutableOutside',
   'library.folder_busy': 'library.folder_busy',
   'library.relocating': 'transfers.moveErrRelocating',
+  'library.state_unreadable': 'library.state_unreadable',
 };
 
 export function moveErrorText(err: unknown, fallback: string = msg('transfers.moveErrFallback')): string {

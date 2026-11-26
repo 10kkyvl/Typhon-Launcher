@@ -25,6 +25,7 @@ const REASONS: Record<string, MessageKey> = {
   'updates.repair_unavailable': 'errUpdates.updatesRepairUnavailable',
   'updates.download_deleting': 'errUpdates.updatesDownloadDeleting',
   'updates.download_in_use': 'errUpdates.updatesDownloadInUse',
+  'library.state_unreadable': 'library.state_unreadable',
 };
 
 export function updateErrorText(raw: unknown, fallback: string = msg('errUpdates.fallback')): string {

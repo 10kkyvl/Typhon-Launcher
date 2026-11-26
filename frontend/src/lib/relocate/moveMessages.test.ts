@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { msg } from '../i18n';
 import { moveErrorText } from './moveMessages';
 
 describe('moveErrorText', () => {
@@ -26,6 +27,13 @@ describe('moveErrorText', () => {
     ['typhon:library.relocating: игра переносится', 'уже переносится'],
   ])('translates %s', (raw, expected) => {
     expect(moveErrorText(new Error(raw))).toContain(expected);
+  });
+
+  // The move's last step repoints the game in the library; a library that could not read its files at
+  // start refuses that save, and the player has to restart, not retry the move.
+  it('says the library files could not be read when the last step is refused for it', () => {
+    const err = new Error('relocate game-id-123: typhon:library.state_unreadable: library not saved, its files could not be read');
+    expect(moveErrorText(err, 'Не удалось перенести')).toBe(msg('library.state_unreadable'));
   });
 
   it('falls back when the backend text carries no code', () => {
