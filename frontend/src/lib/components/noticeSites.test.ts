@@ -152,7 +152,11 @@ const SITES: Record<string, Site[]> = {
     ['info', false],
     ['danger', true],
   ],
-  'lib/components/RandomGameModal.svelte': [['warning', true]],
+  // Nothing matched the spin, or the pick could not be started: both just happened.
+  'lib/components/RandomGameModal.svelte': [
+    ['warning', true],
+    ['danger', true],
+  ],
   // No runtimes on this platform, and a missing runtime, are facts of the system; a failed scan or read
   // just happened.
   'lib/components/RedistModal.svelte': [

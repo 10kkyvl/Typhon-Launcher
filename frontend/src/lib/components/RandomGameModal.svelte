@@ -28,12 +28,12 @@
   import { libraryGames } from '../stores/library';
   import { gameArt } from '../stores/metadata';
   import { navigate } from '../stores/router';
-  import { toast } from '../stores/toasts';
   import { focusHandOff } from '../utils/focusHandOff';
   import { relativeDate } from '../utils/format';
 
   let { onclose }: { onclose: () => void } = $props();
   const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
   type Phase = 'setup' | 'spinning' | 'result' | 'empty';
 
@@ -42,6 +42,8 @@
   let shown = $state<LibraryGame | null>(null);
   let previousId = $state<string | null>(null);
   let launching = $state(false);
+  // Why the pick could not be started, in the launcher's words; it goes with the pick.
+  let failure = $state('');
   let cancelSpin: (() => void) | undefined;
 
   const sources: { id: PickSource; label: () => string }[] = [
@@ -97,6 +99,8 @@
   }
 
   const spinningReason = $derived(phase === 'spinning' ? msg('games.randomSpinning') : '');
+  // While the pick is being started nothing else may change it: one press of Play starts one game.
+  const launchingReason = $derived(launching ? msg('games.randomLaunching') : '');
 
   // The footer the spin was asked from stays while it spins, its button busy, so the focus on it stays.
   let spunFrom = $state<'setup' | 'result'>('setup');
@@ -104,6 +108,8 @@
   let againSlot = $state<HTMLElement>();
 
   function spin() {
+    if (launching) return;
+    failure = '';
     // When the footer changes under the spin button, focus it held goes to the spin button of the new
     // footer: "Again" after a result, so a second Enter spins again rather than starting a game.
     const hand = focusHandOff();
@@ -144,15 +150,20 @@
       onclose();
       return;
     }
+    // The focus Play holds at the press goes to the words of a refusal.
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     launching = true;
+    failure = '';
     try {
       // A launch the player gave up (a question left unanswered) keeps the pick on screen.
       if (await launchGame(game.id)) onclose();
     } catch (err) {
-      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
+      failure = libraryErrorText(err, msg('games.errorPlayFailed'));
     } finally {
       launching = false;
     }
+    if (failure) await hand(() => document.getElementById(failureId));
   }
 
   onDestroy(() => cancelSpin?.());
@@ -212,6 +223,11 @@
         {/if}
       </div>
     </div>
+    {#if phase === 'result' && failure}
+      <div class="notice">
+        <Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice>
+      </div>
+    {/if}
   {/if}
 
   {#snippet footer()}
@@ -225,9 +241,16 @@
       </span>
     {:else if shown}
       <!-- Inert while it spins, not disabled: a focused control that turned disabled would drop focus. -->
-      <Button disabled={phase === 'spinning'} reason={spinningReason} onclick={() => (phase = 'setup')}>{msg('games.randomFilters')}</Button>
+      <Button
+        disabled={phase === 'spinning' || launching}
+        reason={spinningReason || launchingReason}
+        onclick={() => {
+          failure = '';
+          phase = 'setup';
+        }}>{msg('games.randomFilters')}</Button
+      >
       <span class="slot" bind:this={againSlot}>
-        <Button busy={phase === 'spinning'} onclick={spin}>
+        <Button busy={phase === 'spinning'} disabled={launching} reason={launchingReason} onclick={spin}>
           <Dices size="1.6rem" strokeWidth={1.8} />
           {phase === 'spinning' ? msg('games.randomSpinning') : msg('games.randomAgain')}
         </Button>
@@ -293,6 +316,10 @@
   .meta {
     margin: 0;
     color: var(--text-2);
+  }
+
+  .notice {
+    margin-top: var(--space-4);
   }
 
   .card.spinning .info h3 {

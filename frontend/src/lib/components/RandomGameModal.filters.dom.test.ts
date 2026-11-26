@@ -8,10 +8,12 @@ import { collections } from '../stores/collections';
 import { libraryGenres } from '../stores/genres';
 import { libraryGames } from '../stores/library';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import RandomGameModal from './RandomGameModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
-vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
+vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   launchGame: vi.fn(async () => true),
@@ -77,6 +79,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   libraryGames.set([]);
   libraryGenres.set({});
   collections.set([]);
@@ -84,6 +88,7 @@ afterEach(() => {
   finish = undefined;
   vi.clearAllMocks();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 describe('RandomGameModal: the saved genre and collection', () => {

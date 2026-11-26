@@ -8,12 +8,14 @@ import { closeCloudConflict, cloudStatus } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import CloudConflictModal from './CloudConflictModal.svelte';
 import RandomGameModal from './RandomGameModal.svelte';
 
 const { play, status, resolve } = vi.hoisted(() => ({ play: vi.fn(), status: vi.fn(), resolve: vi.fn() }));
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, GetGames: vi.fn(async () => []) } }));
 vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Status: status, ResolveConflict: resolve } }));
@@ -55,6 +57,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeCloudConflict();
   cloudStatus.set(null);
   libraryGames.set([]);
@@ -63,6 +67,7 @@ afterEach(() => {
   status.mockReset();
   resolve.mockReset();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 // Spins to the one game in the library and answers its "Play" button.

@@ -4,10 +4,12 @@ import { msg } from '../i18n';
 import type { LibraryGame } from '../services/library';
 import { libraryGames } from '../stores/library';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import RandomGameModal from './RandomGameModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
-vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
+vi.mock('../services/backend', () => ({ inWails: true }));
 
 // The spin is held by the test: it ends when the test says so.
 let finish: (() => void) | undefined;
@@ -31,9 +33,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   libraryGames.set([]);
   finish = undefined;
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 describe('RandomGameModal: spinning from the keyboard', () => {
