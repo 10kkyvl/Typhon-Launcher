@@ -92,6 +92,8 @@ const SITES: Record<string, Site[]> = {
   'lib/components/CollectionModal.svelte': [['danger', true]],
   'lib/components/DeleteAccountModal.svelte': [['danger', true]],
   'lib/components/EmulatorBusyModal.svelte': [['danger', true]],
+  // A refused status just happened.
+  'lib/components/GameStatusModal.svelte': [['danger', true]],
   // A failed read of the library's tags and a refused save just happened.
   'lib/components/GameTagsModal.svelte': [
     ['danger', true],

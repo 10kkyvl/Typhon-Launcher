@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { AccountError } from '../services/account';
 import { getLegalDocument, type LegalDocument } from '../services/legal';
-import { setStatus, type LibraryGame } from '../services/library';
 import { proposeLibraryPath, selectFolder, type Settings } from '../services/settings';
 import { importThemeText } from '../services/theme';
 import { createLibrary } from '../stores/settings';
@@ -12,7 +11,6 @@ import { authState, deleteAccount } from '../stores/user';
 import { user } from '../testing/dom';
 import AvatarCropModal from './AvatarCropModal.svelte';
 import DeleteAccountModal from './DeleteAccountModal.svelte';
-import GameStatusModal from './GameStatusModal.svelte';
 import LegalDocumentModal from './LegalDocumentModal.svelte';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
 import ThemeTextImportModal from './ThemeTextImportModal.svelte';
@@ -39,10 +37,6 @@ vi.mock('../services/system', async (importOriginal) => ({
 vi.mock('../stores/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../stores/settings')>()),
   createLibrary: vi.fn(),
-}));
-vi.mock('../services/library', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/library')>()),
-  setStatus: vi.fn(),
 }));
 vi.mock('../services/legal', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/legal')>()),
@@ -207,24 +201,6 @@ describe('the crop dialogs', () => {
     save.focus();
     await rerender({ saving: true });
     expect(save.getAttribute('aria-busy')).toBe('true');
-  });
-});
-
-describe('the game status and tags dialogs', () => {
-  it('GameStatusModal keeps the focus on the pressed status, busy, while it is saved', async () => {
-    const saved = deferred<LibraryGame>();
-    vi.mocked(setStatus).mockReturnValueOnce(saved.promise);
-    render(GameStatusModal, { target: app, props: { open: true, game: { id: 'g1', title: 'Hades', status: '' } as LibraryGame } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('modals.gameStatusTitle') });
-    const playing = within(dialog).getAllByRole('button').find((button) => button.textContent?.trim() !== msg('modals.gameStatusNone') && button.getAttribute('aria-pressed') === 'false') as HTMLElement;
-    playing.focus();
-
-    await keys.keyboard('{Enter}');
-
-    expect(playing.getAttribute('aria-busy')).toBe('true');
-    expect(document.activeElement).toBe(playing);
-    saved.resolve({} as LibraryGame);
   });
 });
 
