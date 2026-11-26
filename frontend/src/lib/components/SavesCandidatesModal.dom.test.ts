@@ -2,10 +2,12 @@ import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import { description, tabbable } from '../testing/hints';
 import SavesCandidatesModal from './SavesCandidatesModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 
 const SHORT = 'C:/Users/me/Saved Games/Hades';
 const LONG = 'C:/Users/me/AppData/Local/Supergiant Games/A folder whose name runs on for long enough to be cut by the old list/Hades/Profiles';
@@ -19,8 +21,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   vi.clearAllMocks();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 function open() {

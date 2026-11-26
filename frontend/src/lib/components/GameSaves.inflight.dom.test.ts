@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { cloudSyncNow, type CloudStatus } from '../services/cloudsaves';
+import { cloudSyncNow, loadCloudStatus, type CloudStatus } from '../services/cloudsaves';
 import { locateSaves, type LibraryGame, type SavesResult } from '../services/library';
 import { createBackup, listBackups, restoreBackup, type Snapshot } from '../services/savebackup';
 import type { Settings } from '../services/settings';
@@ -13,11 +13,13 @@ import { settings } from '../stores/settings';
 import { queuedToasts, toasts } from '../stores/toasts';
 import { authState } from '../stores/user';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import GameSaves from './GameSaves.svelte';
 import SaveBackupsModal from './SaveBackupsModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
-vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
+vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   locateSaves: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('../services/savebackup', async (importOriginal) => ({
 vi.mock('../services/cloudsaves', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/cloudsaves')>()),
   cloudSyncNow: vi.fn(),
+  loadCloudStatus: vi.fn(),
 }));
 
 const found = { path: 'C:/Saves/Hades', candidates: null, unreadable: 0, hint: null } as unknown as SavesResult;
@@ -58,9 +61,12 @@ beforeEach(() => {
   saveBackupsEnabled.set(true);
   vi.mocked(locateSaves).mockResolvedValue(found);
   vi.mocked(listBackups).mockResolvedValue([]);
+  vi.mocked(loadCloudStatus).mockImplementation(async () => get(cloudStatus) as CloudStatus);
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeSaveBackups();
   libraryGames.set([]);
   settings.set(null);
@@ -73,7 +79,9 @@ afterEach(() => {
   vi.mocked(createBackup).mockReset();
   vi.mocked(restoreBackup).mockReset();
   vi.mocked(cloudSyncNow).mockReset();
+  vi.mocked(loadCloudStatus).mockReset();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 const createButton = () => screen.getByRole('button', { name: new RegExp(`${msg('saves.createBackup')}|${msg('saves.creating')}`) });
