@@ -132,7 +132,7 @@ func TestAHeldBackStartThatSavesAtOnceKeepsTheOldLaunchersWrite(t *testing.T) {
 	if _, err := old.SetFavorite("a", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := succ.ReloadBeforeGateOpens(); err != nil {
+	if err := succ.ReloadBeforeGateOpens(t.Context()); err != nil {
 		t.Fatalf("ReloadBeforeGateOpens() = %v", err)
 	}
 	openGate(t)
@@ -159,7 +159,7 @@ func TestTheLibraryStartDoesNotReadAgainAfterTheReReadBeforeTheGate(t *testing.T
 	if err := succ.ServiceStartup(t.Context(), application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := succ.ReloadBeforeGateOpens(); err != nil {
+	if err := succ.ReloadBeforeGateOpens(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err := storage.WriteAtomic(path, []byte(`[{"id":"a","title":"A","favorite":true}]`)); err != nil {
@@ -187,7 +187,7 @@ func TestAFailedReReadBeforeTheGateRefusesSaves(t *testing.T) {
 	if err := storage.WriteAtomic(path, broken); err != nil {
 		t.Fatal(err)
 	}
-	if err := succ.ReloadBeforeGateOpens(); err == nil {
+	if err := succ.ReloadBeforeGateOpens(t.Context()); err == nil {
 		t.Fatal("ReloadBeforeGateOpens() = nil for a file that cannot be read")
 	}
 	openGate(t)

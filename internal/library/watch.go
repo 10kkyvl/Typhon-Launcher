@@ -65,7 +65,7 @@ func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOp
 // files are not touched.
 //
 //wails:ignore
-func (s *Service) ReloadBeforeGateOpens() error {
+func (s *Service) ReloadBeforeGateOpens(_ context.Context) error {
 	s.mu.Lock()
 	s.rereadBeforeGate = true
 	s.mu.Unlock()

@@ -149,7 +149,7 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	if err := takeover(); err != nil {
 		return fmt.Errorf("selfupdate: take over the single instance: %w", err)
 	}
-	s.runBeforeGateOpens()
+	s.runBeforeGateOpens(ctx)
 	handoffgate.Open()
 	s.mu.Lock()
 	s.handoffOldGone = true
@@ -183,10 +183,10 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 // SetBeforeGateOpens gives the successor the work that must be done after the
 // old launcher has exited and before any held-back start runs: the gate lets
 // them all go at once, and one may save state another reads again at its own
-// start (the library).
+// start (the library). Its context ends when this launcher shuts down.
 //
 //wails:ignore
-func (s *Service) SetBeforeGateOpens(f func() error) {
+func (s *Service) SetBeforeGateOpens(f func(context.Context) error) {
 	s.mu.Lock()
 	s.beforeGateOpens = f
 	s.mu.Unlock()
@@ -196,14 +196,14 @@ func (s *Service) SetBeforeGateOpens(f func() error) {
 // the gate opens anyway: the launcher must come up, and the work's owner
 // keeps its own state safe (the library refuses to save what it could not
 // read).
-func (s *Service) runBeforeGateOpens() {
+func (s *Service) runBeforeGateOpens(ctx context.Context) {
 	s.mu.Lock()
 	before := s.beforeGateOpens
 	s.mu.Unlock()
 	if before == nil {
 		return
 	}
-	if err := before(); err != nil {
+	if err := before(ctx); err != nil {
 		slog.Error("selfupdate: prepare the held-back services after the hand-over", "error", err)
 	}
 }

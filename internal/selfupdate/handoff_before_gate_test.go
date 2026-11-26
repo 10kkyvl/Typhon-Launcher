@@ -1,6 +1,7 @@
 package selfupdate
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -46,7 +47,7 @@ func TestTheWorkBeforeTheGateRunsBeforeAnyHeldBackStart(t *testing.T) {
 	r := newSuccessorRig(t, true)
 	var ran steps
 	holdStart(t, "test-before-gate-order", &ran)
-	r.svc.SetBeforeGateOpens(func() error {
+	r.svc.SetBeforeGateOpens(func(context.Context) error {
 		if r.oldAlive.Load() {
 			t.Error("the work before the gate ran while the old launcher was alive")
 		}
@@ -73,7 +74,7 @@ func TestAFailedWorkBeforeTheGateStillOpensIt(t *testing.T) {
 	r := newSuccessorRig(t, true)
 	var ran steps
 	holdStart(t, "test-before-gate-fails", &ran)
-	r.svc.SetBeforeGateOpens(func() error {
+	r.svc.SetBeforeGateOpens(func(context.Context) error {
 		ran.add("before gate")
 		return errors.New("library.json cannot be read")
 	})

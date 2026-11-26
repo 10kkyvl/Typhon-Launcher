@@ -36,7 +36,7 @@ func unreadableSuccessor(t *testing.T) (s *Service, path, installDir string) {
 	if err := storage.WriteAtomic(path, []byte(`[{"id":"a",`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ReloadBeforeGateOpens(); err == nil {
+	if err := s.ReloadBeforeGateOpens(t.Context()); err == nil {
 		t.Fatal("setup: the re-read of a broken file succeeded")
 	}
 	openGate(t)
