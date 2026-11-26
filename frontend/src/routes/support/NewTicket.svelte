@@ -33,7 +33,7 @@
   import AttachLogs from './AttachLogs.svelte';
   import { account, forgetRequest, keepRequest, keptRequest, onRequestBack, returnRequest, type RequestDraft, type Writer } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
-  import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
+  import { bodyCounter, copyAction, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
   // A way in that sets a topic or a subject (the Beta badge, the Move dialog, Settings) passes it; the
   // list's "New request" passes neither.
@@ -266,7 +266,9 @@
       const changed = started && account() !== who;
       const back = started && !changed && returnRequest(sent, me, who);
       if (!onScreen || changed) {
-        if (started && !changed) toast(msg(back ? 'tickets.requestNotSentKept' : 'tickets.requestNotSentNewer', { subject: sent.subject.trim() }), 'danger');
+        const subject = sent.subject.trim();
+        if (started && !changed && back) toast(msg('tickets.requestNotSentKept', { subject }), 'danger');
+        else if (started && !changed) toast(msg('tickets.requestNotSentNewer', { subject }), 'danger', copyAction(`${subject}\n\n${sent.body.trim()}`));
         return;
       }
       sending = false;

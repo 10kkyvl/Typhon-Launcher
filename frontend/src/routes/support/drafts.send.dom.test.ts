@@ -62,6 +62,33 @@ const topicBox = () => screen.getByRole('combobox', { name: msg('tickets.topicLa
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 const replies = () => vi.mocked(replyTicket).mock.calls.map((call) => call[1]);
 const said = () => get(toasts).map((t) => [t.kind, t.message]);
+const actions = () => get(toasts).map((t) => t.action?.label ?? null);
+
+/**
+ * Runs the action of toast `index` over a clipboard the test reads, put in place only for the run:
+ * user-event sets its own on `navigator` with every render. `fails` makes the write refuse. Answers
+ * what was written.
+ */
+async function copyFromToast(index: number, fails = false): Promise<string[]> {
+  const action = get(toasts)[index]?.action;
+  if (!action) throw new Error(`toast ${index} has no action`);
+  const written: string[] = [];
+  const writeText = async (text: string) => {
+    if (fails) throw new Error('clipboard refused');
+    written.push(text);
+  };
+  const before = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  try {
+    action.run();
+    await settled();
+  } finally {
+    if (before) Object.defineProperty(navigator, 'clipboard', before);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+  return written;
+}
+
 const offer = () => {
   const plate = screen.queryByRole('button', { name: msg('tickets.draftRestore') })?.closest('.notice');
   return plate ? words(plate) : null;
@@ -192,6 +219,22 @@ describe('a reply on its way', () => {
     expect(replyBox().value).toBe('Newer.');
   });
 
+  it('that fails after the player wrote another offers to copy it from its toast', async () => {
+    const first = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValue(first.promise);
+    const { user } = await opened();
+    await send(user, 'First.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    const again = await opened();
+    await again.user.type(replyBox(), 'Newer.');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const offered = actions();
+    expect({ offered, written: await copyFromToast(0) }).toEqual({ offered: [msg('tickets.copyText')], written: ['First.'] });
+  });
+
   it('sent after its request was left forgets nothing the player wrote since', async () => {
     const first = held<ReturnType<typeof message>>();
     vi.mocked(replyTicket).mockReturnValue(first.promise);
@@ -292,6 +335,7 @@ describe('a new request on its way', () => {
     await settled();
     await settled();
     expect(said()).toEqual([['danger', msg('tickets.requestNotSentKept', { subject: 'Cannot sign in' })]]);
+    expect(actions()).toEqual([null]);
     await newRequest();
     expect(shownRequest()).toEqual(SENT);
   });
@@ -427,6 +471,35 @@ describe('a new request on its way', () => {
     await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
     await screen.findByRole('alert');
     expect({ offered: offer(), said: said(), subject: subjectField().value }).toEqual({ offered: null, said: [], subject: 'Cannot sign in' });
+  });
+
+  it('whose text stays out of the form offers to copy it from its toast, and says it is copied', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const offered = actions();
+    const written = await copyFromToast(0);
+    expect({ offered, written, said: said()[1] }).toEqual({
+      offered: [msg('tickets.copyText')],
+      written: ['Cannot sign in\n\nThe code never arrives.'],
+      said: ['success', msg('tickets.textCopied')],
+    });
+  });
+
+  it('says so when the copy from its toast fails', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const written = await copyFromToast(0, true);
+    expect({ written, said: said()[1] }).toEqual({ written: [], said: ['danger', msg('tickets.textCopyFailed')] });
   });
 
   it('takes no topic meanwhile, so nothing puts its text back in the draft and it is not created twice', async () => {

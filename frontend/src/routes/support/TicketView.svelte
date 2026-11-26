@@ -33,7 +33,7 @@
   import { account, forgetReply, keepReply, keptReply, onReplyBack, returnReply } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { messageWhen } from './messageTime';
-  import { bodyCounter, isSendShortcut, sendKeys, sessionGone } from './sending';
+  import { bodyCounter, copyAction, isSendShortcut, sendKeys, sessionGone } from './sending';
 
   let { number }: { number: number } = $props();
   const uid = $props.id();
@@ -215,7 +215,8 @@
       const changed = started && account() !== who;
       const back = started && !changed && returnReply(number, text, who);
       if (!onScreen || changed) {
-        if (started && !changed) toast(msg(back ? 'tickets.replyNotSentKept' : 'tickets.replyNotSentNewer', { subject: about }), 'danger');
+        if (started && !changed && back) toast(msg('tickets.replyNotSentKept', { subject: about }), 'danger');
+        else if (started && !changed) toast(msg('tickets.replyNotSentNewer', { subject: about }), 'danger', copyAction(text.trim()));
         return;
       }
       sending = false;
