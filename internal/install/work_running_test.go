@@ -1,7 +1,9 @@
 package install
 
 import (
+	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,21 @@ func (f *fakeRegistrar) setOnRemove(hook func()) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.onRemove = hook
+}
+
+func (f *fakeRegistrar) setOnGetGames(hook func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onGetGames = hook
+}
+
+// seedRunningJob puts item in the service with a job still registered for it,
+// as the job goroutine holds it until endJob; cancelled is what Cancel set.
+func seedRunningJob(s *Service, item *Installation, cancelled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = append(s.items, item)
+	s.jobs[item.ID] = &job{cancel: func() {}, cancelled: cancelled}
 }
 
 // startBlockedInstall starts an install of a download with an installer that
@@ -74,6 +91,60 @@ func TestWorkRunningWhileAGameIsRemoved(t *testing.T) {
 	}
 	if s.WorkRunning() {
 		t.Fatal("WorkRunning() = true after the removal finished")
+	}
+}
+
+// A cancelled install deletes the folder it made from inside its own job,
+// after its record already says cancelled and before the job ends: only the
+// job says that work runs, and quitting the launcher then would cut the
+// deletion short.
+func TestWorkRunningWhileACancelledInstallDeletesItsFolder(t *testing.T) {
+	s, _, registrar := newTestService(t)
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "game.zip")
+	writeZip(t, archive, []zipEntry{{name: "a.txt", data: []byte("a")}})
+	dest := filepath.Join(dir, "Games", "Game")
+	mkFile(t, filepath.Join(dest, "Game.exe"), 32)
+	seedRunningJob(s, &Installation{
+		ID: "i1", Type: TypeArchiveZip, Status: StatusExtracting, ArchivePath: archive,
+		Destination: dest, OwnedDestination: dest,
+	}, true)
+	type seen struct {
+		status  Status
+		running bool
+	}
+	var mu sync.Mutex
+	var during []seen
+	registrar.setOnGetGames(func() {
+		got, ok := s.snapshot("i1")
+		if !ok {
+			t.Error("the record of the cancelled install is gone")
+		}
+		at := seen{status: got.Status, running: s.WorkRunning()}
+		mu.Lock()
+		during = append(during, at)
+		mu.Unlock()
+	})
+
+	s.fail("i1", context.Canceled)
+	s.wg.Wait()
+	registrar.setOnGetGames(nil)
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(during) == 0 {
+		t.Fatal("setup: the cancelled install never checked the library before deleting its folder")
+	}
+	for _, at := range during {
+		if at.status != StatusCancelled {
+			t.Fatalf("setup: the folder was checked with the record %s, want it already cancelled", at.status)
+		}
+		if !at.running {
+			t.Fatal("WorkRunning() = false while a cancelled install deletes its folder in its job")
+		}
+	}
+	if exists(dest) {
+		t.Fatalf("setup: the destination %s survived the cancel", dest)
 	}
 }
 

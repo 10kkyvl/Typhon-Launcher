@@ -121,6 +121,8 @@ describe('confirming the restart of a downloaded update', () => {
 
       expect(service.applyUpdate).not.toHaveBeenCalled();
       expect(get(toasts.toasts).map((item) => item.message)).toEqual([msg('state.selfupdateReasonWorkRunning')]);
+      // The store folds a repeat into one toast and counts it: once means no count.
+      expect(get(toasts.toasts).map((item) => item.count)).toEqual([undefined]);
       expect(get(show.updateShow)?.phase).toBe('home');
       expect(get(store.selfUpdateApplying)).toBe(false);
       expect(warn).not.toHaveBeenCalled();

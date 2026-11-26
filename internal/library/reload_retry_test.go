@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"typhon/internal/handoffgate"
+	"typhon/internal/procs"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 
@@ -102,6 +105,51 @@ func TestTheReReadBeforeTheGateGivesUpAfterThreeReads(t *testing.T) {
 	_, err = succ.SetFavorite("b", true)
 	if code := uierr.Code(err); code != "library.state_unreadable" {
 		t.Fatalf("SetFavorite() = %v (code %q), want library.state_unreadable", err, code)
+	}
+}
+
+// A re-read before the gate that failed still lets the library's held start
+// run its service: the session watcher, the Steam sync and the shortcut
+// refresh start, and the start does not read the files a fourth time (a read
+// that failed there would end the start before the watcher).
+func TestAFailedReReadBeforeTheGateStillStartsTheWatcherWithoutReadingAgain(t *testing.T) {
+	if !procs.Supported() {
+		t.Skip("procs enumeration unsupported on this platform, ServiceStartup does not start the watcher")
+	}
+	path := seedLibrary(t)
+	handoffgate.Arm()
+	t.Cleanup(handoffgate.Open)
+	succ := mustServiceAt(t, path)
+	scanned := make(chan struct{})
+	var once sync.Once
+	succ.scan = func(context.Context) ([]procs.Process, bool, error) {
+		once.Do(func() { close(scanned) })
+		return nil, true, nil
+	}
+	if err := succ.ServiceStartup(t.Context(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := succ.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
+	reads := heldLibraryFile(t, 1000, nil)
+	if err := succ.ReloadBeforeGateOpens(t.Context()); err == nil {
+		t.Fatal("setup: the re-read of a held file succeeded")
+	}
+
+	openGate(t)
+
+	if got := reads.Load(); got != reloadAttempts {
+		t.Fatalf("the library was read %d times, want only the %d reads before the gate", got, reloadAttempts)
+	}
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	select {
+	case <-scanned:
+	case <-deadline.C:
+		t.Fatal("the session watcher did not start after a failed re-read")
 	}
 }
 

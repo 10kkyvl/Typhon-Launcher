@@ -139,6 +139,8 @@ type fakeRegistrar struct {
 	next        int
 	// onRemove runs as the library is asked to forget a game, before it does.
 	onRemove func()
+	// onGetGames runs as the library is asked for its games, before it answers.
+	onGetGames func()
 }
 
 func (f *fakeRegistrar) CreateShortcut(id string) error {
@@ -220,6 +222,12 @@ func (f *fakeRegistrar) Find(id string) (library.Game, error) {
 }
 
 func (f *fakeRegistrar) GetGames() []library.Game {
+	f.mu.Lock()
+	hook := f.onGetGames
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]library.Game, 0, len(f.records))
