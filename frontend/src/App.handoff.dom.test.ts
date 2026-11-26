@@ -130,7 +130,7 @@ describe('a successor of a seamless restart, before the old launcher is gone', (
 
     const before = calls.length;
     for (const handler of [...(handlers.get('launcher:handoff_done') ?? [])]) handler({ data: { ...ACTIVE, active: false } });
-    await vi.waitFor(() => expect(named(calls.slice(before), methods)).toContain('social.Friends'));
+    await vi.waitFor(() => expect(named(calls.slice(before), methods)).toContain('social.Kick'));
     expect(named(calls.slice(before), methods)).toEqual(expect.arrayContaining(['download.List', 'install.List', 'library.GetGames', 'social.Kick', 'online.Kick']));
     view.unmount();
   }, 60_000);
