@@ -12,6 +12,7 @@
   import TextField from '../../lib/components/TextField.svelte';
   import GamePicker from '../../lib/components/profile/GamePicker.svelte';
   import { msg } from '../../lib/i18n';
+  import { focusQuietly } from '../../lib/layers/focus';
   import { accountErrorField } from '../../lib/services/accountMessages';
   import { onLogUploadStatus, type LogUploadStatus } from '../../lib/services/logsUpload';
   import { ticketLimits, type Limits, type SupportTopic } from '../../lib/services/support';
@@ -132,9 +133,11 @@
     };
   });
 
+  // Nothing is written while this form's request is on its way: its text left the draft when the send
+  // started, and only a failed send gives it back.
   $effect(() => {
     const now = { topic, game, subject, body, attachLogs };
-    if (!owns) return;
+    if (!owns || untrack(() => sending)) return;
     untrack(() => keepRequest({ ...now, logsTouched }, me));
   });
 
@@ -214,6 +217,11 @@
       await focusInvalid();
       return;
     }
+    // Every control but Send is held while the request is on its way. One that has focus (a click on Send
+    // in the macOS WebKit view takes none) would drop it to the page as it turns disabled: Send keeps it.
+    const focused = document.activeElement;
+    const send = document.getElementById(`${uid}-send`);
+    if (focused instanceof HTMLButtonElement && focused !== send && form?.contains(focused) && send) focusQuietly(send);
     sending = true;
     upload = null;
     const sent: RequestDraft = { topic, game: game ? { ...game } : null, subject, body, attachLogs, logsTouched };
@@ -271,7 +279,7 @@
 
     <div class="field">
       <span class="label" id="{uid}-topic-label">{msg('tickets.topicLabel')}</span>
-      <Select options={topics} value={topic} width="100%" labelledby="{uid}-topic-label" onchange={changeTopic} />
+      <Select options={topics} value={topic} width="100%" labelledby="{uid}-topic-label" disabled={sending} onchange={changeTopic} />
     </div>
 
     <div class="field">
@@ -353,7 +361,7 @@
 
     <div class="actions">
       <Button disabled={sending} onclick={cancel}>{msg('common.cancel')}</Button>
-      <Button variant="primary" busy={sending} onclick={submit}>
+      <Button id="{uid}-send" variant="primary" busy={sending} onclick={submit}>
         {sending ? msg('tickets.submitting') : msg('tickets.submit')}
       </Button>
     </div>

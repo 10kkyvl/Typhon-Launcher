@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -11,6 +11,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { held, LIMITS, message, thread, ticket } from '../../lib/testing/supportTesting';
+import { keptRequest } from './drafts';
 import NewTicket from './NewTicket.svelte';
 import Support from './Support.svelte';
 import TicketView from './TicketView.svelte';
@@ -91,7 +92,7 @@ async function requestOnItsWay() {
   await user.type(bodyField(), 'The code never arrives.');
   await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
   await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
-  return first;
+  return { first, user };
 }
 
 function shownRequest() {
@@ -239,7 +240,7 @@ describe('a new request on its way', () => {
   });
 
   it('created after the form was left is still said, opens nothing, and forgets nothing typed since', async () => {
-    const first = await requestOnItsWay();
+    const { first } = await requestOnItsWay();
     cleanup();
     const { user } = await newRequest();
     expect(subjectField().value).toBe('');
@@ -254,7 +255,7 @@ describe('a new request on its way', () => {
   });
 
   it('that fails after the form was left is in the form again, whole, and a toast names it', async () => {
-    const first = await requestOnItsWay();
+    const { first } = await requestOnItsWay();
     cleanup();
     first.reject(new AccountError('network_error'));
     await settled();
@@ -265,7 +266,7 @@ describe('a new request on its way', () => {
   });
 
   it('that fails while the form is open again and untouched comes back into it', async () => {
-    const first = await requestOnItsWay();
+    const { first } = await requestOnItsWay();
     cleanup();
     await newRequest();
     expect(subjectField().value).toBe('');
@@ -274,7 +275,7 @@ describe('a new request on its way', () => {
   });
 
   it('that fails after the player typed another keeps the newer one, and a toast says the failed one was not sent', async () => {
-    const first = await requestOnItsWay();
+    const { first } = await requestOnItsWay();
     cleanup();
     const { user } = await newRequest();
     await user.type(subjectField(), 'Another matter');
@@ -288,6 +289,60 @@ describe('a new request on its way', () => {
     cleanup();
     await newRequest();
     expect(subjectField().value).toBe('Another matter');
+  });
+
+  it('takes no topic meanwhile, so nothing puts its text back in the draft and it is not created twice', async () => {
+    const { first, user } = await requestOnItsWay();
+    const held = (topicBox() as HTMLButtonElement).disabled;
+    await user.click(topicBox());
+    const other = screen.queryByRole('option', { name: msg('tickets.topicOther') });
+    if (other) await user.click(other);
+    const keptMeanwhile = keptRequest();
+    cleanup();
+    vi.mocked(createTicket).mockResolvedValue(ticket(23, 'Cannot sign in'));
+    const again = await newRequest();
+    const reopened = subjectField().value;
+    if (reopened) {
+      await again.user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+      await settled();
+    }
+    first.resolve(ticket(22, 'Cannot sign in'));
+    await settled();
+    await settled();
+    expect({ held, keptMeanwhile, reopened, creates: vi.mocked(createTicket).mock.calls.length }).toEqual({ held: true, keptMeanwhile: null, reopened: '', creates: 1 });
+  });
+
+  it('keeps nothing that reaches the form meanwhile, even an input event on a held field', async () => {
+    const { first } = await requestOnItsWay();
+    await fireEvent.input(subjectField(), { target: { value: 'Cannot sign in at all' } });
+    await settled();
+    const keptMeanwhile = keptRequest();
+    first.resolve(ticket(22, 'Cannot sign in'));
+    await settled();
+    await settled();
+    expect(keptMeanwhile).toBeNull();
+  });
+
+  it('hands focus on to the busy Send when it was on the topic, held now, and the click on Send took none', async () => {
+    const first = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(first.promise);
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Cannot sign in');
+    await user.type(bodyField(), 'The code never arrives.');
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicAccount') }));
+    expect(document.activeElement).toBe(topicBox());
+    // A click in the macOS WebKit view does not focus the button it presses.
+    await fireEvent.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+    await settled();
+    expect({ held: (topicBox() as HTMLButtonElement).disabled, focus: document.activeElement?.textContent?.trim() }).toEqual({
+      held: true,
+      focus: msg('tickets.submitting'),
+    });
+    first.resolve(ticket(22, 'Cannot sign in'));
+    await settled();
+    await settled();
   });
 
   it('is kept when the player declines the logs: nothing left, so nothing was taken', async () => {
