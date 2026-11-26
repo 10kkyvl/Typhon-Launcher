@@ -44,6 +44,13 @@ devmock build only (`-tags devmock`, never compiled into Windows):
 | `TYPHON_DEVMOCK_MANIFEST_URL`, `TYPHON_DEVMOCK_RELEASE_PUBKEY` | — | point self-update at `tools/devrelease` (`internal/selfupdate/url_devmock.go`, `key_devmock.go`) |
 | `TYPHON_DEVMOCK_COMPAT_STATS` | — | path to a ready compat-stats snapshot (`main.go::compatStatsPath`) |
 
+qa build only (`-tags qa`, `wails3 task build:qa`; Windows only, never with `production`: `qa_forbid.go`, `scripts/check-build-tags.sh`):
+
+| Variable | Default | Effect |
+|---|---|---|
+| `TYPHON_QA_CDP_PORT` | `9333` | WebView2 DevTools port on 127.0.0.1 (`qa_on.go`) |
+| `TYPHON_QA_MANIFEST_URL`, `TYPHON_QA_RELEASE_PUBKEY` | — | point self-update at `tools/devrelease -windows` (§4.2). Both or neither; the URL is accepted only as `http://127.0.0.1:<port>` or `http://localhost:<port>`, the key as base64 of 32 bytes; anything else fails the selfupdate service at construction, never falls back. A `slog.Warn` names the URL when the source is active (`internal/selfupdate/qa_source.go`, `url_qa.go`, `key_qa.go`) |
+
 Test gates (all skip by default): `TYPHON_WINE_LIVE=1` (+ `TYPHON_WINE_LIVE_INSTALLER`, `TYPHON_GUARD_FIXTURE_EXE`, `TYPHON_GUARD_X86_FIXTURE_EXE`, `TYPHON_INNO_COMPILER_INSTALLER`, `TYPHON_GUARD_REAL_INSTALLER`, `TYPHON_GUARD_FULL_INSTALL`, `TYPHON_GUARD_VISIBLE_INSTALL`), `TYPHON_KEYCHAIN_LIVE=1`, `TYPHON_PE_LIVE`, `TYPHON_LIVE_PICKER_DIR`/`_FILE`, `TYPHON_METADATA_API`/`TYPHON_METADATA_TOKEN` (`internal/metadata/live_test.go`), `TYPHON_STEAM_E2E_URL` (`typhonapi/steam_e2e_test.go`). See `TEST_MAP.md`.
 
 CLI arguments of the launcher binary: `--play <libraryGameID>`, `--install-worker <spec.json>`, `--install-broker <dir>`, `--selfupdate-worker <spec.json>` (`main.go::main`). Wails: `--disable-gpu` is passed to WebView2 when `HardwareAcceleration` is off (`main.go::browserArgs`).
@@ -148,6 +155,35 @@ curl -s -X POST '127.0.0.1:8099/control?seconds=60' # pace of downloads that sta
 
 The listener binds 127.0.0.1 and refuses any non-loopback peer; `POST /control` with an `Origin` header
 (a web page) is refused.
+
+### 4.2 Self-update on Windows against the mock source (qa build, portable)
+
+This path has never been run by the people who wrote it: on macOS it is proven to compile
+(`GOOS=windows go vet -tags qa`, a real cross-build) and by the tests of `tools/devrelease` and
+`internal/selfupdate`, nothing more.
+
+`tools/devrelease -windows` serves the chain of §4.1 to a qa `typhon.exe` in portable mode. For each
+version it cross-builds `typhon.exe` with the flags of `build:qa` (`-tags qa`, windows/amd64), zips it
+as `typhon-<v>-portable.zip` with one top-level `typhon.exe` (checked with `selfupdate.CheckPortableZip`
+before publishing) and signs a windows/amd64 manifest whose installer entry carries the portable fields.
+No installer is built: the installer entry names `typhon-<v>-not-an-installer.txt`, so only a portable
+launcher can walk the chain (zip, file swap, hand-over method `exe-zip`). The Windows resource (icon,
+DPI awareness) is generated with `wails3 generate syso` when `wails3` is on PATH and removed after the
+builds; without it the builds go without and the tool says so. `frontend/dist` must already be built.
+With `-state <dir>` it writes `update.ps1` next to `update.env`; `/control`, `-seconds` and `fail=` work
+as in §4.1.
+
+On the Windows machine, from the repository root, after the usual frontend install:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\qa-updates.ps1
+```
+
+The script builds `bin\typhon.exe` at `VERSION`, starts `go run ./tools/devrelease -windows -version
+<next patch> -count 10 -seconds 5 -state %LOCALAPPDATA%\TyphonQAUpdates\devrelease` in a second window,
+waits for `http://127.0.0.1:8099/control`, dot-sources `update.ps1`, points `TYPHON_PORTABLE_DIR` at a
+fresh `%LOCALAPPDATA%\TyphonQAUpdates\portable-<time>` folder and starts the launcher. It never runs
+`npm ci`. Each run rebuilds `bin\typhon.exe`, which the chain replaces in place.
 
 ## 5. State on disk
 
