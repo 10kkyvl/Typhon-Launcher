@@ -92,6 +92,11 @@ const SITES: Record<string, Site[]> = {
   'lib/components/CollectionModal.svelte': [['danger', true]],
   'lib/components/DeleteAccountModal.svelte': [['danger', true]],
   'lib/components/EmulatorBusyModal.svelte': [['danger', true]],
+  // A failed read of the library's tags and a refused save just happened.
+  'lib/components/GameTagsModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
   // Why the launch needs an emulator is read with the prompt; a failed pick or save just happened.
   'lib/components/EmulatorNeededModal.svelte': [
     ['danger', false],
