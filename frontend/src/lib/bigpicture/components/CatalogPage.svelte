@@ -5,6 +5,7 @@
   import { errorCode, t, type MessageKey, type Params } from '../../i18n';
   import { type CatalogGame, type CatalogPage, type GenreFacet } from '../../services/sources';
   import { CatalogController, type CatalogLoadResult } from '../catalogController';
+  import { genreLabel } from '../../metadata/labels';
   import type { RequestText } from '../contracts';
 
   import { bigpictureCatalog } from '../../i18n/catalog/en/bigpictureCatalog';
@@ -164,7 +165,7 @@
       </button>
       {#each shownFacets as facet (facet.label)}
         <button class="filter-chip" class:selected={genre === facet.label} data-bp-focus={`catalog:genre:${focusId(facet.label)}`} onclick={() => void chooseGenre(facet.label)}>
-          {facet.label}<span>{facet.count}</span>
+          {genreLabel(facet.label)}<span>{facet.count}</span>
         </button>
       {/each}
     </div>

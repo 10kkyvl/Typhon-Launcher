@@ -6,6 +6,7 @@
   import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero, primaryAction } from '../../game/view';
+  import { genreLabel } from '../../metadata/labels';
   import { gameDownloads, gameInstalls } from '../../game/transfers';
   import { consoleGroupStart, consoleOrigin, firstWebUrl, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
   import { dlcView, hasRequirements, requirementColumns } from '../../game/extras';
@@ -126,7 +127,7 @@
   const summary = $derived(metadata?.game.summary || catalogGame?.summary || '');
   const year = $derived(metadata?.game.releaseYear || catalogGame?.releaseYear || (metadata?.game.releaseDate ? new Date(metadata.game.releaseDate).getFullYear() : 0));
   const gameMeta = $derived([year || '', metadata?.game.developer || catalogGame?.developer, metadata?.game.publisher || catalogGame?.publisher].filter(Boolean).join(' · '));
-  const genres = $derived([...new Set([...(metadata?.game.genres ?? []), ...(catalogGame?.genres ?? [])])]);
+  const genres = $derived([...new Set([...(metadata?.game.genres ?? []), ...(catalogGame?.genres ?? [])].map(genreLabel))]);
   const availableReleases = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
   const releaseSplit = $derived(splitReleases(availableReleases));
   const orderedReleases = $derived(orderReleases(releaseGroups));
