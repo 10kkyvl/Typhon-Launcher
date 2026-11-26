@@ -128,7 +128,7 @@ describe('ReviewCard: reporting', () => {
 });
 
 describe('ReviewCard: sending a report', () => {
-  it('keeps focus on the pressed reason, busy, while it sends, then returns it to Report', async () => {
+  it('keeps focus on Send, busy, while the chosen reason is sent, then returns it to Report', async () => {
     let sent!: () => void;
     vi.mocked(sendReport).mockReturnValueOnce(new Promise<void>((resolve) => (sent = resolve)));
     const { user } = renderDom(ReviewCard, { review: review('Fine.'), guest: false });
@@ -136,18 +136,21 @@ describe('ReviewCard: sending a report', () => {
     report.focus();
     await user.keyboard('{Enter}');
     const dialog = screen.getByRole('dialog', { name: msg('reviews.reportTitle') });
-    const spam = within(dialog).getByRole('button', { name: msg('reviews.reportReasonSpam') });
-    const other = within(dialog).getByRole('button', { name: msg('reviews.reportReasonOther') });
-    spam.focus();
+    const spam = within(dialog).getByRole('radio', { name: msg('reviews.reportReasonSpam') });
+    const other = within(dialog).getByRole('radio', { name: msg('reviews.reportReasonOther') });
+    await user.click(spam);
+    const send = within(dialog).getByRole('button', { name: msg('reviews.reportSubmit') });
+    send.focus();
 
     await user.keyboard('{Enter}');
 
-    expect(spam.hasAttribute('disabled')).toBe(false);
-    expect(spam.getAttribute('aria-busy')).toBe('true');
+    expect(send.hasAttribute('disabled')).toBe(false);
+    expect(send.getAttribute('aria-busy')).toBe('true');
     expect(other.getAttribute('aria-disabled')).toBe('true');
-    expect(document.activeElement).toBe(spam);
+    expect(document.activeElement).toBe(send);
     await user.click(other);
-    expect(vi.mocked(sendReport)).toHaveBeenCalledTimes(1);
+    await user.keyboard('{Enter}');
+    expect(vi.mocked(sendReport)).toHaveBeenCalledExactlyOnceWith(7, 'spam');
 
     sent();
     await vi.waitFor(() => expect(dialog.isConnected).toBe(false));

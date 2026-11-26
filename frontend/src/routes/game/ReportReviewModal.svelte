@@ -1,83 +1,80 @@
 <script lang="ts">
+  import Button from '../../lib/components/Button.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import OptionList from '../../lib/components/OptionList.svelte';
   import { AccountError } from '../../lib/services/account';
   import { report as reportReview, type ReportReason } from '../../lib/services/reviews';
   import { reviewToastMessage } from '../../lib/game/reviewMessages';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { msg } from '../../lib/i18n';
 
+  /**
+   * A report of a review, sent with one reason. The reasons are a radio group: choosing one sends
+   * nothing (the arrows choose as they move), Send does.
+   */
   let { reviewId, onclose }: { reviewId: number; onclose: () => void } = $props();
+  const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
-  // The reason being sent: its button is busy and keeps focus, the others refuse presses meanwhile.
-  let sending = $state<ReportReason | ''>('');
+  let chosen = $state<ReportReason | ''>('');
+  let sending = $state(false);
+  // Why the report was refused, in the launcher's words for the code.
+  let failure = $state('');
 
-  const REASONS: { value: ReportReason; label: () => string }[] = [
-    { value: 'spam', label: () => msg('reviews.reportReasonSpam') },
-    { value: 'offensive', label: () => msg('reviews.reportReasonOffensive') },
-    { value: 'spoilers', label: () => msg('reviews.reportReasonSpoilers') },
-    { value: 'off_topic', label: () => msg('reviews.reportReasonOffTopic') },
-    { value: 'other', label: () => msg('reviews.reportReasonOther') },
+  const REASONS: { id: ReportReason; label: () => string }[] = [
+    { id: 'spam', label: () => msg('reviews.reportReasonSpam') },
+    { id: 'offensive', label: () => msg('reviews.reportReasonOffensive') },
+    { id: 'spoilers', label: () => msg('reviews.reportReasonSpoilers') },
+    { id: 'off_topic', label: () => msg('reviews.reportReasonOffTopic') },
+    { id: 'other', label: () => msg('reviews.reportReasonOther') },
   ];
+  const options = $derived(REASONS.map((reason) => ({ id: reason.id, title: reason.label() })));
 
-  async function submit(reason: ReportReason) {
-    if (sending) return;
-    sending = reason;
+  async function submit() {
+    if (sending || !chosen) return;
+    // The focus Send holds at the press goes to the words of a refusal.
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
+    sending = true;
+    failure = '';
     try {
-      await reportReview(reviewId, reason);
+      await reportReview(reviewId, chosen);
       toast(msg('reviews.reportSent'), 'success');
       onclose();
     } catch (err) {
-      const code = err instanceof AccountError ? err.code : '';
-      toast(reviewToastMessage(code, msg('reviews.reportFailed')), 'danger');
+      failure = reviewToastMessage(err instanceof AccountError ? err.code : '', msg('reviews.reportFailed'));
     } finally {
-      sending = '';
+      sending = false;
     }
+    if (failure) await hand(() => document.getElementById(failureId));
   }
+
+  const heldReason = $derived(sending ? msg('modals.actionRunning') : '');
 </script>
 
-<Modal dismissible={!sending} open title={msg('reviews.reportTitle')} width="38rem" {onclose}>
-  <div class="reasons">
-    {#each REASONS as reason (reason.value)}
-      <button
-        class="reason"
-        type="button"
-        aria-busy={sending === reason.value || undefined}
-        aria-disabled={sending && sending !== reason.value ? 'true' : undefined}
-        onclick={() => submit(reason.value)}
-      >
-        {reason.label()}
-      </button>
-    {/each}
-  </div>
+<Modal dismissible={!sending} busy={sending} open title={msg('reviews.reportTitle')} width="38rem" {onclose}>
+  <OptionList label={msg('reviews.reportReasonLabel')} {options} bind:value={chosen} disabled={sending} />
+  {#if failure}
+    <div class="notice">
+      <Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice>
+    </div>
+  {/if}
+  {#snippet footer()}
+    <Button disabled={sending} reason={heldReason} onclick={onclose}>{msg('common.cancel')}</Button>
+    <Button
+      variant="primary"
+      disabled={!chosen}
+      reason={chosen ? '' : msg('reviews.reportChooseReason')}
+      busy={sending}
+      onclick={submit}>{msg('reviews.reportSubmit')}</Button
+    >
+  {/snippet}
 </Modal>
 
 <style>
-  .reasons {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .reason {
-    padding: 1rem var(--space-4);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    text-align: left;
-    font-size: var(--font-sm);
-    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
-  }
-
-  .reason:hover:not([aria-disabled='true'], [aria-busy='true']) {
-    background: var(--hover);
-    border-color: var(--border-strong);
-  }
-
-  .reason[aria-disabled='true'] {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  .reason[aria-busy='true'] {
-    cursor: progress;
+  .notice {
+    margin-top: var(--space-3);
   }
 </style>

@@ -78,7 +78,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/game/GameShots.svelte': { shot: 'thumbnail' },
   'routes/game/GameFriendsPanel.svelte': { who: 'row' },
   'routes/game/GameScreenshots.svelte': { thumb: 'thumbnail' },
-  'routes/game/ReportReviewModal.svelte': { reason: 'list option' },
   'routes/game/ReviewCard.svelte': { who: 'row' },
   'routes/game/ReviewComposer.svelte': { toggle: 'radio tile' },
   'routes/game/ReviewSummary.svelte': { score: 'row' },

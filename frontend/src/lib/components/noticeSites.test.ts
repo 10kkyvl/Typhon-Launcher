@@ -271,6 +271,8 @@ const SITES: Record<string, Site[]> = {
   ],
   // The reviews list fails on the same request and announces it with its Retry.
   'routes/game/ReviewSummary.svelte': [['danger', false]],
+  // A refused report just happened.
+  'routes/game/ReportReviewModal.svelte': [['danger', true]],
   // The history file could not be written: a state of the page, not an event of this visit. The first
   // read of the list failed: that just happened.
   'routes/history/History.svelte': [
