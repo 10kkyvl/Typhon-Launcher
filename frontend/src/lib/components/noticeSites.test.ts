@@ -99,6 +99,12 @@ const SITES: Record<string, Site[]> = {
   'lib/components/GameCrashModal.svelte': [['danger', true]],
   // A refused status just happened.
   'lib/components/GameStatusModal.svelte': [['danger', true]],
+  // A refused match, a failed look-up of the candidates and a failed search just happened.
+  'lib/components/MetadataMatchModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+  ],
   // A failed read of the library's tags and a refused save just happened.
   'lib/components/GameTagsModal.svelte': [
     ['danger', true],
