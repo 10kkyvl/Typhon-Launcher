@@ -10,10 +10,12 @@ import { closeSaveBackups, openSaveBackups } from '../stores/savebackup';
 import { settings } from '../stores/settings';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { held, sentToGo } from '../testing/gameDialogsTesting';
 import SaveBackupsModal from './SaveBackupsModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
-vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
+vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   locateSaves: vi.fn(),
@@ -26,6 +28,13 @@ vi.mock('../services/savebackup', async (importOriginal) => ({
 vi.mock('../services/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/settings')>()),
   openFolder: vi.fn(),
+}));
+vi.mock('../services/cloudsaves', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/cloudsaves')>()),
+  loadCloudStatus: vi.fn(async () => ({ enabled: false, signedIn: false, usedBytes: 0, quotaBytes: 0, maxBytes: 0, error: '', games: [] })),
+  cloudSyncNow: vi.fn(),
+  cloudPullRemote: vi.fn(),
+  cloudDeleteRemote: vi.fn(),
 }));
 vi.mock('../services/metadata', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/metadata')>()),
@@ -65,6 +74,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeSaveBackups();
   libraryGames.set([]);
   runningGames.set(new Set());
@@ -75,6 +86,7 @@ afterEach(() => {
   vi.mocked(createBackup).mockReset();
   vi.mocked(openFolder).mockReset();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 async function openDialog() {
@@ -163,5 +175,77 @@ describe('SaveBackupsModal: the backups', () => {
 
     const text = await within(dialog).findByText(msg('saves.listFailed'));
     expect(text.closest('[data-tone="danger"]')).not.toBeNull();
+  });
+});
+
+const footerClose = (dialog: HTMLElement) => within(dialog).getAllByRole('button', { name: msg('common.close') }).find((button) => !button.closest('.head')) as HTMLElement;
+
+describe('SaveBackupsModal: the dialog around the saves', () => {
+  it('opens with the focus inside the saves, not on the close button', async () => {
+    const dialog = await openDialog();
+
+    await within(dialog).findByRole('button', { name: msg('saves.open') });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement?.closest('.head')).toBeNull();
+  });
+
+  it('says there is no backup yet in words of its own', async () => {
+    const dialog = await openDialog();
+
+    expect(await within(dialog).findByText(msg('saves.empty'))).toBeTruthy();
+  });
+
+  it('holds Close with the reason while the folder opens, and Escape waits too', async () => {
+    const opening = held<void>();
+    vi.mocked(openFolder).mockReturnValueOnce(opening.promise);
+    const dialog = await openDialog();
+    const keys = user();
+    await keys.click(await within(dialog).findByRole('button', { name: msg('saves.open') }));
+    const close = footerClose(dialog);
+
+    expect(close).toHaveProperty('disabled', false);
+    expect(close.getAttribute('aria-disabled')).toBe('true');
+    expect(document.getElementById(close.getAttribute('aria-describedby') ?? '')?.textContent?.trim()).toBe(msg('modals.actionRunning'));
+    await keys.click(close);
+    await keys.keyboard('{Escape}');
+    expect(dialog.isConnected).toBe(true);
+
+    opening.resolve();
+    await vi.waitFor(() => expect(close.getAttribute('aria-disabled')).toBeNull());
+    await keys.click(close);
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+  });
+
+  it('closes on Escape as on Close while a backup is made: the backup goes on without the dialog', async () => {
+    const made = held<Snapshot>();
+    vi.mocked(createBackup).mockReturnValueOnce(made.promise);
+    const dialog = await openDialog();
+    const keys = user();
+    const create = await within(dialog).findByRole('button', { name: msg('saves.createBackup') });
+    await vi.waitFor(() => expect(create).toHaveProperty('disabled', false));
+    await keys.click(create);
+    expect(footerClose(dialog).getAttribute('aria-disabled')).toBeNull();
+
+    await keys.keyboard('{Escape}');
+
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    made.resolve(snapshot());
+  });
+
+  it('shows the backups of the game it is open for, not a late answer for the game before', async () => {
+    const first = held<Snapshot[]>();
+    libraryGames.set([{ id: 'g1', title: 'Hades', canonicalGameId: 'igdb:1' } as LibraryGame, { id: 'g2', title: 'Celeste', canonicalGameId: 'igdb:2' } as LibraryGame]);
+    vi.mocked(listBackups).mockImplementation(async (id: string) => (id === 'g1' ? first.promise : []));
+    const hades = await openDialog();
+    closeSaveBackups();
+    await vi.waitFor(() => expect(hades.isConnected).toBe(false));
+
+    openSaveBackups('g2');
+    const celeste = await screen.findByRole('dialog', { name: msg('saves.title', { title: 'Celeste' }) });
+    await within(celeste).findByText(msg('saves.empty'));
+    first.resolve([snapshot({ id: 's1', gameId: 'g1' })]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(celeste).getByText(msg('saves.empty'))).toBeTruthy();
   });
 });
