@@ -79,6 +79,23 @@ func applyPortableZip(ctx context.Context, zipPath, target string) error {
 	return nil
 }
 
+// CheckPortableZip reports whether applyPortableZip would take typhon.exe
+// from the archive, so release tooling publishes only zips the portable
+// launcher accepts.
+func CheckPortableZip(zipPath string) (err error) {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil && (zr == nil || !errors.Is(err, zip.ErrInsecurePath)) {
+		return fmt.Errorf("selfupdate: open portable archive: %w", err)
+	}
+	defer func() {
+		if cerr := zr.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("selfupdate: close portable archive: %w", cerr)
+		}
+	}()
+	_, err = portableExecutableEntry(zr)
+	return err
+}
+
 func portableExecutableEntry(zr *zip.ReadCloser) (*zip.File, error) {
 	var found *zip.File
 	for _, f := range zr.File {

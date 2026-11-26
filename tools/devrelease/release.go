@@ -29,13 +29,15 @@ var (
 )
 
 // release is one version the source can offer: the launcher binary built
-// with that version linked in, and the manifest signed for it.
+// with that version linked in, and the manifest signed for it. On the
+// Windows chain path is the installer placeholder and portablePath the zip.
 type release struct {
-	version string
-	path    string
-	art     selfupdate.Artifact
-	m       selfupdate.Manifest
-	signed  []byte
+	version      string
+	path         string
+	portablePath string
+	art          selfupdate.Artifact
+	m            selfupdate.Manifest
+	signed       []byte
 }
 
 // buildFunc produces a devmock launcher that reports version as its own.
@@ -101,7 +103,7 @@ func resolveArtifacts(ctx context.Context, cfg config, versions []string, build 
 		}
 		if err := build(ctx, v, out); err != nil {
 			cleanup()
-			return nil, nil, fmt.Errorf("build devmock launcher %s: %w", v, err)
+			return nil, nil, fmt.Errorf("build launcher %s: %w", v, err)
 		}
 		paths = append(paths, out)
 	}

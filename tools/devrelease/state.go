@@ -16,6 +16,7 @@ import (
 const (
 	keyFileName  = "release-key"
 	envFileName  = "update.env"
+	psFileName   = "update.ps1"
 	stateDirMode = 0o700
 )
 
@@ -52,11 +53,32 @@ func stateKeyPair(dir string) (ed25519.PrivateKey, ed25519.PublicKey, error) {
 	return priv, pub, nil
 }
 
-func envLines(baseURL string, pub ed25519.PublicKey) []string {
-	return []string{
-		"TYPHON_DEVMOCK_MANIFEST_URL=" + baseURL,
-		"TYPHON_DEVMOCK_RELEASE_PUBKEY=" + base64.StdEncoding.EncodeToString(pub),
+// envLines names the source for the build that reads it: the devmock
+// launcher, or the qa Windows launcher (internal/selfupdate/qa_source.go).
+func envLines(windows bool, baseURL string, pub ed25519.PublicKey) []string {
+	urlVar, keyVar := "TYPHON_DEVMOCK_MANIFEST_URL", "TYPHON_DEVMOCK_RELEASE_PUBKEY"
+	if windows {
+		urlVar, keyVar = "TYPHON_QA_MANIFEST_URL", "TYPHON_QA_RELEASE_PUBKEY"
 	}
+	return []string{
+		urlVar + "=" + baseURL,
+		keyVar + "=" + base64.StdEncoding.EncodeToString(pub),
+	}
+}
+
+// writePowerShellEnv is update.env for a Windows machine, where there is no
+// shell to source an export from. The values are a loopback url and base64,
+// so double quotes hold them without escaping.
+func writePowerShellEnv(dir string, lines []string) error {
+	var b strings.Builder
+	for _, line := range lines {
+		name, value, _ := strings.Cut(line, "=")
+		b.WriteString("$env:" + name + " = \"" + value + "\"\r\n")
+	}
+	if err := storage.WriteAtomic(filepath.Join(dir, psFileName), []byte(b.String())); err != nil {
+		return fmt.Errorf("write PowerShell env file: %w", err)
+	}
+	return nil
 }
 
 func writeEnvFile(dir string, lines []string) error {

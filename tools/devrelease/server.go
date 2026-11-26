@@ -51,13 +51,21 @@ func (s *releaseServer) offerFor(clientVersion string) release {
 	return s.releases[len(s.releases)-1]
 }
 
-func (s *releaseServer) find(version, name string) (release, bool) {
+// find returns the release and the file behind one of its download names:
+// the artifact, or on the Windows chain also the portable zip.
+func (s *releaseServer) find(version, name string) (release, string, bool) {
 	for _, rel := range s.releases {
-		if rel.version == version && rel.art.Name == name {
-			return rel, true
+		if rel.version != version {
+			continue
+		}
+		if rel.art.Name == name {
+			return rel, rel.path, true
+		}
+		if rel.portablePath != "" && rel.art.PortableName == name {
+			return rel, rel.portablePath, true
 		}
 	}
-	return release{}, false
+	return release{}, "", false
 }
 
 func (s *releaseServer) handleManifest(w http.ResponseWriter, r *http.Request) {
@@ -89,19 +97,19 @@ func (s *releaseServer) handleManifest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *releaseServer) handleDownload(w http.ResponseWriter, r *http.Request) {
-	rel, ok := s.find(r.PathValue("version"), r.PathValue("name"))
+	rel, path, ok := s.find(r.PathValue("version"), r.PathValue("name"))
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 	mode := s.control.current()
-	slog.Info("devrelease: download", "version", rel.version, "range", r.Header.Get("Range"), "fail", string(mode))
+	slog.Info("devrelease: download", "version", rel.version, "name", r.PathValue("name"), "range", r.Header.Get("Range"), "fail", string(mode))
 	if mode == failArtifact500 {
 		http.Error(w, "devrelease: fail=artifact-500", http.StatusInternalServerError)
 		return
 	}
 
-	f, err := os.Open(rel.path)
+	f, err := os.Open(path)
 	if err != nil {
 		slog.Error("devrelease: open artifact for download", "error", err)
 		http.Error(w, "artifact unavailable", http.StatusInternalServerError)

@@ -3,6 +3,10 @@
 // (or takes) a launcher artifact, signs a manifest for it with a one-off
 // ed25519 key, and serves both over 127.0.0.1 so a devmock launcher can point
 // TYPHON_DEVMOCK_MANIFEST_URL and TYPHON_DEVMOCK_RELEASE_PUBKEY at it.
+//
+// With -windows it serves the same chain to a portable qa typhon.exe
+// instead: each version is a qa build zipped as the portable update, and the
+// launcher reads TYPHON_QA_MANIFEST_URL and TYPHON_QA_RELEASE_PUBKEY.
 package main
 
 import (
@@ -50,6 +54,7 @@ type config struct {
 	count    int
 	notes    string
 	seconds  int
+	windows  bool
 }
 
 func parseFlags(args []string, stderr io.Writer) (config, error) {
@@ -57,13 +62,14 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.SetOutput(stderr)
 	var cfg config
 	fs.StringVar(&cfg.version, "version", "", "version to publish in the manifest (required)")
-	fs.StringVar(&cfg.artifact, "artifact", "", "path to a pre-built launcher artifact (default: build one with -tags devmock)")
+	fs.StringVar(&cfg.artifact, "artifact", "", "path to a pre-built launcher artifact (default: build one with -tags devmock, or a qa typhon.exe with -windows)")
 	fs.IntVar(&cfg.port, "port", 8099, "port to bind on 127.0.0.1")
 	fs.StringVar(&cfg.seed, "seed", "", "base64-encoded ed25519 seed, 32 bytes (default: the -state key, else a one-off key)")
 	fs.IntVar(&cfg.count, "count", 3, "how many consecutive patch versions to build from -version and offer one after another (1 with -artifact)")
 	fs.StringVar(&cfg.notes, "notes", "", "JSON array of {summary, changes:[{kind,text}]} release notes, entry i for version i (default: a built-in sample)")
 	fs.IntVar(&cfg.seconds, "seconds", 20, "about how long one whole artifact download takes, so progress, cancel and resume can be watched (0: full speed)")
-	fs.StringVar(&cfg.state, "state", "", "directory that keeps the signing key between runs and receives update.env for a wrapper to source")
+	fs.StringVar(&cfg.state, "state", "", "directory that keeps the signing key between runs and receives update.env for a wrapper to source (and update.ps1 with -windows)")
+	fs.BoolVar(&cfg.windows, "windows", false, "serve a windows/amd64 chain of qa typhon.exe builds as portable zips, for a qa launcher in portable mode")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -124,6 +130,25 @@ func closeListener(l net.Listener, cause error) error {
 	return cause
 }
 
+// prepareFor signs the chain of the mode; the Windows one also writes its
+// zips and placeholders into a directory the returned func removes.
+func prepareFor(cfg config, versions, paths []string, port int, templates []noteTemplate, published time.Time, priv ed25519.PrivateKey) ([]release, func(), error) {
+	if !cfg.windows {
+		releases, err := prepareReleases(versions, paths, port, templates, published, priv)
+		return releases, func() {}, err
+	}
+	dir, drop, err := windowsWorkDir()
+	if err != nil {
+		return nil, nil, err
+	}
+	releases, err := prepareWindowsReleases(versions, paths, dir, port, templates, published, priv)
+	if err != nil {
+		drop()
+		return nil, nil, err
+	}
+	return releases, drop, nil
+}
+
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	cfg, err := parseFlags(args, stderr)
 	if err != nil {
@@ -138,7 +163,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	paths, cleanup, err := resolveArtifacts(ctx, cfg, versions, goBuild(stdout, stderr))
+	paths, cleanup, err := buildLaunchers(ctx, cfg, versions, stdout, stderr)
 	if err != nil {
 		return err
 	}
@@ -158,10 +183,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		port = addr.Port
 	}
 
-	releases, err := prepareReleases(versions, paths, port, templates, time.Now().UTC(), priv)
+	releases, dropReleases, err := prepareFor(cfg, versions, paths, port, templates, time.Now().UTC(), priv)
 	if err != nil {
 		return closeListener(listener, err)
 	}
+	defer dropReleases()
 
 	srv := newReleaseServer(releases, cfg.seconds, sleepCtx)
 	httpServer := &http.Server{
@@ -173,7 +199,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	lines := envLines(baseURL, pub)
+	lines := envLines(cfg.windows, baseURL, pub)
 	for _, line := range lines {
 		if _, err := io.WriteString(stdout, line+"\n"); err != nil {
 			return closeListener(listener, fmt.Errorf("print env line: %w", err))
@@ -181,6 +207,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	if cfg.state != "" {
 		if err := writeEnvFile(cfg.state, lines); err != nil {
+			return closeListener(listener, err)
+		}
+		if cfg.windows {
+			if err := writePowerShellEnv(cfg.state, lines); err != nil {
+				return closeListener(listener, err)
+			}
+		}
+	}
+	if cfg.windows {
+		if err := say(stdout, windowsChainNote); err != nil {
 			return closeListener(listener, err)
 		}
 	}
