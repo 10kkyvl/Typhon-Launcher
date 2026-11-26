@@ -7,6 +7,8 @@
 # that source. Nothing here is a real release; the installed launcher and its
 # data are not touched. Run it from the shell you build Typhon in:
 #   powershell -ExecutionPolicy Bypass -File scripts\qa-updates.ps1
+# Every run makes a new data folder under %LOCALAPPDATA%\TyphonQAUpdates
+# (portable-<time>); delete that folder when you are done.
 # The people who wrote this script have never run it on Windows.
 
 $ErrorActionPreference = 'Stop'
@@ -43,16 +45,16 @@ if (-not ($version -match '^(\d+)\.(\d+)\.(\d+)$')) {
 }
 $next = '{0}.{1}.{2}' -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1)
 
-if (-not (Test-Path (Join-Path $root 'frontend\dist\index.html'))) {
-    if (-not (Test-Path (Join-Path $root 'frontend\node_modules'))) {
-        Stop-QA "The frontend is not built and frontend\node_modules is missing; install the frontend dependencies the way you usually do (for example npm --prefix frontend ci), then run this script again."
-    }
-    Write-Host "Building the frontend..."
-    wails3 generate bindings -f '-tags qa' -clean=true -ts -i
-    if ($LASTEXITCODE -ne 0) { Stop-QA "Generating the frontend bindings failed; see the output above." }
-    npm --prefix frontend run build
-    if ($LASTEXITCODE -ne 0) { Stop-QA "Building the frontend failed; see the output above." }
+# Always rebuilt: frontend\dist is ignored by git, so one left by another
+# branch or build would be embedded as it is.
+if (-not (Test-Path (Join-Path $root 'frontend\node_modules'))) {
+    Stop-QA "frontend\node_modules is missing; install the frontend dependencies the way you usually do (for example npm --prefix frontend ci), then run this script again."
 }
+Write-Host "Building the frontend..."
+wails3 generate bindings -f '-tags qa' -clean=true -ts -i
+if ($LASTEXITCODE -ne 0) { Stop-QA "Generating the frontend bindings failed; see the output above." }
+npm --prefix frontend run build
+if ($LASTEXITCODE -ne 0) { Stop-QA "Building the frontend failed; see the output above." }
 
 Write-Host "Building bin\typhon.exe $version with the qa tag..."
 Push-Location (Join-Path $root 'build')
@@ -60,10 +62,13 @@ wails3 generate syso -arch amd64 -icon windows/icon.ico -manifest windows/wails.
 $sysoExit = $LASTEXITCODE
 Pop-Location
 if ($sysoExit -ne 0) { Stop-QA "Generating the Windows resource failed; see the output above." }
+$buildEnv = 'GOOS', 'GOARCH', 'CGO_ENABLED'
+$before = @{}
+foreach ($name in $buildEnv) { $before[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 $env:GOOS = 'windows'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
 go build -tags qa -trimpath -buildvcs=false -ldflags "-w -s -H windowsgui -X typhon/internal/app.Version=$version" -o bin\typhon.exe .
 $buildExit = $LASTEXITCODE
-Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+foreach ($name in $buildEnv) { [Environment]::SetEnvironmentVariable($name, $before[$name], 'Process') }
 Remove-Item (Join-Path $root 'wails_windows_amd64.syso')
 if ($buildExit -ne 0) { Stop-QA "Building the qa launcher failed; see the output above (a running bin\typhon.exe cannot be replaced)." }
 
@@ -72,17 +77,23 @@ $state = Join-Path $base 'devrelease'
 New-Item -ItemType Directory -Force -Path $state | Out-Null
 $envFile = Join-Path $state 'update.ps1'
 if (Test-Path $envFile) { Remove-Item $envFile }
+$failed = Join-Path $state 'failed'
+if (Test-Path $failed) { Remove-Item $failed }
 
 Write-Host "Starting the fake release source ($next and nine more) in a second window..."
 $quotedRoot = $root.Replace("'", "''")
 $quotedState = $state.Replace("'", "''")
-$serve = "Set-Location '$quotedRoot'; go run ./tools/devrelease -windows -version $next -count 10 -seconds 5 -state '$quotedState'; if (`$LASTEXITCODE -ne 0) { Write-Host 'devrelease stopped with an error, see above.' -ForegroundColor Red }"
+$quotedFailed = $failed.Replace("'", "''")
+# The second window stays open after devrelease ends, so its output can be
+# read; the marker file is how this window learns that it ended.
+$serve = "Set-Location '$quotedRoot'; go run ./tools/devrelease -windows -version $next -count 10 -seconds 5 -state '$quotedState'; New-Item -ItemType File -Force -Path '$quotedFailed' | Out-Null; Write-Host 'devrelease stopped; read the lines above.' -ForegroundColor Red; Read-Host 'Press Enter to close this window'"
 $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($serve))
-$source = Start-Process powershell -ArgumentList '-NoExit', '-EncodedCommand', $encoded -PassThru
+$source = Start-Process powershell -ArgumentList '-EncodedCommand', $encoded -PassThru
 
 # Ten cross-builds take minutes; the source answers once they are signed.
 $deadline = (Get-Date).AddMinutes(30)
 while (-not (Test-Control)) {
+    if (Test-Path $failed) { Stop-QA "devrelease stopped before the source answered; read its window." }
     if ($source.HasExited) { Stop-QA "The devrelease window closed before the source answered." }
     if ((Get-Date) -gt $deadline) { Stop-QA "devrelease did not answer within 30 minutes; read its window." }
     Start-Sleep -Seconds 3

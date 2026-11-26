@@ -59,8 +59,9 @@ func qaVariable(lookup func(string) (string, bool), name string) string {
 }
 
 // qaLoopbackBaseURL accepts exactly http://127.0.0.1:<port> or
-// http://localhost:<port>: a qa build must not be pointable at a server on
-// another machine that signs with a key of its own.
+// http://localhost:<port>, so a mistyped or planted variable cannot name a
+// server on another machine. A local listener can still redirect elsewhere;
+// what it serves is trusted only through the key and the signed hashes.
 func qaLoopbackBaseURL(raw string) (string, error) {
 	refuse := fmt.Errorf("%w: %s = %q, want http://127.0.0.1:<port> or http://localhost:<port>", errQAUpdateSource, qaManifestURLEnv, raw)
 	u, err := url.Parse(raw)
