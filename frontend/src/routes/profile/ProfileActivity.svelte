@@ -55,8 +55,8 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.8rem;
-    margin: 0 calc(var(--space-3) * -1);
+    padding: var(--space-2);
+    margin: 0 calc(-1 * var(--space-3));
     background: none;
     border: 0;
     border-radius: var(--radius-md);
@@ -88,7 +88,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: var(--space-1);
   }
 
   .title {

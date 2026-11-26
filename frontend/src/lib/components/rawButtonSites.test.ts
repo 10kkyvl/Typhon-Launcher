@@ -82,6 +82,9 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/game/ReviewCard.svelte': { who: 'row' },
   'routes/game/ReviewComposer.svelte': { toggle: 'radio tile' },
   'routes/game/ReviewSummary.svelte': { score: 'row' },
+  // A whole row or card that opens its game, as another player's page draws them (GameLink is a title
+  // or a cover alone); ProfilePlaying is shared with that page, its props held. The kit has no radio
+  // tile or swatch: the appearance panel's pickers are radio groups of their own (roving.ts).
   'routes/profile/ProfileActivity.svelte': { row: 'row' },
   'routes/profile/ProfileAppearancePanel.svelte': { theme: 'radio tile', 'pick-card': 'radio tile', 'emoji-cell': 'radio tile', color: 'swatch' },
   'routes/profile/ProfilePlaying.svelte': { open: 'row' },

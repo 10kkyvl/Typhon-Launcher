@@ -85,7 +85,7 @@
   .recent-meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: var(--space-1);
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;

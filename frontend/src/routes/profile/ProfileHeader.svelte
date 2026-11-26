@@ -339,7 +339,7 @@
 {/if}
 
 <style>
-  .header-surface { padding: 0 0 2rem; position: relative; }
+  .header-surface { padding: 0 0 var(--space-5); position: relative; }
   .profile-header {
     container-type: inline-size;
     display: block;
@@ -357,7 +357,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--space-1);
   }
 
   .display-name {
@@ -376,7 +376,7 @@
   .status {
     display: flex;
     align-items: baseline;
-    gap: 0.6rem;
+    gap: var(--space-1);
     font-size: var(--font-sm);
     color: var(--text-2);
     overflow-wrap: anywhere;
@@ -400,13 +400,13 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-4);
-    margin-top: 0.4rem;
+    margin-top: var(--space-1);
   }
 
   .meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: var(--space-1);
     font-size: var(--font-sm);
     color: var(--text-2);
   }
@@ -428,7 +428,7 @@
   .head-actions {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: var(--space-2);
     flex-shrink: 0;
   }
 
@@ -445,14 +445,14 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--space-1);
   }
 
   .field-label {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: var(--space-2);
     font-size: var(--font-xs);
     color: var(--text-2);
   }
@@ -466,7 +466,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.8rem;
+    gap: var(--space-2);
     margin-top: var(--space-5);
     padding-top: var(--space-4);
     border-top: 1px solid var(--border);

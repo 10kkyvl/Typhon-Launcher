@@ -196,7 +196,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.3rem 0;
+    padding: var(--space-3) 0;
   }
 
   .row + .row {
@@ -206,7 +206,7 @@
   .row-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-1);
     min-width: 0;
   }
 

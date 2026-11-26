@@ -90,7 +90,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.6rem;
+    gap: var(--space-1);
     flex: 1;
     min-width: 0;
   }

@@ -389,7 +389,8 @@
 {/snippet}
 
 <Page>
-  <PageHeader title={msg('social.profileLabel')} />
+  <!-- Titled as another player's page is: by the @username, the display name an h2 under it. -->
+  <PageHeader title={!isGuest && $currentUser ? `@${$currentUser.username}` : msg('social.profileLabel')} />
 
   {#if $profileFailed || snapshotRetrying}
     <div class="load-error">
@@ -516,7 +517,7 @@
 
   .workspace {
     display: flex;
-    gap: 1.6rem;
+    gap: var(--space-4);
     align-items: flex-start;
   }
 
@@ -531,9 +532,9 @@
     width: 30rem;
     flex-shrink: 0;
     position: sticky;
-    top: 1.6rem;
+    top: var(--space-4);
     align-self: flex-start;
-    max-height: calc(100vh - var(--titlebar-h) - var(--topbar-h) - 2 * 1.6rem);
+    max-height: calc(100vh - var(--titlebar-h) - var(--topbar-h) - 2 * var(--space-4));
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--space-1);
@@ -560,7 +561,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: var(--space-1);
   }
 
   .topbar-text strong {
