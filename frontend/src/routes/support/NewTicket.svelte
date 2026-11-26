@@ -48,6 +48,8 @@
   const kept = keptRequest();
   const draft = prefilled ? null : kept;
   let offered = $state<RequestDraft | null>(prefilled ? kept : null);
+  // The offer came while the form was open (a failed send handed it in): it is said once, politely.
+  let offeredLate = $state(false);
   let topic = $state<string>(draft?.topic ?? startTopic);
   let attachLogs = $state(draft?.attachLogs ?? attachLogsByDefault(startTopic));
   let logsTouched = draft?.logsTouched ?? false;
@@ -132,7 +134,10 @@
         owns = true;
         return false;
       }
-      offered ??= back;
+      if (!offered) {
+        offered = back;
+        offeredLate = true;
+      }
       return holdsTyped;
     });
     return () => {
@@ -164,6 +169,7 @@
     const typed = holdsTyped ? current() : null;
     fill(offered);
     offered = typed;
+    offeredLate = false;
     owns = true;
     // The notice's button may leave: focus goes on to the subject, never to the page.
     await tick();
@@ -283,10 +289,14 @@
 {:else}
   <div class="form" bind:this={form}>
     {#if offered}
-      <Notice tone="info" announce={false} action={restoreDraft}>
-        {offered.subject.trim() ? msg('tickets.draftKept', { subject: offered.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
-        {#if holdsTyped}{msg('tickets.draftSwapNote')}{/if}
-      </Notice>
+      {#key offered}
+        <Notice tone="info" announce={offeredLate} action={restoreDraft}>
+          <span id="{uid}-offer">
+            {offered.subject.trim() ? msg('tickets.draftKept', { subject: offered.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
+            {#if holdsTyped}{msg('tickets.draftSwapNote')}{/if}
+          </span>
+        </Notice>
+      {/key}
     {/if}
 
     <div class="field">
@@ -383,7 +393,7 @@
 <LogsConfirm bind:this={confirm} />
 
 {#snippet restoreDraft()}
-  <Button size="sm" disabled={sending} onclick={restore}>{msg('tickets.draftRestore')}</Button>
+  <Button size="sm" aria-describedby="{uid}-offer" disabled={sending} onclick={restore}>{msg('tickets.draftRestore')}</Button>
 {/snippet}
 
 {#snippet signIn()}

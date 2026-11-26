@@ -352,10 +352,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   // The limits failed to load and a send was refused: both just happened. A request the player left
-  // unsent, offered when a way in with a prefill opens the form: a fact read with the form.
+  // unsent, offered when a way in with a prefill opens the form: a fact read with the form; offered
+  // later, by a send that failed while the form was open, it is announced.
   'routes/support/NewTicket.svelte': [
     ['danger', true],
-    ['info', false],
+    ['info', 'dynamic'],
     ['danger', true],
   ],
   'routes/support/TicketList.svelte': [['danger', true]],

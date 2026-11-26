@@ -288,6 +288,20 @@ describe('a failed send and the ways in', () => {
     first.reject(new AccountError('network_error'));
     await vi.waitFor(() => expect(shown()).toEqual({ ...BETA_FORM, offered: OFFER }));
     expect(get(toasts).map((t) => t.message)).toEqual([msg('tickets.requestNotSentKept', { subject: 'Old matter' })]);
+    expect({ polite: notice()?.querySelectorAll('[role="status"]').length, alerts: screen.queryAllByRole('alert').length }).toEqual({ polite: 1, alerts: 0 });
+  });
+
+  it('"Restore it" is described by the notice\'s sentence', async () => {
+    await oldDraft();
+    await open(BETA);
+    const described = () => {
+      const ids = restoreButton()?.getAttribute('aria-describedby') ?? '';
+      return ids
+        .split(' ')
+        .map((id) => document.getElementById(id)?.textContent?.replace(/\s+/g, ' ').trim())
+        .join(' ');
+    };
+    expect(described()).toBe(msg('tickets.draftKept', { subject: 'Old matter' }));
   });
 
   it('a key on the subject of a prefilled form is an edit even when it changes nothing visible', async () => {
