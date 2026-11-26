@@ -25,6 +25,7 @@
   import { joinDate } from '../../lib/social/view';
   import { statusDot } from '../../lib/social/presence';
   import { shownPresence } from '../../lib/stores/presence';
+  import { friendsLoaded, friendsPage } from '../../lib/stores/social';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
@@ -258,7 +259,7 @@
         </div>
         {#if !isGuest && stats}
           <div class="stats">
-            <ProfileStats {stats} hidden={!showStats} />
+            <ProfileStats {stats} hidden={!showStats} friends={$friendsLoaded ? $friendsPage.friends.length : null} />
           </div>
         {:else if !isGuest && !statsFailed}
           <!-- The page's status says what is loading; this mark only holds the figures' place. -->

@@ -1,12 +1,21 @@
 <script lang="ts">
-  import { CheckCircle2, Clock, Gamepad2 } from '@lucide/svelte';
+  import { CheckCircle2, Clock, Gamepad2, Users } from '@lucide/svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import type { ProfileStats } from '../../lib/services/profile';
   import { formatCount } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
 
-  let { stats, hidden }: { stats: ProfileStats; hidden: boolean } = $props();
+  let {
+    stats,
+    hidden,
+    friends = null,
+  }: {
+    stats: ProfileStats;
+    hidden: boolean;
+    /** How many friends the player has, once the friends list has been read; left out while unknown. */
+    friends?: number | null;
+  } = $props();
 </script>
 
 <div class="stats-row">
@@ -25,6 +34,13 @@
       {#snippet icon()}<CheckCircle2 size="1.8rem" strokeWidth={1.8} />{/snippet}
     </StatTile>
   </div>
+  {#if friends !== null}
+    <div class="stat">
+      <StatTile value={formatCount(friends)} label={msg('profile.statFriends')}>
+        {#snippet icon()}<Users size="1.8rem" strokeWidth={1.8} />{/snippet}
+      </StatTile>
+    </div>
+  {/if}
   {#if hidden}
     <div class="hidden-flag">
       <HiddenBadge text={msg('social.statsHiddenFromOthers')} />
