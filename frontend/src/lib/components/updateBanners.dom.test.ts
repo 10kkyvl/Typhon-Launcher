@@ -1,14 +1,21 @@
 import { fireEvent, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 import { msg } from '../i18n';
+import { installStable, SelfUpdateError } from '../services/selfupdate';
 import { requestDismiss, requestDownload, retryFailed, selfUpdateDownloading, selfUpdateStatus } from '../stores/selfupdate';
+import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
 import StableOffer from './StableOffer.svelte';
 import UpdateBanner from './UpdateBanner.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('../services/selfupdate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/selfupdate')>()),
+  installStable: vi.fn(),
+}));
 vi.mock('../stores/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../stores/selfupdate')>()),
   retryFailed: vi.fn(),
@@ -22,6 +29,8 @@ afterEach(() => {
   vi.mocked(retryFailed).mockReset();
   vi.mocked(requestDownload).mockReset();
   vi.mocked(requestDismiss).mockReset();
+  vi.mocked(installStable).mockReset();
+  toasts.set([]);
   document.body.replaceChildren();
 });
 
@@ -184,5 +193,20 @@ describe('StableOffer', () => {
     expect(notice).toBeTruthy();
     expect(text.closest('[role="status"], [role="alert"]')).toBeNull();
     expect(within(notice).getByRole('button', { name: msg('ui.stableOfferButton', { version: '1.4.1' }) })).toBeTruthy();
+  });
+
+  it('keeps its dialog open with the reason when running work refuses the install', async () => {
+    vi.mocked(installStable).mockRejectedValue(new SelfUpdateError('typhon:selfupdate.work_running: selfupdate: an install is running'));
+    selfUpdateStatus.set({ state: 'idle', currentVersion: '1.5.0-beta.2', stableOffer: '1.4.1' });
+    const { user } = renderDom(StableOffer);
+    await user.click(screen.getByRole('button', { name: msg('ui.stableOfferButton', { version: '1.4.1' }) }));
+    const dialog = await screen.findByRole('dialog', { name: msg('ui.stableOfferConfirmTitle', { version: '1.4.1' }) });
+
+    await user.click(within(dialog).getByRole('button', { name: msg('ui.stableOfferButton', { version: '1.4.1' }) }));
+
+    expect(await within(dialog).findByText(msg('state.selfupdateReasonWorkRunning'))).toBeTruthy();
+    expect(dialog.isConnected).toBe(true);
+    expect(get(toasts)).toEqual([]);
+    expect(installStable).toHaveBeenCalledOnce();
   });
 });

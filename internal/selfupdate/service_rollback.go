@@ -22,7 +22,13 @@ func (s *Service) ApplyRollback(language string) error {
 }
 
 // startRollback is ApplyRollback for a caller that already holds the service.
+// The rollback quits the launcher like an update does, so it is refused the
+// same way while work runs that the shutdown would wait for.
 func (s *Service) startRollback(language string) error {
+	if err := s.askHandoffBlocker(); err != nil {
+		s.release()
+		return err
+	}
 	if err := launchRollback(s.dir, s.portable, s.currentVersion, language); err != nil {
 		s.release()
 		return err

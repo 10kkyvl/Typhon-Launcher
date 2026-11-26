@@ -25,7 +25,7 @@ import {
   type SelfUpdateStatus,
 } from '../services/selfupdate';
 import { updateReason } from '../services/selfupdateMessages';
-import { msg } from '../i18n';
+import { errorCode, msg } from '../i18n';
 import { toast } from './toasts';
 import { resumeFinishedShow, showFollowsStatus, updateShow, updateShowHandoff, type ConfirmedStart } from './updateShow';
 
@@ -334,6 +334,12 @@ export async function requestHandoff() {
   await applyConfirmed();
 }
 
+/** Go refused because work runs that the quit would wait for: the player waits and presses again. */
+function workRunning(err: unknown): boolean {
+  return errorCode(err) === 'selfupdate.work_running';
+}
+
+/** Rejects only with a work-running refusal, which the confirmation dialog says; anything else is toasted. */
 export async function requestRollback() {
   if (get(rollbackBusy)) return;
   rollbackBusy.set(true);
@@ -341,6 +347,7 @@ export async function requestRollback() {
     await applyRollbackRequest();
   } catch (err) {
     rollbackBusy.set(false);
+    if (workRunning(err)) throw err;
     toast(updateReason(err), 'danger');
   }
 }
@@ -361,12 +368,14 @@ export function retryFailed() {
   return requestCheck();
 }
 
+/** Rejects only with a work-running refusal, as requestRollback does. */
 export async function requestInstallStable() {
   if (get(stableBusy)) return;
   stableBusy.set(true);
   try {
     applyStatus(await installStableRequest());
   } catch (err) {
+    if (workRunning(err)) throw err;
     toast(updateReason(err), 'danger');
   } finally {
     stableBusy.set(false);

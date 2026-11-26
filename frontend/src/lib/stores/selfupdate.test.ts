@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
+import { msg } from '../i18n';
 
 const handlers: Record<string, (event: { data: unknown }) => void> = {};
 
@@ -23,6 +24,7 @@ vi.mock('../services/selfupdate', async (importOriginal) => ({
   applyUpdate: vi.fn(),
   getRollback: vi.fn(),
   applyRollback: vi.fn(),
+  installStable: vi.fn(),
   dismissUpdate: vi.fn(),
   cancelDownload: vi.fn(),
   getReleaseNotes: vi.fn(),
@@ -490,6 +492,48 @@ describe('rollback', () => {
 
     expect(get(store.rollbackBusy)).toBe(false);
     expect(get(toasts.toasts).map((t) => t.message)).toContain('Сохранённая копия прежней версии повреждена.');
+  });
+
+  // Work that the launcher's shutdown would wait for: the player is asked to wait and press again, so the
+  // reason stays in the dialog they pressed in, and nothing else says it.
+  it('hands a rollback refused for running work back to the dialog without a toast', async () => {
+    const { service, store } = await load();
+    const refusal = new service.SelfUpdateError('typhon:selfupdate.work_running: selfupdate: an install is running');
+    vi.mocked(service.applyRollback).mockRejectedValue(refusal);
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+
+    await expect(store.requestRollback()).rejects.toBe(refusal);
+
+    expect(get(store.rollbackBusy)).toBe(false);
+    expect(get(toasts.toasts)).toEqual([]);
+  });
+
+  it('hands an install of the stable build refused for running work back to the dialog without a toast', async () => {
+    const { service, store } = await load();
+    const refusal = new service.SelfUpdateError('typhon:selfupdate.work_running: selfupdate: an install is running');
+    vi.mocked(service.installStable).mockRejectedValue(refusal);
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+
+    await expect(store.requestInstallStable()).rejects.toBe(refusal);
+
+    expect(get(store.stableBusy)).toBe(false);
+    expect(get(toasts.toasts)).toEqual([]);
+  });
+
+  it('still toasts an install of the stable build that failed for another reason', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.installStable).mockRejectedValue(
+      new service.SelfUpdateError('typhon:selfupdate.hash_mismatch: selfupdate: the download does not match'),
+    );
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+
+    await store.requestInstallStable();
+
+    expect(get(store.stableBusy)).toBe(false);
+    expect(get(toasts.toasts).map((t) => t.message)).toEqual([msg('state.selfupdateReasonCorruptDownload')]);
   });
 
   it('frees the button and reports it when the launcher did not exit in time', async () => {

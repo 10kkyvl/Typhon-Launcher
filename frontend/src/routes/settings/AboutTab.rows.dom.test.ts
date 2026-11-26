@@ -47,6 +47,7 @@ vi.mock('../../lib/stores/cloudsaves', async (importOriginal) => ({
 vi.mock('../../lib/services/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/selfupdate')>()),
   checkForUpdate: vi.fn(),
+  applyRollback: vi.fn(),
 }));
 vi.mock('../../lib/stores/router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/stores/router')>()),
@@ -57,7 +58,7 @@ import { Clipboard } from '@wailsio/runtime';
 import { msg, type MessageKey } from '../../lib/i18n';
 import { getLegalDocument, listLegalDocuments } from '../../lib/services/legal';
 import { sendLogs, type LogUploadStatus } from '../../lib/services/logsUpload';
-import { checkForUpdate, emptyReleaseNotes, noRollback, type SelfUpdateStatus } from '../../lib/services/selfupdate';
+import { applyRollback, checkForUpdate, emptyReleaseNotes, noRollback, SelfUpdateError, type SelfUpdateStatus } from '../../lib/services/selfupdate';
 import { rollbackReason, updateReason } from '../../lib/services/selfupdateMessages';
 import { openFolder } from '../../lib/services/settings';
 import { exportLogs, getAppInfo, getSystemInfo, getWineStatus, type AppInfo, type SystemInfo } from '../../lib/services/system';
@@ -153,7 +154,7 @@ afterEach(() => {
   selfUpdateChecking.set(false);
   releaseNotes.set(emptyReleaseNotes());
   rollbackInfo.set(noRollback());
-  for (const fn of [getAppInfo, getSystemInfo, getWineStatus, exportLogs, openFolder, listLegalDocuments, getLegalDocument, sendLogs, checkForUpdate, navigate]) {
+  for (const fn of [getAppInfo, getSystemInfo, getWineStatus, exportLogs, openFolder, listLegalDocuments, getLegalDocument, sendLogs, checkForUpdate, applyRollback, navigate]) {
     vi.mocked(fn).mockReset();
   }
   vi.mocked(Clipboard.SetText).mockReset();
@@ -353,6 +354,21 @@ describe('the about tab: the launcher update rows', () => {
     rollbackInfo.set(blocked);
     await waitFor(() => expect(screen.queryByRole('button', { name: msg('ui.rollbackButton', { version: '1.4.1' }) })).toBeNull());
     expect(await said('settings.aboutRollbackLabel')).toBe(rollbackReason(blocked));
+  });
+
+  it('keeps the rollback dialog open with the reason when running work refuses it', async () => {
+    vi.mocked(applyRollback).mockRejectedValue(new SelfUpdateError('typhon:selfupdate.work_running: selfupdate: an install is running'));
+    rollbackInfo.set({ available: true, version: '1.4.1', reason: '', reasonCode: '' });
+    open();
+    await user().click(await screen.findByRole('button', { name: msg('ui.rollbackButton', { version: '1.4.1' }) }));
+    const dialog = await screen.findByRole('dialog', { name: msg('ui.rollbackConfirmTitle', { version: '1.4.1' }) });
+
+    await user().click(within(dialog).getByRole('button', { name: msg('ui.rollbackButton', { version: '1.4.1' }) }));
+
+    expect(await within(dialog).findByText(msg('state.selfupdateReasonWorkRunning'))).toBeTruthy();
+    expect(dialog.isConnected).toBe(true);
+    expect(toastTexts()).toEqual([]);
+    expect(applyRollback).toHaveBeenCalledOnce();
   });
 });
 

@@ -150,6 +150,15 @@ func refuseWhileWorkRuns(blocked func() bool) error {
 	return nil
 }
 
+// askHandoffBlocker is refuseWhileWorkRuns for a caller that does not read the
+// blocker under its own check of the state. The blocker runs outside s.mu.
+func (s *Service) askHandoffBlocker() error {
+	s.mu.Lock()
+	blocked := s.handoffBlocker
+	s.mu.Unlock()
+	return refuseWhileWorkRuns(blocked)
+}
+
 func (s *Service) serviceContext() context.Context {
 	s.mu.Lock()
 	ctx := s.ctx

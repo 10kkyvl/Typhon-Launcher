@@ -900,6 +900,12 @@ func (s *Service) InstallStable(ctx context.Context, language string) (Status, e
 		s.release()
 		return s.GetStatus(), ErrNoStableOffer
 	}
+	// Asked before the download: applyReady would refuse only after the whole
+	// release came down, and backToOffer would then show it as a failed install.
+	if err := s.askHandoffBlocker(); err != nil {
+		s.release()
+		return s.GetStatus(), err
+	}
 
 	if rec, err := checkRollback(s.dir, s.currentVersion); err == nil &&
 		!version.IsPrerelease(version.Parse(rec.Version)) && sameVersion(rec.Version, offered) {
