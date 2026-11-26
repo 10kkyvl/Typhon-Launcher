@@ -280,7 +280,9 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // The connection went; the figures and the showcase preview failed to load: each just happened.
   'routes/profile/Profile.svelte': [
+    ['warning', true],
     ['danger', true],
     ['danger', true],
   ],

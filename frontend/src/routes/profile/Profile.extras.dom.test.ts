@@ -23,7 +23,7 @@ vi.mock('../../lib/services/profileCover', async (original) => (await import('./
 vi.mock('../../lib/stores/messaging', async (original) => (await import('./profileTesting')).messagingStore(await original()));
 
 // What the page adds from data it already has: the friends count beside the figures, read from the
-// friends store the shell keeps.
+// friends store the shell keeps, and a note while the connection is gone.
 
 const friend = (id: string): FriendView => ({ id, username: id, displayName: id, avatarUrl: '', since: '2026-01-01T00:00:00Z', presence: { status: 'offline' } }) as FriendView;
 const friendsTile = () => screen.queryByText(msg('profile.statFriends'))?.closest('.tile') ?? null;
@@ -65,5 +65,26 @@ describe('the friends count', () => {
     await screen.findAllByText('12');
 
     expect(friendsTile()).toBeNull();
+  });
+});
+
+describe('the connection gone', () => {
+  it('the page says so in a warning while offline, and not once it is back', async () => {
+    authState.set('offline');
+    renderDom(Profile);
+
+    const note = await screen.findByText(msg('profile.offlineNote'));
+    expect(note.closest('[data-tone="warning"]')).not.toBeNull();
+
+    authState.set('authenticated');
+
+    await vi.waitFor(() => expect(screen.queryByText(msg('profile.offlineNote'))).toBeNull());
+  });
+
+  it('says nothing while connected', async () => {
+    renderDom(Profile);
+    await screen.findAllByText('12');
+
+    expect(screen.queryByText(msg('profile.offlineNote'))).toBeNull();
   });
 });

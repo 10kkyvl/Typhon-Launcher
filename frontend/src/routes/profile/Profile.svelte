@@ -392,6 +392,10 @@
   <!-- Titled as another player's page is: by the @username, the display name an h2 under it. -->
   <PageHeader title={!isGuest && $currentUser ? `@${$currentUser.username}` : msg('social.profileLabel')} />
 
+  {#if $isOffline}
+    <div class="note"><Notice tone="warning">{msg('profile.offlineNote')}</Notice></div>
+  {/if}
+
   {#if $profileFailed || snapshotRetrying}
     <div class="load-error">
       <Notice tone="danger" bind:retrying={snapshotRetrying} retry={{ label: msg('common.retry'), run: retrySnapshot }}>{msg('profile.loadFailed')}</Notice>
@@ -511,6 +515,7 @@
 </Page>
 
 <style>
+  .note,
   .load-error {
     margin: 0 0 var(--space-4);
   }
