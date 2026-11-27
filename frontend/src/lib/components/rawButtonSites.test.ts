@@ -53,7 +53,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/GameLink.svelte': { cover: 'row' },
   'lib/components/GameProfiles.svelte': { candidate: 'radio tile' },
   'lib/components/HeroCarousel.svelte': { pick: 'tile' },
-  'lib/components/InstallChooseStep.svelte': { cand: 'radio tile' },
   'lib/components/LiveIsland.svelte': { head: 'disclosure', top: 'disclosure' },
   'lib/components/NotificationsPanel.svelte': { notification: 'row' },
   'lib/components/Sidebar.svelte': { 'nav-item': 'nav item' },

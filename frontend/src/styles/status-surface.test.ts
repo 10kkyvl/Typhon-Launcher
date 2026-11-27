@@ -217,7 +217,7 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   ],
   'routes/friends/FriendCodeCard.svelte': ['Card', '.mark'],
   'routes/downloads/FailedList.svelte': ['the fill of a row', '.error-text'],
-  'lib/components/InstallPlanStep.svelte': ['a dialog: the plan step of InstallModal', '.value.danger', '.note.danger'],
+  'lib/components/InstallPlanStep.svelte': ['a dialog: the plan step of InstallModal', '.value.danger'],
   'lib/components/AccountMenu.svelte': ['the header island, checked over the wash in theme-contrast.test.ts', '.offline-mark'],
   'lib/components/SidebarStatus.svelte': ['the sidebar island; icons', '.warn :global(svg)', '.danger :global(svg)'],
   'lib/components/UpdateCard.svelte': ['Card', '.mark.cautious', '.explain.cautious'],

@@ -145,6 +145,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'lib/components/PropertiesSaves.svelte': [['danger', true]],
+  // A package that could not be read and a refused action just happened.
+  'lib/components/InstallModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
   // InstallModal's parts. Too little space just happened; an install's stored warning and what deleting
   // seeded files does are read with the dialog; a stopped install just happened.
   'lib/components/InstallPlanStep.svelte': [['danger', true]],

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { addGame, launchGame, selectExecutable } from '../services/library';
   import { libraryErrorText } from '../library/errors';
@@ -15,6 +15,7 @@
     retryInstall,
     retryInstallInteractive,
     startInstall,
+    type Installation,
     type PlanInfo,
     type SpaceInfo,
   } from '../services/install';
@@ -33,8 +34,10 @@
   } from '../stores/install';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
   import InstallChooseStep from './InstallChooseStep.svelte';
   import InstallOutcome from './InstallOutcome.svelte';
@@ -42,8 +45,16 @@
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
 
+  /**
+   * Installs one download: its plan (destination, space, mode), the choice of the game's executable,
+   * progress and the outcome. Every refusal is said in the dialog by code and takes the focus; while
+   * an action runs the other controls are held with a reason. The dialog is reopened for one download
+   * after another and can be unmounted with its page: an answer for an earlier opening paints nothing
+   * here, and an install it started, or a refusal, is said once in a toast naming its package.
+   */
   let { open = $bindable(false), downloadId }: { open?: boolean; downloadId: string | null } = $props();
   const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
   const modeOptions = $derived([
     { id: 'move', label: msg('modals.installModeMove') },
@@ -101,7 +112,6 @@
   const spaceDriven = $derived(controlled || silent);
   const requestMode = $derived(portable ? (info?.seeding ? 'copy' : mode) : '');
   const notEnoughSpace = $derived(!spacePending && !spaceError && !!space && !space.enough);
-  const spaceBlocked = $derived(notEnoughSpace || (!spacePending && spaceError !== ''));
   const roots = $derived(info?.roots ?? []);
   const rootChoice = $derived(rootOfDestination(roots, destination) || OTHER_ROOT);
   const rootOptions = $derived([
@@ -125,6 +135,7 @@
     }
     if (info) return 'plan';
     if (imageDownload) return 'image';
+    if (readFailure) return 'unreadable';
     return 'loading';
   });
 
@@ -162,6 +173,15 @@
     }
   });
 
+  // What the last action was refused with, and why the package could not be read: said in the dialog.
+  let failure = $state('');
+  let readFailure = $state('');
+  let readRetrying = $state(false);
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
+
   function reset() {
     token++;
     planner.cancel();
@@ -171,6 +191,8 @@
     loading = false;
     busy = false;
     actor = '';
+    failure = '';
+    readFailure = '';
     destination = '';
     mode = '';
     chosen = '';
@@ -217,27 +239,23 @@
     }
   }
 
-  function onDestinationInput(event: Event & { currentTarget: HTMLInputElement }) {
-    destination = event.currentTarget.value;
-    replan(false);
-  }
-
-  async function load(id: string) {
+  async function load(id: string): Promise<boolean | undefined> {
     const existing = get(installationsByDownload).get(id);
     if (existing) {
       installId = existing.id;
-      return;
+      return true;
     }
     const queued = get(downloadsById).get(id);
     if (queued?.origin?.platform) {
       imageDownload = queued;
-      return;
+      return true;
     }
     const current = ++token;
     loading = true;
     try {
       const result = await inspectDownload(id);
-      if (!open || current !== token) return;
+      if (!open || current !== token) return undefined;
+      readFailure = '';
       info = result;
       destination = result.plan.destination;
       mode = result.seeding ? 'copy' : result.mode;
@@ -253,21 +271,28 @@
       };
       replan(true);
       if ((result.roots?.length ?? 0) > 1) void loadFolders(current);
+      return true;
     } catch (err) {
-      if (!open || current !== token) return;
-      toast(installErrorText(err), 'danger');
-      open = false;
+      if (!open || current !== token) return undefined;
+      readFailure = installErrorText(err, msg('modals.installReadFailed'));
+      return false;
     } finally {
       if (current === token) loading = false;
     }
   }
 
-  $effect(() => {
+  // One per opening and download. `token` also moves with every read inside an opening. Before the
+  // dialog draws: an install already known for the download is drawn at once, and the layer gives the
+  // focus to its step, not to a loading view that is about to go.
+  let opening = 0;
+
+  $effect.pre(() => {
     const isOpen = open;
     const id = downloadId;
     untrack(() => {
+      opening += 1;
       reset();
-      if (isOpen && id) load(id);
+      if (isOpen && id) void load(id);
     });
   });
 
@@ -283,14 +308,16 @@
   });
 
   async function browseDestination() {
+    const at = opening;
     try {
       const path = await selectFolder(msg('modals.installChooseFolder'));
-      if (path) {
+      if (path && alive && at === opening) {
         destination = path;
         replan(true, 'pick');
       }
-    } catch {
-      toast(msg('modals.installFolderDialogFailed'), 'danger');
+    } catch (err) {
+      console.warn('install dialog: folder picker', err);
+      if (alive && at === opening) failure = msg('modals.installFolderDialogFailed');
     }
   }
 
@@ -301,47 +328,81 @@
     replan(true);
   }
 
-  async function run(action: () => Promise<void>, by = '', errorText: (err: unknown) => string = installErrorText) {
+  function setDestination(value: string) {
+    destination = value;
+    replan(false);
+  }
+
+  /** The package the dialog is about: what a toast names when an answer lands after it moved on. */
+  const subject = () => installation?.name || info?.name || imageTitle;
+
+  // One action at a time. The pressed control stays focused and busy; a refusal is said in the dialog
+  // and takes the focus. `heard` tells the action whether the dialog is still the one it was pressed in.
+  async function run(
+    action: (heard: () => boolean) => Promise<void>,
+    by = '',
+    errorText: (err: unknown) => string = installErrorText,
+  ) {
+    if (busy) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    const title = subject();
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     busy = true;
     actor = by;
+    failure = '';
     try {
-      await action();
+      await action(heard);
     } catch (err) {
-      toast(errorText(err), 'danger');
+      if (!heard()) {
+        toast(msg('modals.installRefusedFor', { title, reason: errorText(err) }), 'danger');
+        return;
+      }
+      failure = errorText(err);
     }
+    if (!heard()) return;
     busy = false;
     actor = '';
+    if (failure) await hand(() => document.getElementById(failureId));
   }
 
   const own = (by: string) => busy && actor === by;
   const other = (by: string) => busy && actor !== by;
+  const heldFor = (by: string) => (other(by) ? msg('modals.actionRunning') : '');
+
+  // An install that starts after the dialog moved on is that package's: the store learns it, the dialog
+  // does not show it, a toast names it.
+  function started(item: Installation, heard: () => boolean, title: string) {
+    upsertInstallation(item);
+    if (heard()) installId = item.id;
+    else toast(msg('modals.installStartedFor', { title }));
+  }
 
   function start() {
     const current = info;
     if (!current) return;
-    return run(async () => {
+    return run(async (heard) => {
       const item = await startInstall(current.downloadId, {
         destination: controlled || silent ? destination : '',
         mode: requestMode,
         type: current.plan.type,
         installerPath: current.plan.installerPath,
       });
-      upsertInstallation(item);
-      installId = item.id;
+      started(item, heard, current.name);
     }, 'start');
   }
 
   function startImage() {
     const current = imageDownload;
     if (!current?.origin?.platform) return;
-    return run(async () => {
+    return run(async (heard) => {
       const item = await startInstall(current.id, {
         platform: current.origin.platform,
         title: current.origin.title || current.name,
         cover: current.origin.cover ?? '',
       });
-      upsertInstallation(item);
-      installId = item.id;
+      started(item, heard, current.origin.title || current.name);
     }, 'image');
   }
 
@@ -350,8 +411,8 @@
     if (!item?.gameId) return;
     // A launch the player gave up (a question left unanswered) keeps the dialog where it was.
     return run(
-      async () => {
-        if (await launchGame(item.gameId)) open = false;
+      async (heard) => {
+        if ((await launchGame(item.gameId)) && heard()) open = false;
       },
       'play',
       (err) => libraryErrorText(err, msg('games.errorPlayFailed')),
@@ -371,41 +432,40 @@
     if (!path) return;
     return run(async () => {
       await openGameFolder(path, plan?.installerPath || '');
-    });
+    }, 'source');
   }
 
   function pickInstaller() {
     const current = info;
     if (!current) return;
-    return run(async () => {
+    return run(async (heard) => {
       const path = await selectExecutable(msg('modals.installChooseInstaller'));
-      if (!path) return;
+      if (!path || !heard()) return;
       const item = await startInstall(current.downloadId, {
         type: 'exe_installer',
         installerPath: path,
       });
-      upsertInstallation(item);
-      installId = item.id;
-    });
+      started(item, heard, current.name);
+    }, 'installer');
   }
 
   function pickGameExecutable() {
     const current = info;
     if (!current) return;
-    return run(async () => {
+    return run(async (heard) => {
       const path = await selectExecutable(msg('modals.installChooseGameExecutable'));
-      if (!path) return;
+      if (!path || !heard()) return;
       await addGame(path, current.name);
       toast(msg('modals.installGameAdded'), 'success');
-      open = false;
-    });
+      if (heard()) open = false;
+    }, 'executable');
   }
 
   function pickManual() {
-    return run(async () => {
+    return run(async (heard) => {
       const path = await selectExecutable(msg('modals.installChooseGameExecutable'));
-      if (path) chosen = path;
-    });
+      if (path && heard()) chosen = path;
+    }, 'manual');
   }
 
   function confirmChoice() {
@@ -435,8 +495,9 @@
   function dismissCurrent() {
     const item = installation;
     if (!item) return;
-    return run(async () => {
+    return run(async (heard) => {
       await dismissInstall(item.id);
+      if (!heard()) return;
       installId = null;
       if (downloadId) await load(downloadId);
     }, 'dismiss');
@@ -445,12 +506,21 @@
   function deleteData() {
     const item = installation;
     if (!item) return;
-    return run(async () => {
+    return run(async (heard) => {
       await deleteDownloadData(item.downloadId);
-      cleanupResolved = true;
+      if (heard()) cleanupResolved = true;
       toast(msg('modals.installDownloadDataDeleted'), 'success');
     }, 'delete');
   }
+
+  // Why the primary action of the plan cannot be pressed now.
+  const startReason = $derived.by(() => {
+    if (other('start')) return msg('modals.actionRunning');
+    if (notEnoughSpace) return msg('modals.installNotEnoughSpace');
+    if (!spacePending && spaceError) return spaceError;
+    if ((controlled || silent) && destination.trim() === '') return msg('errInstall.installEmptyDestination');
+    return '';
+  });
 </script>
 
 <Modal dismissible={!busy} bind:open title={msg('modals.installTitle')} width="54rem">
@@ -459,6 +529,15 @@
       <Spinner size="lg" />
       <span class="loading-text">{msg('modals.installAnalyzing')}</span>
     </div>
+  {:else if phase === 'unreadable'}
+    <Notice
+      tone="danger"
+      compact
+      bind:retrying={readRetrying}
+      retry={{ label: msg('common.retry'), run: () => (downloadId ? load(downloadId) : Promise.resolve(undefined)) }}
+    >
+      {readFailure}
+    </Notice>
   {:else if phase === 'plan' && info && plan}
     <InstallPlanStep
       {info}
@@ -482,7 +561,9 @@
       {mode}
       {setMode}
       {movesInPlace}
-      ondestinationinput={onDestinationInput}
+      held={busy ? msg('modals.actionRunning') : ''}
+      acting={busy ? actor : ''}
+      ondestination={setDestination}
       onbrowse={browseDestination}
       onusesuggested={useSuggested}
       onopensource={openSource}
@@ -490,7 +571,13 @@
       onpickexecutable={pickGameExecutable}
     />
   {:else if phase === 'choose' && installation}
-    <InstallChooseStep {candidatePaths} bind:chosen onpickmanual={pickManual} />
+    <InstallChooseStep
+      {candidatePaths}
+      bind:chosen
+      held={busy ? msg('modals.actionRunning') : ''}
+      acting={busy ? actor : ''}
+      onpickmanual={pickManual}
+    />
   {:else if phase === 'image' || phase === 'progress' || phase === 'done' || phase === 'problem'}
     <InstallOutcome
       {phase}
@@ -508,49 +595,70 @@
     />
   {/if}
 
+  {#if failure}
+    <div class="failure">
+      <Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice>
+    </div>
+  {/if}
+
   {#snippet footer()}
     {#if phase === 'plan' && plan}
-      <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button disabled={busy} reason={busy ? msg('modals.actionRunning') : ''} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
       {#if plan.type !== 'unknown'}
-        <Button
-          variant="primary"
-          disabled={other('start') || spaceBlocked || ((controlled || silent) && destination.trim() === '')}
-          busy={own('start')}
-          onclick={start}
-        >
+        <Button variant="primary" disabled={!!startReason} reason={startReason} busy={own('start')} onclick={start}>
           {primaryLabel}
         </Button>
       {/if}
     {:else if phase === 'image'}
-      <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={other('image')} busy={own('image')} onclick={startImage}>{msg('emul.installAction')}</Button>
+      <Button disabled={busy} reason={busy ? msg('modals.actionRunning') : ''} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={other('image')} reason={heldFor('image')} busy={own('image')} onclick={startImage}>
+        {msg('emul.installAction')}
+      </Button>
+    {:else if phase === 'unreadable'}
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     {:else if phase === 'progress'}
       <Button onclick={() => (open = false)}>{msg('modals.installMinimize')}</Button>
-      <Button variant="danger" disabled={other('cancel') || externalWait} busy={own('cancel')} onclick={cancelCurrent}>
+      <Button
+        variant="danger"
+        disabled={other('cancel') || externalWait}
+        reason={heldFor('cancel') || (externalWait ? msg('modals.installWaitingExternal') : '')}
+        busy={own('cancel')}
+        onclick={cancelCurrent}
+      >
         {msg('modals.installCancelInstall')}
       </Button>
     {:else if phase === 'choose'}
-      <Button onclick={() => (open = false)}>{msg('common.close')}</Button>
-      <Button variant="danger" disabled={other('cancel')} busy={own('cancel')} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
-      <Button variant="primary" disabled={other('confirm') || !chosen} busy={own('confirm')} onclick={confirmChoice}>
+      <Button disabled={busy} reason={busy ? msg('modals.actionRunning') : ''} onclick={() => (open = false)}>{msg('common.close')}</Button>
+      <Button variant="danger" disabled={other('cancel')} reason={heldFor('cancel')} busy={own('cancel')} onclick={cancelCurrent}>
+        {msg('modals.installCancelInstall')}
+      </Button>
+      <Button
+        variant="primary"
+        disabled={other('confirm') || !chosen}
+        reason={heldFor('confirm') || (chosen ? '' : msg('modals.installChooseGameExecutable'))}
+        busy={own('confirm')}
+        onclick={confirmChoice}
+      >
         {msg('modals.installConfirm')}
       </Button>
     {:else if phase === 'done'}
       {#if installation?.platform && installation.gameId}
-        <Button onclick={() => (open = false)}>{msg('common.done')}</Button>
-        <Button variant="primary" disabled={other('play')} busy={own('play')} onclick={playInstalled}>{msg('games.play')}</Button>
+        <Button data-autofocus onclick={() => (open = false)}>{msg('common.done')}</Button>
+        <Button variant="primary" disabled={other('play')} reason={heldFor('play')} busy={own('play')} onclick={playInstalled}>{msg('games.play')}</Button>
       {:else}
-        <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
+        <Button data-autofocus variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
       {/if}
     {:else if phase === 'problem'}
-      <Button onclick={dismissCurrent} disabled={other('dismiss')} busy={own('dismiss')}>{msg('modals.installDismiss')}</Button>
+      <Button onclick={dismissCurrent} disabled={other('dismiss')} reason={heldFor('dismiss')} busy={own('dismiss')}>{msg('modals.installDismiss')}</Button>
       {#if installation?.platform}
-        <Button onclick={openImageFolder} disabled={other('folder')} busy={own('folder')}>{msg('emul.installFolder')}</Button>
+        <Button onclick={openImageFolder} disabled={other('folder')} reason={heldFor('folder')} busy={own('folder')}>{msg('emul.installFolder')}</Button>
       {/if}
       {#if installation && needsInteractiveInstall(installation.error)}
-        <Button variant="primary" onclick={retryManually} disabled={other('retry')} busy={own('retry')}>{msg('modals.installManually')}</Button>
+        <Button variant="primary" onclick={retryManually} disabled={other('retry')} reason={heldFor('retry')} busy={own('retry')}>
+          {msg('modals.installManually')}
+        </Button>
       {:else if !installation || canRetryInstall(installation.error)}
-        <Button variant="primary" onclick={retryCurrent} disabled={other('retry')} busy={own('retry')}>{msg('common.retry')}</Button>
+        <Button variant="primary" onclick={retryCurrent} disabled={other('retry')} reason={heldFor('retry')} busy={own('retry')}>{msg('common.retry')}</Button>
       {/if}
     {/if}
   {/snippet}
@@ -568,5 +676,9 @@
   .loading-text {
     font-size: var(--font-md);
     font-weight: 500;
+  }
+
+  .failure {
+    margin-top: var(--space-4);
   }
 </style>

@@ -3,16 +3,21 @@
   import type { PlanInfo, SpaceInfo } from '../services/install';
   import type { DestinationHint } from '../install/destinationAdvice';
   import { installTypeLabels } from '../stores/install';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize } from '../utils/format';
   import Button from './Button.svelte';
   import Notice from './Notice.svelte';
+  import PathField from './PathField.svelte';
   import Select from './Select.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import Spinner from './Spinner.svelte';
   import SystemRequirements from './SystemRequirements.svelte';
   import { msg } from '../i18n';
 
-  /** InstallModal's plan: what the package is, where it goes, the space it needs and how it is installed. */
+  /**
+   * InstallModal's plan: what the package is, where it goes, the space it needs and how it is installed.
+   * The destination is typed or browsed; a refusal of it is said at the field. While one of the
+   * dialog's actions runs (`acting` names it), the rest is held with `held`.
+   */
   let {
     info,
     plan,
@@ -35,7 +40,9 @@
     mode,
     setMode,
     movesInPlace,
-    ondestinationinput,
+    held,
+    acting,
+    ondestination,
     onbrowse,
     onusesuggested,
     onopensource,
@@ -63,14 +70,19 @@
     mode: string;
     setMode: (next: string) => void;
     movesInPlace: boolean;
-    ondestinationinput: (event: Event & { currentTarget: HTMLInputElement }) => void;
-    onbrowse: () => void;
+    /** Why the plan cannot be changed now ('' while it can). */
+    held: string;
+    /** The dialog's action that runs, '' while none does. */
+    acting: string;
+    ondestination: (value: string) => void;
+    onbrowse: () => Promise<void> | void;
     onusesuggested: () => void;
     onopensource: () => void;
     onpickinstaller: () => void;
     onpickexecutable: () => void;
   } = $props();
   const uid = $props.id();
+  const heldBy = (by: string) => (acting && acting !== by ? held : '');
 </script>
 
   <div class="block">
@@ -82,7 +94,7 @@
     <div class="rows">
       <div class="row">
         <span class="key">{msg('modals.installSource')}</span>
-        <span class="value">{truncateMiddle(plan.sourcePath, 48)}</span>
+        <span class="value path">{plan.sourcePath}</span>
       </div>
       {#if space}
         <div class="row">
@@ -115,22 +127,16 @@
 
     {#if controlled || silent}
       <div class="field">
-        <span class="field-label" id="{uid}-destination-label">{msg('modals.installDestinationFolder')}</span>
-        <div class="field-controls">
-          <input
-            class="input sm"
-            type="text"
-            aria-labelledby="{uid}-destination-label"
-            aria-invalid={spaceError && !spacePending ? 'true' : undefined}
-            aria-describedby={spaceError && !spacePending ? `${uid}-destination-error` : undefined}
-            value={destination}
-            oninput={ondestinationinput}
-          />
-          <Button size="sm" onclick={onbrowse}>{msg('modals.installBrowse')}</Button>
-        </div>
-        {#if spaceError && !spacePending}
-          <p class="note danger" id="{uid}-destination-error" role="alert">{spaceError}</p>
-        {:else if hint && !spacePending}
+        <PathField
+          label={msg('modals.installDestinationFolder')}
+          editable
+          bind:value={() => destination, ondestination}
+          browseLabel={msg('modals.installBrowse')}
+          {onbrowse}
+          error={spaceError && !spacePending ? spaceError : ''}
+          disabledReason={held || undefined}
+        />
+        {#if hint && !spacePending && !spaceError}
           <div class="hint">
             <p class="note">
               {#if hint.kind === 'adjusted'}
@@ -142,7 +148,7 @@
               {/if}
             </p>
             {#if hint.kind === 'suggest'}
-              <Button size="sm" onclick={onusesuggested}>{msg('modals.installUseSuggested')}</Button>
+              <Button size="sm" disabled={!!held} reason={held} onclick={onusesuggested}>{msg('modals.installUseSuggested')}</Button>
             {/if}
           </div>
         {/if}
@@ -174,15 +180,15 @@
     {#if plan.type === 'unknown'}
       <div class="choices">
         <p class="note">{msg('modals.installUnknownTypeNote')}</p>
-        <Button onclick={onopensource}>
+        <Button disabled={!!heldBy('source')} reason={heldBy('source')} busy={acting === 'source'} onclick={onopensource}>
           <FolderOpen size="1.6rem" strokeWidth={1.8} />
           {msg('modals.installOpenDownloadFolder')}
         </Button>
-        <Button onclick={onpickinstaller}>
+        <Button disabled={!!heldBy('installer')} reason={heldBy('installer')} busy={acting === 'installer'} onclick={onpickinstaller}>
           <FileSearch size="1.6rem" strokeWidth={1.8} />
           {msg('modals.installPickInstallerButton')}
         </Button>
-        <Button onclick={onpickexecutable}>
+        <Button disabled={!!heldBy('executable')} reason={heldBy('executable')} busy={acting === 'executable'} onclick={onpickexecutable}>
           <Gamepad2 size="1.6rem" strokeWidth={1.8} />
           {msg('modals.installPickExecutableButton')}
         </Button>
@@ -251,6 +257,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A path is read whole: it wraps where it must instead of being cut. */
+  .value.path {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .value.danger {
     color: var(--danger);
   }
@@ -271,17 +284,6 @@
     color: var(--text-3);
   }
 
-  .field-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    width: 100%;
-  }
-
-  .field-controls .input {
-    flex: 1;
-  }
-
   .note {
     font-size: var(--font-xs);
     line-height: 1.5;
@@ -292,10 +294,6 @@
     display: flex;
     align-items: center;
     gap: 0.8rem;
-  }
-
-  .note.danger {
-    color: var(--danger);
   }
 
   .choices {

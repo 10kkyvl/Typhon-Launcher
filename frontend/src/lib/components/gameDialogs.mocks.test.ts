@@ -62,6 +62,7 @@ const DIALOGS = [
   // game files and move game folders between disks.
   'RemoveGameModal',
   'MoveGameModal',
+  'InstallModal',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -188,6 +189,8 @@ describe('tests that mount a game or library dialog', () => {
         './addDialogs.dom.test.ts',
         './RemoveGameModal.dom.test.ts',
         './MoveGameModal.dom.test.ts',
+        './InstallModal.dom.test.ts',
+        './InstallModal.play.dom.test.ts',
         ...HELD,
       ]),
     );

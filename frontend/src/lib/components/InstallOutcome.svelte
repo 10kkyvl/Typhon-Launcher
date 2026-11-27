@@ -5,7 +5,7 @@
   import { platformBadge } from '../library/emulation';
   import { installErrorText } from '../install/installErrors';
   import { installStatusLabels } from '../stores/install';
-  import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
+  import { bytesSize, progressPercent } from '../utils/format';
   import Button from './Button.svelte';
   import ConsoleTag from './ConsoleTag.svelte';
   import EmulatorHint from './EmulatorHint.svelte';
@@ -52,7 +52,7 @@
     <div class="rows">
       <div class="row">
         <span class="key">{msg('emul.downloadName')}</span>
-        <span class="value">{truncateMiddle(imageDownload.name, 48)}</span>
+        <span class="value path">{imageDownload.name}</span>
       </div>
       <div class="row">
         <span class="key">{msg('emul.downloadSize')}</span>
@@ -85,7 +85,7 @@
       </div>
       {/if}
       {#if installation.currentFile}
-        <span class="current-file">{truncateMiddle(installation.currentFile, 56)}</span>
+        <span class="current-file">{installation.currentFile}</span>
       {/if}
     {/if}
   </div>
@@ -98,7 +98,7 @@
       </div>
       <div class="row">
         <span class="key">{msg('modals.installFolderLabel')}</span>
-        <span class="value">{truncateMiddle(installation.destination, 44)}</span>
+        <span class="value path">{installation.destination}</span>
       </div>
       {#if installation.platform}
         <div class="row">
@@ -126,10 +126,10 @@
           <Notice tone="warning" compact announce={false}>{msg('modals.installSeedingDeleteWarning')}</Notice>
         {/if}
         <div class="cleanup-actions">
-          <Button size="sm" variant="danger" disabled={other('delete')} busy={own('delete')} onclick={ondelete}>
+          <Button size="sm" variant="danger" disabled={other('delete')} reason={other('delete') ? msg('modals.actionRunning') : ''} busy={own('delete')} onclick={ondelete}>
             {msg('modals.installDeleteDownloadedFiles')}
           </Button>
-          <Button size="sm" onclick={() => (cleanupResolved = true)}>{msg('modals.installKeep')}</Button>
+          <Button size="sm" disabled={other('keep')} reason={other('keep') ? msg('modals.actionRunning') : ''} onclick={() => (cleanupResolved = true)}>{msg('modals.installKeep')}</Button>
         </div>
       </div>
     {/if}
@@ -163,9 +163,7 @@
     font-size: var(--font-lg);
     font-weight: 600;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .pkg-type {
@@ -206,6 +204,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A path or a file name is read whole: it wraps where it must instead of being cut. */
+  .value.path {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .field {
     display: flex;
     flex-direction: column;
@@ -242,9 +247,7 @@
   .current-file {
     font-size: var(--font-xs);
     color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .cleanup-actions {

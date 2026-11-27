@@ -10,12 +10,14 @@ import { installations } from '../stores/install';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import CloudConflictModal from './CloudConflictModal.svelte';
 import InstallModal from './InstallModal.svelte';
 
 const { play, status, resolve } = vi.hoisted(() => ({ play: vi.fn(), status: vi.fn(), resolve: vi.fn() }));
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, GetGames: vi.fn(async () => []) } }));
 vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Status: status, ResolveConflict: resolve } }));
@@ -59,6 +61,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeCloudConflict();
   cloudStatus.set(null);
   installations.set([]);
@@ -68,6 +72,7 @@ afterEach(() => {
   status.mockReset();
   resolve.mockReset();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 function openDone() {
@@ -79,15 +84,17 @@ function openDone() {
 
 describe('InstallModal: "Play" after the installation', () => {
   it.each(['library.launch_failed', 'library.executable_missing', 'emulators.not_configured'])(
-    'shows a failed launch in the launch error’s own words (%s)',
+    'says a failed launch in the dialog, in the launch error’s own words (%s)',
     async (code) => {
       // An emulator code with no known platform for the game is shown as it is, not asked about.
       play.mockRejectedValue(new Error(`typhon:${code}: detail`));
-      const { playButton } = openDone();
+      const { dialog, playButton } = openDone();
 
       await user().click(playButton);
 
-      await vi.waitFor(() => expect(get(toasts).map(({ kind, message }) => [kind, message])).toEqual([['danger', msg(code as 'library.launch_failed')]]));
+      const alert = await within(dialog).findByRole('alert');
+      expect(alert.textContent?.trim()).toBe(msg(code as 'library.launch_failed'));
+      expect(get(toasts)).toEqual([]);
     },
   );
 
