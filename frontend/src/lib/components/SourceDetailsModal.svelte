@@ -281,6 +281,8 @@
 
   const acting = $derived(refreshing || toggling);
   const heldReason = $derived(acting ? msg('modals.actionRunning') : '');
+  // A refresh started elsewhere ("Refresh all", the schedule) holds Delete as the dialog's own does.
+  const removeHeld = $derived(heldReason || (source?.status === 'updating' ? msg('modals.sourceDetailsRemoveHeldUpdating') : ''));
   const from = $derived(total === 0 ? 0 : (page - 1) * pageSize + 1);
   const to = $derived(Math.min(page * pageSize, total));
 </script>
@@ -306,7 +308,7 @@
           <Button size="sm" busy={toggling} disabled={refreshing} reason={heldReason} onclick={doToggle}>
             {source.enabled ? msg('modals.sourceDetailsDisable') : msg('modals.sourceDetailsEnable')}
           </Button>
-          <Button size="sm" variant="danger" disabled={acting} reason={heldReason} onclick={doRemove}>{msg('common.delete')}</Button>
+          <Button size="sm" variant="danger" disabled={removeHeld !== ''} reason={removeHeld} onclick={doRemove}>{msg('common.delete')}</Button>
         </div>
       </section>
 

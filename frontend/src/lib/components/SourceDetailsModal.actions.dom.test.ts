@@ -189,6 +189,26 @@ describe('SourceDetailsModal: refresh, enable and remove', () => {
   });
 });
 
+describe('SourceDetailsModal: a refresh started elsewhere', () => {
+  it('holds Delete with its reason while the source refreshes, and frees it once the refresh ends', async () => {
+    sources.set([{ ...fitgirl, status: 'updating' } as Source, dodi]);
+    const { dialog, keys } = await openDialog();
+    const remove = button(dialog, msg('common.delete'));
+
+    expect(remove.getAttribute('aria-disabled')).toBe('true');
+    expect(remove.hasAttribute('disabled')).toBe(false);
+    expect(describedBy(remove)).toContain(msg('modals.sourceDetailsRemoveHeldUpdating'));
+    await keys.click(remove);
+    expect(screen.queryByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeNull();
+
+    sources.set([fitgirl, dodi]);
+    await vi.waitFor(() => expect(remove.getAttribute('aria-disabled')).toBeNull());
+    await keys.click(remove);
+    expect(screen.getByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeTruthy();
+    expect(vi.mocked(removeSource)).not.toHaveBeenCalled();
+  });
+});
+
 describe('SourceDetailsModal: an action answering after the dialog was opened for another source', () => {
   it('a removal that went through for the source before closes nothing: the dialog stays on the new one', async () => {
     const removing = held<void>();
