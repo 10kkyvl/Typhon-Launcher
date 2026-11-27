@@ -114,6 +114,7 @@
   saving={$uploadingAvatar}
   error={cropOpen ? failure : ''}
   onsave={save}
+  returnFocus={() => buttons?.querySelector<HTMLElement>('[data-avatar-change]')}
 />
 
 {#if confirmingRemove}

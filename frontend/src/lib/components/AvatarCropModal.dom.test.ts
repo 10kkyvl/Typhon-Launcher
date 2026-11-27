@@ -274,6 +274,27 @@ describe('AvatarCropModal from the avatar editor', () => {
     expect(document.activeElement).toBe(change);
   });
 
+  it('opened by a press that took no focus, gives focus to "Change avatar" when the upload lands', async () => {
+    vi.mocked(pickAvatar).mockResolvedValueOnce({ data: 'AAAA', mime: 'image/png' });
+    const upload = held<CurrentUser>();
+    vi.mocked(uploadAvatar).mockReturnValueOnce(upload.promise);
+    render(AvatarEditor, { target: app });
+    const change = screen.getByRole('button', { name: msg('ui.avatarChange') });
+    // The macOS view does not focus a button a pointer presses: the dialog then has no opener to return to.
+    change.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(document.activeElement).toBe(document.body);
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.avatarCropTitle') });
+    await loaded(dialog);
+    const save = button(dialog, msg('common.save'));
+    save.focus();
+    await user().keyboard('{Enter}');
+
+    upload.resolve({ id: 'u-ana', username: 'ana', displayName: 'Ana', avatarUrl: 'a.webp' } as CurrentUser);
+
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    expect(document.activeElement).toBe(change);
+  });
+
   it('after a failed upload, focus goes to the words that say it', async () => {
     const { upload, dialog } = await pickAndSave();
 
