@@ -57,7 +57,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/InstallModal.svelte': { cand: 'radio tile' },
   'lib/components/LiveIsland.svelte': { head: 'disclosure', top: 'disclosure' },
   'lib/components/NotificationsPanel.svelte': { notification: 'row' },
-  'lib/components/ReleaseMatchModal.svelte': { candidate: 'radio tile' },
   'lib/components/RemoveGameModal.svelte': { mode: 'radio tile' },
   'lib/components/Sidebar.svelte': { 'nav-item': 'nav item' },
   'lib/components/SidebarStatus.svelte': { item: 'row' },

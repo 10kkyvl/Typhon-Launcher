@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import { Check } from '@lucide/svelte';
+  import { onDestroy, untrack } from 'svelte';
   import {
     confirmMatch,
     getMatchCandidates,
@@ -10,21 +9,29 @@
     type MatchCandidate,
     type ReleaseView,
   } from '../services/sources';
-  import { errorMessage } from '../stores/sources';
+  import { sourceErrorText } from '../sources/sourceErrors';
   import { metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
   import { candidateGroups } from '../game/similar';
   import { bytesSize, relativeDate } from '../utils/format';
+  import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import OptionList from './OptionList.svelte';
+  import type { OptionItem } from './optionList';
   import SearchInput from './SearchInput.svelte';
   import Spinner from './Spinner.svelte';
-  import Tooltip from './Tooltip.svelte';
-  import { msg } from '../i18n';
-  import { nextIndex } from '../utils/roving';
+  import { msg, type MessageKey } from '../i18n';
 
+  /**
+   * Which catalog game a feed release is: the candidates Go found for it and a search by name, one
+   * choice across both lists, saved by Confirm. The lists are option lists whose arrows only walk them
+   * (a choice is a press, Space or Enter), held while a match or an ignore is on its way. Every failure
+   * is said in the dialog in the launcher's words for its code, never Go's text; an answer for an
+   * opening the dialog has left paints nothing here, and a refusal of one is a toast naming its release.
+   */
   let {
     open = $bindable(false),
     release,
@@ -35,6 +42,7 @@
     onchanged?: () => void;
   } = $props();
   const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
   let candidates = $state<MatchCandidate[]>([]);
   const ordered = $derived.by(() => {
@@ -42,18 +50,28 @@
     return [...groups.server, ...groups.local];
   });
   let loadingCandidates = $state(false);
+  let candidatesFailure = $state('');
+  let candidatesRetrying = $state(false);
   let selectedGameId = $state<string | null>(null);
   let query = $state('');
   let searchResults = $state<CatalogGame[]>([]);
   let searching = $state(false);
   let searchError = $state('');
-  // The footer action running: its button stays focused and busy, the other waits.
+  let searchRetrying = $state(false);
+  // The footer action running: its button stays focused and busy, the rest of the dialog is held.
   let submitting = $state<'' | 'confirm' | 'ignore'>('');
+  // Why the last match or ignore was refused, in the launcher's words for its code.
+  let failure = $state('');
   let searchToken = 0;
-  // One per opening of the dialog: a retry that answers after its opening has passed says so.
+  // One per opening of the dialog and per release: an answer that arrives after its opening has
+  // passed (closed, opened for another release, the dialog taken off the page) is not this one's.
   let opening = 0;
   let candidatesToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // The reason by code: the sources' table, then the catalog's (a match looks the game up there), then
+  // the dialog's own words for a code neither has.
+  const reason = (err: unknown) => sourceErrorText(err, metadataErrorText(err, msg('modals.releaseMatchUnknownReason')));
 
   $effect(() => {
     const isOpen = open;
@@ -63,32 +81,55 @@
       searchToken += 1;
       candidatesToken += 1;
       loadingCandidates = false;
+      candidatesFailure = '';
       searching = false;
       searchError = '';
-      // A retry still running when the dialog closes belongs to that opening: the next starts clean.
+      // A retry or an action still running when the dialog closes belongs to that opening: the next
+      // starts clean.
       opening += 1;
       searchRetrying = false;
+      candidatesRetrying = false;
+      submitting = '';
+      failure = '';
       selectedGameId = null;
       query = '';
       searchResults = [];
       candidates = [];
-      if (isOpen && current) loadCandidates(current.release.id);
+      if (isOpen && current) void loadCandidates(current.release.id);
     });
+  });
+
+  onDestroy(() => {
+    opening += 1;
+    clearTimeout(searchTimer);
   });
 
   // Only the answer for the release the dialog is open for lands: a late one for the release before
   // would offer, and save, another release's games.
-  async function loadCandidates(releaseId: string) {
+  async function loadCandidates(releaseId: string): Promise<boolean | undefined> {
     const token = ++candidatesToken;
     loadingCandidates = true;
     try {
       const found = await getMatchCandidates(releaseId);
-      if (token === candidatesToken) candidates = found;
+      if (token !== candidatesToken) return undefined;
+      candidates = found;
+      candidatesFailure = '';
+      return true;
     } catch (err) {
-      if (token === candidatesToken) toast(errorMessage(err), 'danger');
+      if (token !== candidatesToken) return undefined;
+      candidates = [];
+      candidatesFailure = msg('modals.releaseMatchCandidatesFailed', { reason: reason(err) });
+      return false;
     } finally {
       if (token === candidatesToken) loadingCandidates = false;
     }
+  }
+
+  async function retryCandidates(): Promise<boolean | undefined> {
+    if (!release) return false;
+    const mine = opening;
+    const found = await loadCandidates(release.release.id);
+    return mine === opening ? found : undefined;
   }
 
   // A failed search stays on screen, its Retry busy, until the next answer replaces it.
@@ -116,14 +157,13 @@
     } catch (err) {
       if (token === searchToken) {
         searchResults = [];
-        searchError = errorMessage(err);
+        searchError = msg('modals.releaseMatchSearchFailed', { reason: reason(err) });
       }
     } finally {
       if (token === searchToken) searching = false;
     }
   }
 
-  let searchRetrying = $state(false);
   let searchResultsEl = $state<HTMLElement>();
   let searchBlock = $state<HTMLElement>();
 
@@ -141,64 +181,93 @@
     return mine === opening ? searchError === '' : undefined;
   }
 
-  async function confirm() {
-    if (!release || !selectedGameId) return;
-    submitting = 'confirm';
+  type Action = {
+    kind: 'confirm' | 'ignore';
+    send: (releaseId: string) => Promise<void>;
+    done: () => void;
+    /** The dialog's words for a refusal while it is still on the release. */
+    failedHere: MessageKey;
+    /** A toast naming the release, for a refusal that answers after the dialog has left it. */
+    failedFor: MessageKey;
+  };
+
+  // One request per press: while one runs its button is busy and the other is held (Button refuses
+  // both). The focus the press holds goes to the words of a refusal; a press that held none moves nothing.
+  async function act(action: Action) {
+    const target = release;
+    if (!target) return;
+    const at = opening;
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
+    submitting = action.kind;
+    failure = '';
     try {
-      await confirmMatch(release.release.id, selectedGameId);
-      toast(msg('modals.releaseMatchSaved'), 'success');
-      open = false;
-      onchanged?.();
+      await action.send(target.release.id);
     } catch (err) {
-      toast(metadataErrorText(err, errorMessage(err)), 'danger');
-    } finally {
+      if (at !== opening) {
+        toast(msg(action.failedFor, { title: target.release.rawTitle, reason: reason(err) }), 'danger');
+        return;
+      }
       submitting = '';
+      failure = msg(action.failedHere, { reason: reason(err) });
+      await hand(() => document.getElementById(failureId));
+      return;
     }
+    action.done();
+    if (at !== opening) return;
+    submitting = '';
+    open = false;
+    onchanged?.();
   }
 
-  async function ignore() {
-    if (!release) return;
-    submitting = 'ignore';
-    try {
-      await ignoreRelease(release.release.id, true);
-      toast(msg('modals.releaseMatchIgnored'));
-      open = false;
-      onchanged?.();
-    } catch (err) {
-      toast(errorMessage(err), 'danger');
-    } finally {
-      submitting = '';
-    }
+  function confirm() {
+    const gameId = selectedGameId;
+    if (!gameId) return;
+    void act({
+      kind: 'confirm',
+      send: (releaseId) => confirmMatch(releaseId, gameId),
+      done: () => toast(msg('modals.releaseMatchSaved'), 'success'),
+      failedHere: 'modals.releaseMatchConfirmFailed',
+      failedFor: 'modals.releaseMatchFailedFor',
+    });
   }
 
-  // Each list of games is a radio group: the arrows move the focus and the choice together. A game that
-  // is not in the catalog takes the focus, so its hint says why, but is not chosen.
-  function moveChoice(event: KeyboardEvent, ids: string[], off: (index: number) => boolean) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const group = (event.currentTarget as HTMLElement).closest('[role="radiogroup"]');
-    const radios = [...(group?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
-    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), ids.length, event.key, { orientation: 'vertical' });
-    if (next === null) return;
-    event.preventDefault();
-    if (!off(next)) selectedGameId = ids[next];
-    radios[next]?.focus();
+  function ignore() {
+    void act({
+      kind: 'ignore',
+      send: (releaseId) => ignoreRelease(releaseId, true),
+      done: () => toast(msg('modals.releaseMatchIgnored')),
+      failedHere: 'modals.releaseMatchIgnoreFailed',
+      failedFor: 'modals.releaseMatchIgnoreFailedFor',
+    });
   }
 
-  // The one Tab stop of a list: its chosen game, else its first.
-  function stopOf(ids: string[]): number {
-    return Math.max(0, ids.findIndex((id) => id === selectedGameId));
-  }
-
-  const orderedIds = $derived(ordered.map((candidate) => candidate.gameId));
-  const orderedOff = (index: number) => ordered[index]?.inCatalog === false;
-  const orderedStop = $derived(stopOf(orderedIds));
-  const resultIds = $derived(searchResults.map((game) => game.id));
-  const resultStop = $derived(stopOf(resultIds));
+  const candidateRows = $derived<OptionItem[]>(
+    ordered.map((candidate) => ({
+      id: candidate.gameId,
+      title: candidate.title,
+      note: candidate.platforms && candidate.platforms.length > 0 ? candidate.platforms.join(', ') : undefined,
+      fact: [
+        candidate.year ? String(candidate.year) : '',
+        candidate.source === 'server' ? msg('modals.releaseMatchFromCatalog') : `${candidate.method} · ${Math.round(candidate.score * 100)}%`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      disabledReason: candidate.inCatalog === false ? msg('modals.releaseMatchNotInCatalog') : undefined,
+    })),
+  );
+  const resultRows = $derived<OptionItem[]>(
+    searchResults.map((game) => ({ id: game.id, title: game.title, fact: game.releaseYear ? String(game.releaseYear) : undefined })),
+  );
+  const heldReason = $derived(submitting ? msg('modals.actionRunning') : '');
 </script>
 
-<Modal dismissible={!submitting} bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
+<Modal dismissible={!submitting} busy={submitting !== ''} bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
   {#if release}
     <div class="sections">
+      {#if failure}
+        <Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice>
+      {/if}
       <section class="block">
         <div class="rows">
           <div class="row">
@@ -226,49 +295,24 @@
 
       <section class="block">
         <h4 id="{uid}-candidates">{msg('modals.releaseMatchCandidates')}</h4>
-        {#if loadingCandidates}
+        {#if loadingCandidates && !candidatesRetrying}
           <Spinner size="sm" label={msg('modals.releaseMatchSearchingCandidates')} />
+        {:else if candidatesFailure || candidatesRetrying}
+          <Notice tone="danger" compact bind:retrying={candidatesRetrying} retry={{ label: msg('common.retry'), run: retryCandidates }}>
+            {candidatesFailure}
+          </Notice>
         {:else if candidates.length === 0}
           <EmptyState size="inline" title={msg('modals.releaseMatchNoCandidates')} />
         {:else}
-          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-candidates">
-            {#each ordered as candidate, index (candidate.gameId)}
-              {@const missing = candidate.inCatalog === false}
-              <!-- Not disabled: a disabled button cannot take focus, and the reason would reach no keyboard. -->
-              <Tooltip text={missing ? msg('modals.releaseMatchNotInCatalog') : ''}>
-              <button
-                type="button"
-                class="candidate"
-                role="radio"
-                aria-checked={selectedGameId === candidate.gameId}
-                aria-disabled={missing || undefined}
-                tabindex={index === orderedStop ? 0 : -1}
-                onclick={() => {
-                  if (!missing) selectedGameId = candidate.gameId;
-                }}
-                onkeydown={(event) => moveChoice(event, orderedIds, orderedOff)}
-              >
-                <span class="radio" class:on={selectedGameId === candidate.gameId} aria-hidden="true">
-                  {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
-                </span>
-                <span class="candidate-main">
-                  <span class="candidate-title" title={candidate.title}>{candidate.title}</span>
-                  {#if candidate.platforms && candidate.platforms.length > 0}
-                    {@const platforms = candidate.platforms.join(', ')}
-                    <span class="candidate-platforms" title={platforms}>{platforms}</span>
-                  {/if}
-                </span>
-                {#if candidate.year}<span class="year">{candidate.year}</span>{/if}
-                {#if candidate.source === 'server'}
-                  <span class="candidate-method">{msg('modals.releaseMatchFromCatalog')}</span>
-                {/if}
-                {#if candidate.source !== 'server'}
-                  <span class="candidate-method">{candidate.method}</span>
-                  <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
-                {/if}
-              </button>
-              </Tooltip>
-            {/each}
+          <div class="candidates">
+            <OptionList
+              labelledby="{uid}-candidates"
+              options={candidateRows}
+              value={selectedGameId ?? undefined}
+              activation="manual"
+              disabled={submitting !== ''}
+              onchange={(id) => (selectedGameId = id)}
+            />
           </div>
         {/if}
       </section>
@@ -297,24 +341,15 @@
         {:else if searching}
           <Spinner size="sm" label={msg('modals.releaseMatchSearching')} />
         {:else if searchResults.length > 0}
-          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-search" bind:this={searchResultsEl}>
-            {#each searchResults as game, index (game.id)}
-              <button
-                type="button"
-                class="candidate"
-                role="radio"
-                aria-checked={selectedGameId === game.id}
-                tabindex={index === resultStop ? 0 : -1}
-                onclick={() => (selectedGameId = game.id)}
-                onkeydown={(event) => moveChoice(event, resultIds, () => false)}
-              >
-                <span class="radio" class:on={selectedGameId === game.id} aria-hidden="true">
-                  {#if selectedGameId === game.id}<Check size="1.2rem" strokeWidth={2.6} />{/if}
-                </span>
-                <span class="candidate-title" title={game.title}>{game.title}</span>
-                {#if game.releaseYear}<span class="year">{game.releaseYear}</span>{/if}
-              </button>
-            {/each}
+          <div class="candidates" bind:this={searchResultsEl}>
+            <OptionList
+              labelledby="{uid}-search"
+              options={resultRows}
+              value={selectedGameId ?? undefined}
+              activation="manual"
+              disabled={submitting !== ''}
+              onchange={(id) => (selectedGameId = id)}
+            />
           </div>
         {/if}
       </section>
@@ -322,11 +357,12 @@
   {/if}
 
   {#snippet footer()}
-    <Button variant="danger" disabled={submitting === 'confirm'} busy={submitting === 'ignore'} onclick={ignore}>{msg('modals.releaseMatchIgnore')}</Button>
-    <Button disabled={submitting !== ''} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button variant="danger" disabled={submitting === 'confirm'} reason={heldReason} busy={submitting === 'ignore'} onclick={ignore}>{msg('modals.releaseMatchIgnore')}</Button>
+    <Button disabled={submitting !== ''} reason={heldReason} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button
       variant="primary"
       disabled={!selectedGameId || submitting === 'ignore'}
+      reason={submitting === 'ignore' ? heldReason : ''}
       busy={submitting === 'confirm'}
       onclick={confirm}
     >
@@ -343,7 +379,7 @@
   }
 
   .block h4 {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -358,7 +394,7 @@
 
   .row {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: var(--space-4);
     padding: 0.8rem 0;
@@ -374,124 +410,20 @@
     flex-shrink: 0;
   }
 
+  /* A long feed title wraps: the whole of it is on screen, not behind a hover. */
   .value {
     min-width: 0;
     color: var(--text);
     text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .candidates {
-    display: flex;
-    flex-direction: column;
-    max-height: 18rem;
+    max-height: 26rem;
     overflow-y: auto;
     padding: var(--space-1);
     background: var(--surface);
     border-radius: var(--radius-md);
-  }
-
-  .candidate {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 0.9rem 1rem;
-    border-radius: var(--radius-sm);
-    text-align: left;
-    transition: background var(--dur-fast) var(--ease);
-  }
-
-  .candidate:hover:not([aria-disabled='true']) {
-    background: var(--hover);
-  }
-
-  .candidate[aria-disabled='true'] {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .candidate[aria-checked='true'] {
-    background: var(--hover-strong);
-  }
-
-  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
-  .candidate:focus-visible {
-    outline-offset: -2px;
-  }
-
-  .radio {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.8rem;
-    height: 1.8rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-    color: #fff;
-  }
-
-  .radio.on {
-    background: var(--accent);
-    border-color: var(--accent-bright);
-  }
-
-  .candidate-main {
-    flex: 1 1 0;
-    min-width: 12rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-
-  .candidate-platforms {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .candidate-title {
-    min-width: 0;
-    font-size: var(--font-sm);
-    color: var(--text);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-  }
-
-  .year {
-    flex-shrink: 0;
-    padding: 0.2rem 0.8rem;
-    border-radius: var(--radius-sm);
-    background: var(--surface-3);
-    color: var(--text);
-    font-size: var(--font-xs);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .candidate-method {
-    font-size: 1.2rem;
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
-
-  .candidate-score {
-    font-size: var(--font-xs);
-    font-weight: 600;
-    color: var(--accent-text);
-    font-variant-numeric: tabular-nums;
-    flex-shrink: 0;
-    min-width: 4rem;
-    text-align: right;
   }
 
   .search-field {

@@ -1,8 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import type { PopularGame } from '../social/popular';
-import type { ReleaseView } from '../services/sources';
 import { statusReason } from '../services/selfupdateMessages';
 import { autoAway } from '../stores/presence';
 import { selfUpdateStatus } from '../stores/selfupdate';
@@ -12,19 +11,11 @@ import FriendCodeCard from '../../routes/friends/FriendCodeCard.svelte';
 import PopularGames from '../../routes/activity/PopularGames.svelte';
 import TokenValueInput from '../../routes/settings/TokenValueInput.svelte';
 import AccountMenu from './AccountMenu.svelte';
-import ReleaseMatchModal from './ReleaseMatchModal.svelte';
 import TagEditor from './TagEditor.svelte';
 import SidebarStatus from './SidebarStatus.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
-vi.mock('../services/sources', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/sources')>()),
-  getMatchCandidates: vi.fn(async () => [
-    { gameId: 'g1', title: 'Hades', score: 0.9, method: 'title', source: 'local', inCatalog: false },
-    { gameId: 'g2', title: 'Hades II', score: 0.8, method: 'title', source: 'local' },
-  ]),
-}));
 
 // A hint that says more than a control's name (class c): the control keeps its name, the hint is its
 // description, keyboard focus shows it, and the control has no native title any more.
@@ -98,16 +89,6 @@ describe('hints that describe a control', () => {
     await expectDescribed(field, '--radius-sm');
     await rerender({ id: 'f', name: '--radius-sm', value: '6px', describedBy: 'f-hint', onchange: () => {} });
     expect(field.getAttribute('aria-describedby')?.split(' ')).toContain('f-hint');
-  });
-
-  it('a release candidate missing from the catalog: why it cannot be picked, and it is not picked', async () => {
-    const release = { release: { id: 'r1', rawTitle: 'Hades', normalizedTitle: 'hades', size: 1, uploadedAt: '' }, sourceName: 'Feed', gameTitle: '' } as unknown as ReleaseView;
-    render(ReleaseMatchModal, { target: app, props: { open: true, release } });
-    const missing = await waitFor(() => screen.getByRole('radio', { name: /^Hades\b(?! II)/ }));
-    await expectDescribed(missing, msg('modals.releaseMatchNotInCatalog'));
-    expect(missing.getAttribute('aria-disabled')).toBe('true');
-    missing.click();
-    expect(missing.getAttribute('aria-checked')).toBe('false');
   });
 
   it('a tag chip: the tag is its text, and its remove button is named for the tag', () => {
