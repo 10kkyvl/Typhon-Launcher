@@ -381,6 +381,17 @@ describe('the first read of the friends', () => {
     expect(get(friendsPage).friends.length).toBe(4);
   });
 
+  it('a failure of A’s first read is not B’s: the next session starts without it', async () => {
+    const { authState, friendsLoaded, friendsLoadError, reloadFriends, service } = await signedIn();
+    vi.mocked(service.refresh).mockRejectedValueOnce(new Error('timeout'));
+    await reloadFriends();
+
+    authState.set('unauthenticated');
+    authState.set('authenticated');
+
+    expect([get(friendsLoaded), get(friendsLoadError)]).toEqual([false, null]);
+  });
+
   it('a session that ends forgets the read and its failure', async () => {
     const { authState, friendsLoaded, friendsLoadError, reloadFriends, service } = await signedIn();
     vi.mocked(service.friends).mockResolvedValueOnce(page(1, 0));
@@ -516,6 +527,24 @@ describe('the follow-up read (reads asked while one runs)', () => {
     expect(await afterAction).toBe(true);
     expect(service.refresh).toHaveBeenCalledTimes(3);
     expect(get(friendsPage).friends.length).toBe(2);
+  });
+
+  it('a follow-up of an ended session is not the next one’s: B’s read after an action reads', async () => {
+    const { authState, reloadFriends, service } = await signedIn();
+    const first = deferred<void>();
+    vi.mocked(service.refresh).mockReturnValueOnce(first.promise).mockResolvedValue(undefined);
+    vi.mocked(service.friends).mockResolvedValue(page(2, 0) as never);
+    void reloadFriends();
+    void reloadFriends();
+
+    authState.set('unauthenticated');
+    authState.set('authenticated');
+    void reloadFriends();
+    const afterAction = reloadFriends();
+    first.resolve();
+
+    expect(await afterAction).toBe(true);
+    expect(service.refresh).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -715,6 +744,57 @@ describe('the read of a start (the stored session checked behind the splash)', (
     await started;
     expect(asked(store.service)).toEqual([1, 1, 2]);
     expect(held(store).friends).toBe(5);
+  });
+
+  it('runs before a read asked after an action, so the start’s older answer never lands over that read', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    const afterActionAnswer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never).mockReturnValueOnce(afterActionAnswer.promise as never);
+    vi.mocked(store.service.refresh).mockResolvedValue(undefined);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    const afterAction = store.reloadFriends();
+    await flush();
+    afterActionAnswer.resolve(page(5, 0));
+    await flush();
+    answer.resolve(page(2, 0));
+    await started;
+
+    expect(await afterAction).toBe(true);
+    expect(held(store).friends).toBe(5);
+  });
+
+  it('whose session ended is not the read of the screen arriving in the next one: that screen reads', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never).mockResolvedValueOnce(page(2, 0) as never);
+    vi.mocked(store.service.refresh).mockResolvedValue(undefined);
+
+    const started = store.initSocial();
+    store.authState.set('unauthenticated');
+    store.authState.set('authenticated');
+    const arrival = store.readFriendsOnArrival();
+    answer.resolve(page(9, 9));
+
+    expect(await arrival).toBe(true);
+    await started;
+    expect(held(store)).toEqual({ friends: 2, incoming: 0, loaded: true, error: null });
+  });
+
+  it('that fails after another account signed in is not that account’s failure', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('unauthenticated');
+    store.authState.set('authenticated');
+    answer.reject(new Error('timeout'));
+    await started;
+
+    expect(held(store)).toEqual({ friends: 0, incoming: 0, loaded: false, error: null });
   });
 });
 
