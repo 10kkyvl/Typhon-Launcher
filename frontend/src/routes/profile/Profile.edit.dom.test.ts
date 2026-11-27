@@ -188,6 +188,14 @@ describe("the edit bar's Save", () => {
     expect(refusal(button(msg('common.save')))).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('profile.fillBlocks') });
   });
 
+  // A value the server holds can already be one the bar refuses: unchanged, the bar has nothing to send,
+  // and says that first.
+  it('unchanged with a saved status text the server would refuse, says there is nothing to save', async () => {
+    await editor(player({ appearance: { parallax: false } as ProfileAppearance, statusText: 'a\u202eb' }));
+
+    expect(refusal(button(msg('common.save')))).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('state.accountErrorNoChanges') });
+  });
+
   it('changed and online, is free and says no reason', async () => {
     const { user } = await editor();
     await change(user);

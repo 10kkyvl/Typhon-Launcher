@@ -251,6 +251,46 @@ describe("leaving while the header's own save runs and the edit bar holds change
   });
 });
 
+// The bar's save is its own: while it runs, the header's typed text is still unsaved and still the
+// player's to lose or keep.
+describe("the edit bar's save running while the header editor holds typed text", () => {
+  async function barSaving() {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const view = await headerEditor();
+    await view.user.type(about(), 'Hi');
+    await view.user.click(button(msg('profileStyle.edit')));
+    const themes = screen.getByRole('radiogroup', { name: msg('profile.theme') });
+    await view.user.click(within(themes).getAllByRole('radio').find((radio) => radio.getAttribute('aria-checked') !== 'true') as HTMLElement);
+    await view.user.click(screen.getAllByRole('button', { name: msg('common.save') }).find((save) => save.closest('.topbar')) as HTMLElement);
+    expect(get(savingProfile)).toBe(true);
+    return { ...view, answer };
+  }
+
+  it('leaving asks about both editors', async () => {
+    const { answer } = await barSaving();
+
+    navigate('catalog');
+
+    expect(get(route).name).toBe('profile');
+    expect(get(leaveRequest)?.prompt().text).toBe(msg('profile.leaveBothText'));
+    stayHere();
+    answer.resolve(me);
+    await waitFor(() => expect(get(savingProfile)).toBe(false));
+  });
+
+  it('Big Picture entered keeps the header text for the next opening', async () => {
+    const { answer, unmount } = await barSaving();
+
+    unmount();
+    renderDom(Profile);
+
+    expect(about().value).toBe('Hi');
+    answer.resolve(me);
+    await waitFor(() => expect(get(savingProfile)).toBe(false));
+  });
+});
+
 describe('a header save answered after another account signed in', () => {
   // A pressed Save and left; A signed out and B signed in; then the server answers A's save.
   async function answeredUnderAnother(answer: (late: ReturnType<typeof pending<CurrentUser>>) => void) {
