@@ -158,6 +158,66 @@ describe('отключение синхронизации аккаунта', () 
 
     expect(get(feedEvents)).toEqual([{ id: 1 }]);
   });
+
+  async function consented() {
+    const store = await load();
+    const { settings } = await import('./settings');
+    const service = await import('../services/social');
+    const { Events } = await import('@wailsio/runtime');
+    vi.mocked(service.friends).mockReset();
+    vi.mocked(service.refresh).mockReset();
+    const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as (event: { data: unknown }) => void;
+    settings.set({ accountSync: true } as never);
+    return { ...store, settings, service, handler };
+  }
+
+  it('S11 снятое согласие убирает список друзей и заявки: показывать их больше нечем', async () => {
+    const { friendsLoaded, friendsPage, handler, incomingCount, needsSocialConsent, settings } = await consented();
+    handler({ data: page(4, 1) });
+
+    settings.set({ accountSync: false } as never);
+
+    expect([get(needsSocialConsent), get(friendsLoaded), get(friendsPage).friends.length, get(incomingCount)]).toEqual([true, false, 0, 0]);
+  });
+
+  it('S3 ответ, запрошенный до снятия согласия, отбрасывается', async () => {
+    const { friendsLoaded, friendsPage, reloadFriends, service, settings } = await consented();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(service.friends).mockReturnValueOnce(answer.promise as never);
+    const reading = reloadFriends();
+    await flush();
+
+    settings.set({ accountSync: false } as never);
+    answer.resolve(page(4, 0));
+    await reading;
+
+    expect([get(friendsLoaded), get(friendsPage).friends.length]).toEqual([false, 0]);
+  });
+
+  it('ответ на чтение после согласия, запрошенный до его снятия, отбрасывается (loadFriends)', async () => {
+    const { friendsLoaded, friendsPage, loadFriends, service, settings } = await consented();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(service.friends).mockReturnValueOnce(answer.promise as never);
+    const reading = loadFriends();
+
+    settings.set({ accountSync: false } as never);
+    answer.resolve(page(4, 0));
+    await reading;
+
+    expect([get(friendsLoaded), get(friendsPage).friends.length]).toEqual([false, 0]);
+  });
+
+  it('согласие, данное снова, читает список заново: прежний ответ ему не мешает', async () => {
+    const { friendsLoaded, friendsPage, reloadFriends, service, settings } = await consented();
+    vi.mocked(service.friends).mockResolvedValueOnce(page(4, 0) as never).mockResolvedValueOnce(page(2, 0) as never);
+    await reloadFriends();
+    settings.set({ accountSync: false } as never);
+
+    settings.set({ accountSync: true } as never);
+
+    expect(await reloadFriends()).toBe(true);
+    expect([get(friendsLoaded), get(friendsPage).friends.length]).toEqual([true, 2]);
+  });
 });
 
 describe('incomingPeak', () => {

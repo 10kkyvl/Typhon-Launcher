@@ -257,7 +257,11 @@ export async function initSocial(): Promise<void> {
   needsSocialConsent.subscribe((needs) => {
     const changed = consentWithheld !== needs;
     consentWithheld = needs;
-    if (changed && needs) resetFeed();
+    if (!changed || !needs) return;
+    // Without the consent nothing of the account's friends may be shown, and a read asked with it is
+    // dropped: the badges, Activity and the game page see an empty page as after a sign-out.
+    resetFeed();
+    forget();
   });
 
   await readAtStart();
