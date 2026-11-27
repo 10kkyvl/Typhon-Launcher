@@ -211,6 +211,31 @@ describe('UpdateCard: the history', () => {
     expect(dialog.querySelectorAll('[title]').length).toBe(0);
   });
 
+  it('says each row’s status and method in words, never Go’s codes', async () => {
+    const row = (status: string, strategy = 'full_release') => ({ ...entry, id: `${status}-${strategy}`, status, strategy });
+    vi.mocked(getUpdateHistory).mockResolvedValueOnce([
+      row('completed'),
+      row('failed', 'patch_chain'),
+      row('running', 'torrent_reuse'),
+      row('rolled_back'),
+      row('someday_new', 'someday_strategy'),
+    ]);
+    const { user } = renderDom(UpdateCard, { update: update(), running: false });
+
+    await user.click(screen.getByRole('button', { name: msg('ui.history') }));
+
+    const dialog = await screen.findByRole('dialog', { name: msg('ui.updateHistoryTitle') });
+    const rows = [...dialog.querySelectorAll('li')].map((item) => [...item.querySelectorAll('.muted')].map((part) => part.textContent?.trim()));
+    expect(rows.map(([strategy, , status]) => [strategy, status])).toEqual([
+      [msg('state.updatesStrategyFullRelease'), msg('ui.updateHistoryStatusCompleted')],
+      [msg('state.updatesStrategyPatchChain'), msg('ui.updateHistoryStatusFailed')],
+      [msg('state.updatesStrategyTorrentReuse'), msg('ui.updateHistoryStatusRunning')],
+      [msg('state.updatesStrategyFullRelease'), msg('ui.updateHistoryStatusRolledBack')],
+      [msg('state.updatesStrategyUnknown'), msg('ui.updateHistoryStatusUnknown')],
+    ]);
+    for (const code of ['completed', 'failed', 'running', 'rolled_back', 'someday_new', 'someday_strategy']) expect(dialog.textContent).not.toContain(code);
+  });
+
   it('says there is none with an empty state, and Close gives the focus back to History', async () => {
     const { user } = renderDom(UpdateCard, { update: update(), running: false });
     const history = screen.getByRole('button', { name: msg('ui.history') });

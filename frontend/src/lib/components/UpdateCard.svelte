@@ -23,7 +23,7 @@
   import { updateReasonKey } from './updateReason';
   import { activeMove } from '../stores/relocate';
   import { toast } from '../stores/toasts';
-  import { msg } from '../i18n';
+  import { msg, type MessageKey } from '../i18n';
 
   let { update, running }: { update: Update; running: boolean } = $props();
   const uid = $props.id();
@@ -95,6 +95,17 @@
       loadingHistory = false;
     }
   }
+
+  // A history row's status (`updates.History*` in Go) and method in words; one Go adds later is
+  // said as unknown, never by its code.
+  const HISTORY_STATUS: Record<string, MessageKey> = {
+    running: 'ui.updateHistoryStatusRunning',
+    completed: 'ui.updateHistoryStatusCompleted',
+    failed: 'ui.updateHistoryStatusFailed',
+    rolled_back: 'ui.updateHistoryStatusRolledBack',
+  };
+  const historyStatus = (status: string) => msg(Object.hasOwn(HISTORY_STATUS, status) ? HISTORY_STATUS[status] : 'ui.updateHistoryStatusUnknown');
+  const historyStrategy = (strategy: string) => strategyLabels(strategy as StrategyType) ?? strategyLabels('');
 
   // Why the question's Update waits: the game started, moved or began updating while it was open.
   const confirmHeld = $derived(
@@ -326,9 +337,9 @@
       {#each history as entry (entry.id)}
         <li>
           <span class="step-label">{entry.fromVersion || '—'} → {entry.toVersion || '—'}</span>
-          <span class="muted">{strategyLabels(entry.strategy as StrategyType) ?? entry.strategy}</span>
+          <span class="muted">{historyStrategy(entry.strategy)}</span>
           <span class="muted">{relativeDate(entry.startedAt)}</span>
-          <span class="muted">{entry.status}</span>
+          <span class="muted">{historyStatus(entry.status)}</span>
         </li>
       {/each}
     </ul>
