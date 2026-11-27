@@ -111,7 +111,7 @@ describe('hints that describe a control', () => {
   });
 
   it('a tag chip: the tag is its text, and its remove button is named for the tag', () => {
-    render(TagEditor, { target: app, props: { tags: ['coop'], placeholder: 'Tag' } });
+    render(TagEditor, { target: app, props: { tags: ['coop'], placeholder: 'Tag', label: 'New tag' } });
     const remove = screen.getByRole('button', { name: msg('modals.gameTagsRemove', { tag: 'coop' }) });
     expect(remove.hasAttribute('title')).toBe(false);
     expect(remove.closest('.chip')?.textContent).toContain('coop');

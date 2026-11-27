@@ -153,4 +153,9 @@ describe('GameTagsModal: the tag suggestions', () => {
     expect(get(toasts)).toEqual([]);
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  it('names its tag field', () => {
+    const { dialog } = openDialog();
+    expect(within(dialog).getByRole('combobox', { name: msg('modals.gameTagsField') })).toBeTruthy();
+  });
 });

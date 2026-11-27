@@ -194,8 +194,15 @@
     />
 
     <div class="field">
-      <span class="field-label">{msg('modals.collectionTagsLabel')}</span>
-      <TagEditor bind:this={editor} bind:tags {suggestions} placeholder={msg('modals.gameTagsPlaceholder')} disabled={busy} />
+      <span class="field-label" id="{uid}-tags-label">{msg('modals.collectionTagsLabel')}</span>
+      <TagEditor
+        bind:this={editor}
+        bind:tags
+        {suggestions}
+        placeholder={msg('modals.gameTagsPlaceholder')}
+        labelledby="{uid}-tags-label"
+        disabled={busy}
+      />
     </div>
 
     <div class="field">

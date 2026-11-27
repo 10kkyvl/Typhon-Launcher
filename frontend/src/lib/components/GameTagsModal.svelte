@@ -78,7 +78,14 @@
 </script>
 
 <Modal dismissible={!saving} bind:open title={msg('modals.gameTagsTitle')} {returnFocus}>
-  <TagEditor bind:this={editor} bind:tags {suggestions} placeholder={msg('modals.gameTagsPlaceholder')} disabled={saving} />
+  <TagEditor
+    bind:this={editor}
+    bind:tags
+    {suggestions}
+    placeholder={msg('modals.gameTagsPlaceholder')}
+    label={msg('modals.gameTagsField')}
+    disabled={saving}
+  />
   {#if tags.length === 0}
     <div class="no-tags">
       <EmptyState size="inline" title={msg('modals.gameTagsEmpty')} />

@@ -208,3 +208,10 @@ describe('CollectionModal: the tag suggestions', () => {
     expect(within(screen.getByRole('dialog', { name: msg('modals.collectionEditTitle') })).queryByRole('alert')).toBeNull();
   });
 });
+
+describe('CollectionModal: the tags', () => {
+  it('names the tag field by its heading', () => {
+    const editor = openEditor();
+    expect(within(editor).getByRole('combobox', { name: msg('modals.collectionTagsLabel') })).toBeTruthy();
+  });
+});

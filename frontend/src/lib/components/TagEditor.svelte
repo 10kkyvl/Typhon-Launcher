@@ -3,13 +3,25 @@
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
   import { msg } from '../i18n';
+  import { composing } from '../utils/shortcut';
 
+  /**
+   * The tags of a game or a collection: a field and Add for a new one, the chips of those it has. The
+   * field is named by the caller, with `label` or the id of a visible heading (`labelledby`).
+   */
   let {
     tags = $bindable([]),
     suggestions = [],
     placeholder,
+    label,
+    labelledby,
     disabled = false,
-  }: { tags?: string[]; suggestions?: string[]; placeholder: string; disabled?: boolean } = $props();
+  }: {
+    tags?: string[];
+    suggestions?: string[];
+    placeholder: string;
+    disabled?: boolean;
+  } & ({ label: string; labelledby?: undefined } | { labelledby: string; label?: undefined }) = $props();
 
   const listId = `tag-suggestions-${Math.random().toString(36).slice(2)}`;
   let draft = $state('');
@@ -30,6 +42,13 @@
     add();
   }
 
+  // Add stays where it is, held while the field is empty: the focus goes back to the field for the
+  // next tag.
+  function addPressed() {
+    add();
+    field?.focus();
+  }
+
   // The pressed remove button goes with its tag; focus moves to the tag that took its place, else the
   // one before it, else the field, so the keyboard stays in the list instead of falling to the page.
   function remove(tag: string) {
@@ -42,7 +61,7 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
-    if (event.key !== 'Enter' || event.isComposing) return;
+    if (event.key !== 'Enter' || composing(event)) return;
     event.preventDefault();
     add();
   }
@@ -50,8 +69,23 @@
 
 <div class="editor">
   <div class="row">
-    <input class="input" type="text" list={listId} {placeholder} {disabled} bind:value={draft} bind:this={field} {onkeydown} />
-    <Button disabled={disabled || !draft.trim()} onclick={add}>{msg('modals.gameTagsAdd')}</Button>
+    <input
+      class="input"
+      type="text"
+      list={listId}
+      {placeholder}
+      aria-label={label}
+      aria-labelledby={labelledby}
+      {disabled}
+      bind:value={draft}
+      bind:this={field}
+      {onkeydown}
+    />
+    <Button
+      disabled={disabled || !draft.trim()}
+      reason={!disabled && !draft.trim() ? msg('modals.tagEditorAddEmpty') : ''}
+      onclick={addPressed}>{msg('modals.gameTagsAdd')}</Button
+    >
     <datalist id={listId}>
       {#each offered as tag (tag)}
         <option value={tag}></option>
