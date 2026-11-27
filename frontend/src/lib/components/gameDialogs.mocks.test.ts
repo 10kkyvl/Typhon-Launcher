@@ -99,7 +99,7 @@ const missingPlain = (source: string) => gaps(NEEDED_PLAIN, source);
 const mounting = Object.entries(tests).filter(([path, source]) => MOUNTS.test(source) || HELD.includes(path));
 // The source guards that quote a wrapper's import line in their own self-tests: they mount nothing.
 // By path, so a test that mounts one cannot leave the check by being named like a guard.
-const GUARDS = ['./settingsDialogs.mocks.test.ts'];
+const GUARDS = ['./settingsDialogs.mocks.test.ts', '../../routes/profile/Profile.mocks.test.ts'];
 const wrappingOf = (entries: [string, string][]) =>
   entries.filter(([path, source]) => !GUARDS.includes(path) && !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
 const wrapping = wrappingOf(Object.entries(tests));
