@@ -92,6 +92,10 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.avatarCropLoadFailed': 'Failed to open the image',
   'modals.avatarCropHint': 'Drag the image and adjust the zoom — the avatar shows as a circle in your profile',
   'modals.avatarCropSaving': 'Saving…',
+  'modals.avatarCropArea': 'Avatar crop',
+  'modals.avatarCropKeysHint': 'The arrow keys move the image',
+  'modals.avatarCropZoomAtMin': 'The image is zoomed out as far as it goes',
+  'modals.avatarCropZoomAtMax': 'The image is zoomed in as far as it goes',
 
   // DownloadDetailsModal.svelte
   'modals.downloadDetailsFolderUnavailable': 'Folder unavailable',
@@ -114,6 +118,8 @@ export const modals: Record<ModalsKey, Message> = {
 
   // SocialConsentScreen.svelte
   'modals.socialConsentEnableFailed': 'Failed to enable sync',
+  'modals.socialConsentEnableFailedReason': 'Failed to enable sync: {reason}',
+  'modals.socialConsentEnabled': 'Account sync is on',
   'modals.socialConsentTitle': 'Friends and sync',
   'modals.socialConsentIntro':
     'Friends work on top of account sync: without it, the server has nothing to show your friends, or you — their profiles.',

@@ -57,6 +57,8 @@ export const profile = {
   'profile.deleteAccountDone': 'Аккаунт удалён',
   'profile.deleteAccountWrongPassword': 'Неверный пароль',
   'profile.deleteAccountFailed': 'Не удалось удалить аккаунт',
+  'profile.deleteAccountPasswordNeeded': 'Сначала введите пароль',
+  'profile.deleteAccountFailedFor': 'Аккаунт «{name}» не удалён. {reason}',
 
   'profile.blockPinned': 'Закреплённая игра',
   'profile.blockCollection': 'Коллекция',

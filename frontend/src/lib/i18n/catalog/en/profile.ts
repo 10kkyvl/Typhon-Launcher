@@ -60,6 +60,8 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.deleteAccountDone': 'Account deleted',
   'profile.deleteAccountWrongPassword': 'Wrong password',
   'profile.deleteAccountFailed': 'Could not delete the account',
+  'profile.deleteAccountPasswordNeeded': 'Enter your password first',
+  'profile.deleteAccountFailedFor': 'The account "{name}" was not deleted. {reason}',
 
   'profile.blockPinned': 'Pinned game',
   'profile.blockCollection': 'Collection',

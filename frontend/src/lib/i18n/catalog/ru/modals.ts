@@ -89,6 +89,10 @@ export const modals = {
   'modals.avatarCropLoadFailed': 'Не удалось открыть изображение',
   'modals.avatarCropHint': 'Перетащите изображение и подберите масштаб — в профиле аватар показывается кружком',
   'modals.avatarCropSaving': 'Сохранение…',
+  'modals.avatarCropArea': 'Кадр аватара',
+  'modals.avatarCropKeysHint': 'Стрелки на клавиатуре сдвигают изображение',
+  'modals.avatarCropZoomAtMin': 'Изображение уже отдалено до предела',
+  'modals.avatarCropZoomAtMax': 'Изображение уже приближено до предела',
 
   // DownloadDetailsModal.svelte
   'modals.downloadDetailsFolderUnavailable': 'Папка недоступна',
@@ -111,6 +115,8 @@ export const modals = {
 
   // SocialConsentScreen.svelte
   'modals.socialConsentEnableFailed': 'Не удалось включить синхронизацию',
+  'modals.socialConsentEnableFailedReason': 'Не удалось включить синхронизацию: {reason}',
+  'modals.socialConsentEnabled': 'Синхронизация с аккаунтом включена',
   'modals.socialConsentTitle': 'Друзья и синхронизация',
   'modals.socialConsentIntro':
     'Друзья работают поверх синхронизации с аккаунтом: без неё серверу нечего показать вашим друзьям, а вам — их профили.',
