@@ -61,6 +61,7 @@ const DIALOGS = [
   // The dialogs of download, install and storage: they start real downloads and installers, delete
   // game files and move game folders between disks.
   'RemoveGameModal',
+  'MoveGameModal',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -186,6 +187,7 @@ describe('tests that mount a game or library dialog', () => {
         './AddImageModal.dom.test.ts',
         './addDialogs.dom.test.ts',
         './RemoveGameModal.dom.test.ts',
+        './MoveGameModal.dom.test.ts',
         ...HELD,
       ]),
     );

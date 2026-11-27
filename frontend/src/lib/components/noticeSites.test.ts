@@ -159,11 +159,12 @@ const SITES: Record<string, Site[]> = {
     ['info', false],
     ['danger', true],
   ],
-  // That the move is safe is read with the dialog; a failed move or start just happened.
+  // That the move is safe is read with the dialog; a refused cancel and a failed move just happened (a
+  // refused folder or start is said at the field).
   'lib/components/MoveGameModal.svelte': [
     ['danger', true],
-    ['info', false],
     ['danger', true],
+    ['info', false],
   ],
   // Nothing matched the spin, or the pick could not be started: both just happened.
   'lib/components/RandomGameModal.svelte': [

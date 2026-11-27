@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import { FolderOpen, HardDrive, ShieldCheck } from '@lucide/svelte';
-  import { moveErrorText } from '../relocate/moveMessages';
+  import { onDestroy, untrack } from 'svelte';
+  import { HardDrive, ShieldCheck } from '@lucide/svelte';
+  import { REASONS, moveErrorText } from '../relocate/moveMessages';
   import { movePercent, moveSummary } from '../relocate/moveText';
   import { inWails } from '../services/backend';
   import { cancelMove, moveGame, moveGameTarget, selectMoveTargetFolder, type MoveJob } from '../services/relocate';
@@ -10,18 +10,28 @@
   import { closeMoveGame, moves, moveTarget } from '../stores/relocate';
   import { navigate } from '../stores/router';
   import { toast } from '../stores/toasts';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize } from '../utils/format';
+  import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import PathField from './PathField.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import { errorCode, msg } from '../i18n';
 
+  /**
+   * Moves one game's folder into another folder (relocate.Service.MoveGame). The chosen folder is
+   * checked by Go first (MoveGameTarget: the folder the game would land in, or why it cannot); a refusal
+   * of the folder or of the start is said at the field, by code. A running move goes on in the
+   * background when the dialog closes; its Cancel says what it leaves (relocate.Service.Cancel stops the
+   * copy and its check, the game stays where it was; once the files are in the new place the move
+   * finishes). An answer for an earlier opening, or a dialog that is gone, paints nothing and closes
+   * nothing: a start is then said once in a toast naming its game.
+   */
   const uid = $props.id();
+  const keepId = `${uid}-keep`;
 
-  const game = $derived(
-    $moveTarget ? ($libraryGames.find((g) => g.id === $moveTarget?.gameId) ?? null) : null,
-  );
+  const game = $derived($moveTarget ? ($libraryGames.find((g) => g.id === $moveTarget?.gameId) ?? null) : null);
 
   let jobId = $state<string | null>(null);
   let startedJob = $state<MoveJob | null>(null);
@@ -31,36 +41,43 @@
 
   let picked = $state('');
   let diskInfo = $state<StorageInfo | null>(null);
+  let diskUnknown = $state(false);
   let finalPath = $state('');
   let resolving = $state(false);
-  let picking = $state(false);
   let starting = $state(false);
   let cancelling = $state(false);
+  // Why the folder or the start was refused, said at the field; why a cancel was refused, at the progress.
   let failure = $state('');
-  let loadedFor = $state('');
+  let cancelFailure = $state('');
+  let fieldBox = $state<HTMLElement>();
 
-  $effect(() => {
+  // One per opening: the dialog stays mounted in the shell and is opened for one game after another.
+  let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
+
+  // Before the dialog draws: an opening that finds the game's move running draws its progress first,
+  // and the layer gives focus to "continue in background", not to a form that is about to go.
+  $effect.pre(() => {
     const target = $moveTarget;
     untrack(() => {
-      if (!target) {
-        loadedFor = '';
-        return;
-      }
-      if (loadedFor === target.gameId) return;
-      loadedFor = target.gameId;
+      opening += 1;
       picked = '';
       finalPath = '';
       diskInfo = null;
+      diskUnknown = false;
+      resolving = false;
+      starting = false;
+      cancelling = false;
       failure = '';
+      cancelFailure = '';
       jobId = null;
       startedJob = null;
+      if (!target) return;
       const existing = $moves.find(
-        (j) =>
-          j.scope === 'game' &&
-          j.gameId === target.gameId &&
-          j.stage !== 'done' &&
-          j.stage !== 'cancelled' &&
-          j.stage !== 'failed',
+        (j) => j.scope === 'game' && j.gameId === target.gameId && j.stage !== 'done' && j.stage !== 'cancelled' && j.stage !== 'failed',
       );
       if (existing) jobId = existing.id;
     });
@@ -70,8 +87,14 @@
     if (job?.stage === 'done') closeMoveGame();
   });
 
-  function message(err: unknown, fallback: string) {
-    return moveErrorText(err, fallback);
+  const browseButton = () => fieldBox?.querySelector<HTMLElement>('button') ?? null;
+
+  function named(what: 'start' | 'cancel', title: string, err: unknown): string {
+    const key = REASONS[errorCode(err)];
+    if (what === 'start') {
+      return key ? msg('modals.moveGameStartFailedForReason', { title, reason: msg(key) }) : msg('modals.moveGameStartFailedFor', { title });
+    }
+    return key ? msg('modals.moveGameCancelFailedForReason', { title, reason: msg(key) }) : msg('modals.moveGameCancelFailedFor', { title });
   }
 
   async function pickFolder() {
@@ -79,70 +102,107 @@
       toast(msg('modals.moveGameDesktopOnly'));
       return;
     }
-    picking = true;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    const id = game?.id;
+    if (!id) return;
+    let folder: string;
     try {
-      const folder = await selectMoveTargetFolder();
-      if (!folder) return;
-      picked = folder;
-      finalPath = '';
-      failure = '';
-      if (game) {
-        resolving = true;
-        try {
-          const path = await moveGameTarget(game.id, folder);
-          if (picked === folder) finalPath = path;
-        } catch (err) {
-          if (picked === folder) failure = message(err, msg('modals.moveGameStartFailed'));
-        } finally {
-          resolving = false;
-        }
-      }
-      try {
-        const info = await getStorageInfoFor(folder);
-        if (picked === folder) diskInfo = info;
-      } catch (err) {
-        if (picked !== folder) return;
-        diskInfo = null;
-        if (!failure) failure = message(err, msg('modals.moveGameFreeSpaceUnknown'));
-      }
+      folder = await selectMoveTargetFolder();
     } catch (err) {
-      toast(message(err, msg('modals.moveGameFolderDialogFailed')), 'danger');
+      if (heard()) failure = moveErrorText(err, msg('modals.moveGameFolderDialogFailed'));
+      return;
+    }
+    if (!heard() || !folder) return;
+    picked = folder;
+    finalPath = '';
+    failure = '';
+    diskInfo = null;
+    diskUnknown = false;
+    resolving = true;
+    const current = () => heard() && picked === folder;
+    await Promise.all([resolveTarget(id, folder, current), readDisk(folder, current)]);
+  }
+
+  async function resolveTarget(id: string, folder: string, current: () => boolean) {
+    try {
+      const path = await moveGameTarget(id, folder);
+      if (current()) finalPath = path;
+    } catch (err) {
+      if (current()) failure = moveErrorText(err, msg('modals.moveGameStartFailed'));
     } finally {
-      picking = false;
+      if (current()) resolving = false;
+    }
+  }
+
+  async function readDisk(folder: string, current: () => boolean) {
+    try {
+      const info = await getStorageInfoFor(folder);
+      if (current()) diskInfo = info;
+    } catch (err) {
+      // The free space is a fact of the folder here; Go measures it again when the move starts and
+      // refuses with relocate.free_space_unknown if it still cannot.
+      console.warn('move dialog: free space', err);
+      if (current()) diskUnknown = true;
     }
   }
 
   async function start() {
-    if (!game || !picked || !finalPath || starting) return;
+    if (!game || !picked || !finalPath || starting || resolving) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    const id = game.id;
+    const title = game.title;
+    const parent = picked;
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     starting = true;
     failure = '';
     try {
-      const created = await moveGame(game.id, picked);
+      const created = await moveGame(id, parent);
+      if (!heard()) {
+        toast(msg('modals.moveGameStartedFor', { title }));
+        return;
+      }
+      starting = false;
       jobId = created.id;
       startedJob = created;
+      await hand(() => document.getElementById(keepId));
     } catch (err) {
-      failure = message(err, msg('modals.moveGameStartFailed'));
-    } finally {
+      if (!heard()) {
+        toast(named('start', title, err), 'danger');
+        return;
+      }
       starting = false;
+      failure = moveErrorText(err, msg('modals.moveGameStartFailed'));
+      await hand(browseButton);
     }
   }
 
   async function cancel() {
     if (!job || cancelling) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    const id = job.id;
+    const title = job.title || game?.title || '';
     cancelling = true;
+    cancelFailure = '';
     try {
-      await cancelMove(job.id);
+      await cancelMove(id);
     } catch (err) {
-      toast(message(err, msg('modals.moveGameCancelFailed')), 'danger');
+      if (heard()) cancelFailure = moveErrorText(err, msg('modals.moveGameCancelFailed'));
+      else toast(named('cancel', title, err), 'danger');
     } finally {
-      cancelling = false;
+      if (heard()) cancelling = false;
     }
   }
 
   function retry() {
+    const hand = focusHandOff();
     jobId = null;
     startedJob = null;
     failure = '';
+    void hand(browseButton);
   }
 
   function close() {
@@ -153,7 +213,30 @@
     closeMoveGame();
     navigate('support', { view: 'new', topic: 'other' });
   }
+
+  const startReason = $derived.by(() => {
+    if (starting) return '';
+    if (!picked) return msg('transfers.moveErrNoTarget');
+    if (resolving) return msg('modals.moveGameChecking');
+    if (!finalPath) return failure || msg('modals.moveGameStartFailed');
+    return '';
+  });
 </script>
+
+{#snippet folderFacts()}
+  {#if resolving}
+    <span class="fact">{msg('modals.moveGameChecking')}</span>
+  {/if}
+  {#if diskInfo}
+    <span class="disk">
+      <HardDrive size="1.5rem" strokeWidth={1.8} aria-hidden="true" />
+      <span class="disk-name">{msg('modals.moveGameDiskName', { volume: diskInfo.volume || '—' })}{diskInfo.filesystem ? ` · ${diskInfo.filesystem}` : ''}</span>
+      <span class="disk-meta">{msg('modals.moveGameDiskFree', { free: bytesSize(diskInfo.freeBytes), total: bytesSize(diskInfo.totalBytes) })}</span>
+    </span>
+  {:else if diskUnknown}
+    <span class="fact">{msg('modals.moveGameFreeSpaceUnknown')}</span>
+  {/if}
+{/snippet}
 
 <!-- dismissible while resolving: it only reads where the game would go; closing drops the answer. -->
 <Modal dismissible={!(starting || cancelling)} open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="52rem" onclose={close}>
@@ -175,7 +258,11 @@
             <span>{movePercent(job)}%</span>
           </div>
           {#if job.currentFile}
-            <span class="field-sub mono">{truncateMiddle(job.currentFile, 64)}</span>
+            <span class="field-sub mono">{job.currentFile}</span>
+          {/if}
+          <p class="hint">{msg('modals.moveGameCancelNote')}</p>
+          {#if cancelFailure}
+            <Notice tone="danger" compact>{cancelFailure}</Notice>
           {/if}
         </div>
       {:else}
@@ -188,36 +275,21 @@
           {/if}
         {/if}
 
-        <div class="field">
-          <span class="field-label" id="{uid}-folder-label">{msg('modals.moveGameNewFolder')}</span>
-          <div class="pick-controls">
-            <input
-              class="input sm"
-              type="text"
-              readonly
-              aria-labelledby="{uid}-folder-label"
-              placeholder={msg('modals.moveGameFolderPlaceholder')}
-              value={picked}
-            />
-            <Button size="sm" busy={picking} onclick={pickFolder}>
-              <FolderOpen size="1.5rem" strokeWidth={1.8} />
-              {msg('modals.moveGameBrowse')}
-            </Button>
-          </div>
+        <div class="field" bind:this={fieldBox}>
+          <PathField
+            label={msg('modals.moveGameNewFolder')}
+            value={picked}
+            placeholder={msg('modals.moveGameFolderPlaceholder')}
+            browseLabel={msg('modals.moveGameBrowse')}
+            onbrowse={pickFolder}
+            error={failure}
+            disabledReason={starting ? msg('modals.actionRunning') : undefined}
+            facts={picked ? folderFacts : undefined}
+          />
         </div>
 
         {#if finalPath}
-          <p class="final" title={finalPath}>{msg('modals.moveGameWillMoveTo', { path: truncateMiddle(finalPath, 64) })}</p>
-        {/if}
-
-        {#if diskInfo}
-          <div class="disk">
-            <HardDrive size="1.7rem" strokeWidth={1.8} />
-            <div class="disk-text">
-              <span class="disk-name">{msg('modals.moveGameDiskName', { volume: diskInfo.volume || '—' })}{diskInfo.filesystem ? ` · ${diskInfo.filesystem}` : ''}</span>
-              <span class="disk-meta">{msg('modals.moveGameDiskFree', { free: bytesSize(diskInfo.freeBytes), total: bytesSize(diskInfo.totalBytes) })}</span>
-            </div>
-          </div>
+          <p class="final">{msg('modals.moveGameWillMoveTo', { path: finalPath })}</p>
         {/if}
 
         <Notice compact announce={false}>
@@ -226,25 +298,22 @@
         </Notice>
 
         <p class="hint">{msg('modals.moveGameHint')}</p>
-
-        {#if failure}
-          <Notice tone="danger" compact>{failure}</Notice>
-        {/if}
       {/if}
     </div>
   {/if}
 
   {#snippet footer()}
     {#if jobActive && job}
+      <Button id={keepId} data-autofocus onclick={close}>{msg('modals.moveGameInBackground')}</Button>
       <Button variant="danger" busy={cancelling} onclick={cancel}>
         {cancelling ? msg('modals.moveGameCancelling') : msg('modals.moveGameCancelMove')}
       </Button>
     {:else}
-      <Button onclick={close}>{msg('common.cancel')}</Button>
+      <Button disabled={starting} reason={starting ? msg('modals.actionRunning') : ''} onclick={close}>{msg('common.cancel')}</Button>
       {#if jobFailed}
         <Button variant="primary" onclick={retry}>{msg('modals.moveGameRetry')}</Button>
       {:else}
-        <Button variant="primary" disabled={!picked || !finalPath || resolving} busy={starting} onclick={start}>
+        <Button variant="primary" disabled={!!startReason} reason={startReason} busy={starting} onclick={start}>
           {starting ? msg('modals.moveGameStarting') : msg('modals.moveGameStart')}
         </Button>
       {/if}
@@ -288,29 +357,18 @@
     word-break: break-all;
   }
 
-  .pick-controls {
-    display: flex;
-    gap: var(--space-2);
-  }
-
-  .pick-controls .input {
-    flex: 1;
-  }
-
   .disk {
-    display: flex;
+    display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    gap: var(--space-2);
     color: var(--text-2);
   }
 
-  .disk-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+  .fact {
+    display: block;
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   .disk-name {
