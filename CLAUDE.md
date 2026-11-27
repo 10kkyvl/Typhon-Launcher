@@ -79,5 +79,7 @@ cd frontend && npm run check && npx vitest run <file>    # svelte-check + one te
 wails3 task common:generate:bindings                     # after changing exported service methods
 ```
 
-`internal/lan` tests fail while a release launcher holds port 42816; that is not a bug. Devmock without
+`internal/lan` tests fail while a release launcher holds port 42816; that is not a bug.
+On macOS `check:local` needs `127.0.0.2` on `lo0` (`sudo ifconfig lo0 alias 127.0.0.2`, lost at reboot);
+without it 17 `internal/download` tests fail and the later steps do not run. Devmock without
 `TYPHON_TEST_DATA_DIR` shares state with the native build; see `docs/DEBUGGING.md`.

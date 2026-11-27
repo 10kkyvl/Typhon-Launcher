@@ -36,3 +36,14 @@ Forbidden without an explicit user decision:
   commit made before the change that needs it.
 - Tests that lock a struct's mutex or write its private fields. Tests use the public API and the
   package's test helpers; if a helper is missing, add it to the helpers file.
+
+## Learned the hard way
+
+- A journal or set `add` that returns early on an existing key keeps the stale payload for the new
+  operation.
+- A recovery path is never stricter than the live path it finishes: a job left "for the next start"
+  for ever reads as an active operation.
+- A hold names what releases it: list every operation it can now refuse and the code the player gets.
+- One operation, one session: read the token when the operation starts and check it again right
+  before the request that carries the player's data (a log upload outlived a sign-out and went out
+  under the next account's token).

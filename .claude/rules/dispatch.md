@@ -34,9 +34,25 @@ worktree of its own, never in the tree being integrated: a mutation left in plac
 makes the orchestrator's own run lie (`.claude/agents/typhon-reviewer.md`). After each stage the
 orchestrator stops hung agents and background shells and removes the worktrees of merged or abandoned agent branches; a process this
 session did not start is never killed, only listed for the owner. An implementer's worktree gets
-its own `npm ci`; never symlink `node_modules` there (`common:build:frontend` runs `npm ci` and
-deletes the link's target).
+its own `frontend/node_modules`: `npm ci`, or a clone of the integration worktree's (`cp -Rc`, same lock
+file); never a symlink (an install or a `wails3 task` run through it empties the target for every
+agent). The orchestrator runs `check:local` only where `ls -ld frontend/node_modules` shows a real folder.
 A read-only agent's scratch copy goes in a folder it names itself, and its cleanup removes that
 folder only; the orchestrator's own scripts live outside the shared scratchpad. A review finding
 that repeats in a second package becomes a base helper or a guard before the next brief goes out,
 not a per-package fix (focus hand-off was fixed package by package until `utils/focusHandOff.ts`).
+## Integration
+
+Cherry-pick conflicts: resolve line by line in one script under `set -e` that asserts both sides, runs
+`cherry-pick --continue` itself and ends with a grep for markers; never a regex across the markers,
+never a resolver chained to the commit with `;`; afterwards compare `git diff --stat <base> HEAD -- docs`.
+Fix-up commits are folded into the commits they repair, onto the agent's own base commit (a branch name
+moves), so every commit on the line type-checks. An agent stopped by a server error or a usage limit is
+resumed with a message; its worktree and context are intact. Before a stage starts, `git fetch` and
+read the remote `v2/…` branches that touch the same area: another session may have built it.
+
+On the 2.0 line, under the user's standing authorization for it: integrated work that builds and
+passes its suites fast-forwards `2.0` and is pushed the same day, open review findings included (they
+are listed in the report and closed by the next rounds); no extra branches on origin; local working
+branches are `v2/feat|fix|refactor/<name>`. A lesson is committed to the instruction files when it is
+learned.

@@ -94,3 +94,29 @@ Add a line when a mistake repeats; drop one a guard now enforces.
   parents clip nothing (a guard pins only the carousel), and the class is on only while the stage
   shows the picture. Shoot such screens with wide art, without it (cover look) and in a light preset;
   jsdom sees none of the three.
+- After a split, a negative whole-screen claim ("never shows a raw error", "nothing sends without
+  asking") keeps reading the whole screen: glob the folder and pin the file list. A positive claim
+  follows its part.
+- State moved into a factory object with getters and setters: a field a part writes or binds needs a
+  setter, and neither svelte-check nor `bind:` notices a missing one: pin it with a source test; where
+  the outside only resets, expose a method.
+- A modifier class on a component's root must not reuse the class of one of its inner parts
+  (`class:fill` against the track's `.fill`): the part's rule paints the root, and only a headless
+  frame shows it. A layout fix made for one control is measured on the others it touches first.
+- `Intl.ListFormat(..., { type: 'unit' })` joins Russian items with bare spaces: use a catalogued
+  separator and assert the whole string in ru and en.
+- `inert` on a disabled region removes the control's value from the accessibility tree: keep the
+  native `disabled` there and guard that callers pass it.
+- Test a fix inside a screen through the gate that mounts it (`App.svelte` shows the splash while
+  `bootstrapping`; a test of the sign-in screen alone never ran in the app).
+- "Not known yet" is not "no": `facts?.portable ?? false` left a switch live while the read was pending
+  or had failed. A control whose safety depends on a read waits for it and says so.
+- "Not lost" / "back in the form" must hold across leaving the screen and under every order of
+  answers, or it is not said: every text the screen can hold has a named place, and the last resort is
+  a Copy action.
+- A toast that carries the player's text or an action is dismissed, and refuses, when the signed-in
+  account changes.
+- A store's page is cleared on every session change before the new session's first read; an event
+  heard while signed out is dropped.
+- A read dropped as "never used" is probed on the parent commit first (the startup friends read fed
+  every screen that does not check `friendsLoaded`).

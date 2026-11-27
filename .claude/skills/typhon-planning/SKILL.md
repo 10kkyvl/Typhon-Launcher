@@ -46,3 +46,7 @@ the implementation.
 - Dictate exact function names and files where the implementer can choose.
 - Write "test more thoroughly": name concrete scenarios and boundaries instead.
 - Inflate a five-line fix with documents and checklists: scale to the change.
+- State a fact about today's behaviour ("this read is never used") unprobed: put it to the implementer
+  as a question to answer first.
+- Put briefs, scout reports, probes or harnesses under `/tmp`: they go in
+  `~/Documents/typhon/output/<task>/`.

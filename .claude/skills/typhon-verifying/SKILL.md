@@ -29,6 +29,9 @@ request matching observable behaviour, with the evidence next to it.
 7. Destructive paths: a "killed between X and Y" test and a manual look at the on-disk state after
    recovery.
 8. Anything that cannot be checked here (Windows-only, a real game, CrossOver) is named, not hidden.
+9. "Is X on the branch?" is answered by `git log <range> -- <paths>`, not by the files being there.
+10. A commit or a push never rides in the same command as a test run with filtered output: gate it on
+    the run's own exit code.
 
 ## Report
 

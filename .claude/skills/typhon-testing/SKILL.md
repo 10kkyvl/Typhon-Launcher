@@ -49,6 +49,9 @@ or rewritten.
   `vi.mock('…/services/library', importOriginal)` leaves `stores/library` on the real service, because
   `services/library → stores/cloudsaves → stores/library` is an import cycle: import `stores/library`
   first.
+- A pin of a late answer delivers it AFTER the newer data, the reopening or the account change; in the
+  other order the test passes with the guard removed.
+- A surviving mutant is closed by a test that goes red on that mutant.
 
 ## When not to write one
 

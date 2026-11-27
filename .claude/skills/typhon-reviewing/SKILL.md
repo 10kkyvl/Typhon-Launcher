@@ -26,7 +26,10 @@ hypothesis without a reachable scenario is not a finding. Style, naming and anyt
    Refuted → not written.
 5. For a diff additionally: is there a test that fails without this change; was a test seam added to
    production; are the TS table, events and bindings updated (mistake 12); which invariants from
-   `.claude/rules/go-internal.md` are touched and how that is proven.
+   `.claude/rules/go-internal.md` are touched and how that is proven. After a code is added, list the
+   screens that can receive it and check each screen's own table: a library code can come back
+   unwrapped through another package's call (`lib/install/errorReach.test.ts`).
+6. Go mutants: `go test -overlay`; no tree is edited.
 
 ## Severity (project scale)
 
@@ -39,4 +42,6 @@ MEDIUM — edge case with a workaround.
 - Confirmed separate from plausible; duplicates merged by cause; ordered by consequence.
 - For the user: plain words, code lines and commands next to the evidence.
 - The orchestrator issues the verdict; `typhon-hunter` findings are re-checked by reading the code.
+- Probe tests are named in the report and kept in a durable work folder; the fix round adopts them as
+  its RED.
   When only an audit is requested, product code is not changed.

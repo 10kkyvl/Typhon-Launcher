@@ -34,6 +34,11 @@ A browser run that replaces Go's answers (a state devmock cannot reach) proves t
 each replaced call name the Go test that proves the real answer in that state, or list the pair as
 unverified. Example: a dialog passed such a run while the real `Status()` did not list the conflict
 the launch gate had blocked on.
+Its fixtures carry Go's real values: full codes (`diskusage.reason.only_copy`), the payload the store
+destructures, totals that add up; a wrong fixture reads as a product bug. The test server has no
+library folder and no account: patch the setting in the page's `GetSettings` answer (never in Go); a
+signed-in scene answers every call of the backend-bound packages in the page. Toasts are drawn by the
+live island (`.live-island .head .text`).
 
 ## Do not
 
