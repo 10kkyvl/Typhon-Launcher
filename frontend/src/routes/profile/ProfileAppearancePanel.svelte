@@ -117,6 +117,9 @@
   let panel = $state<HTMLElement>();
   // The remove button and the crop's leave with the cover: focus goes on to the upload.
   const uploadControl = () => panel?.querySelector<HTMLElement>('[data-cover-upload]');
+  // The crop dialog opened from nothing focused (WebKit does not focus a clicked button) gives focus to
+  // the control that opened it: Upload is held while "Adjust crop"'s own upload runs.
+  const cropOpener = () => (via === 'crop' ? panel?.querySelector<HTMLElement>('[data-cover-recrop]') : uploadControl());
   const locked = $derived(disabled || reading || uploading || cropOpen);
   const working = $derived(reading || uploading);
   onDestroy(() => { alive = false; sequence++; });
@@ -345,6 +348,7 @@
     {#if a.coverUrl}
       {#if originalSource}
         <Button
+          data-cover-recrop
           size="sm"
           variant="ghost"
           busy={uploading && via === 'crop'}
@@ -482,7 +486,7 @@
   </fieldset>
 </div>
 {#if cropOpen}
-  <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} returnFocus={uploadControl} />
+  <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} returnFocus={cropOpener} />
 {/if}
 {#if pending}
   <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} returnFocus={pending.returnFocus} />

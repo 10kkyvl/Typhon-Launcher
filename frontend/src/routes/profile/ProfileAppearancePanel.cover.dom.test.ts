@@ -61,9 +61,9 @@ const held = (control: HTMLElement) => ({
   disabled: control.matches(':disabled'),
 });
 
-async function editor() {
+async function editor(me: CurrentUser = still()) {
   authState.set('authenticated');
-  currentUser.set(still());
+  currentUser.set(me);
   const view = renderDom(Profile);
   await view.user.click(await screen.findByRole('button', { name: msg('profileStyle.edit') }));
   const input = document.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
@@ -205,6 +205,29 @@ describe("the cover's Upload through a still picture: read, crop, upload", () =>
     await waitFor(() => expect(screen.queryByRole('dialog', { name: msg('profile.cropTitle') })).toBeNull());
     await waitFor(() => expect(held(recrop)).toEqual({ focused: true, busy: true, disabled: false }));
     expect(uploadProfileCover).toHaveBeenCalledTimes(2);
+    answer.resolve('https://cdn.example/two.webp');
+    await waitFor(() => expect(held(recrop)).toEqual({ focused: true, busy: false, disabled: false }));
+  });
+});
+
+describe('"Adjust crop" pressed by a click that takes no focus (WebKit)', () => {
+  it('gets focus back when its dialog closes, and keeps it, busy, through the upload', async () => {
+    vi.mocked(uploadProfileCover).mockResolvedValueOnce('https://cdn.example/one.webp');
+    const { user, input } = await editor();
+    await user.click(uploadButton());
+    chosen(input, new File(['png'], 'cover.png', { type: 'image/png' }));
+    await user.click(within(await cropReady()).getByRole('button', { name: msg('profile.applyCrop') }));
+    const recrop = await screen.findByRole('button', { name: msg('profile.editCrop') });
+    const answer = pending<string>();
+    vi.mocked(uploadProfileCover).mockReturnValueOnce(answer.promise);
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    recrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(document.activeElement).toBe(document.body);
+    await user.click(within(await cropReady()).getByRole('button', { name: msg('profile.applyCrop') }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: msg('profile.cropTitle') })).toBeNull());
+    await waitFor(() => expect(held(recrop)).toEqual({ focused: true, busy: true, disabled: false }));
     answer.resolve('https://cdn.example/two.webp');
     await waitFor(() => expect(held(recrop)).toEqual({ focused: true, busy: false, disabled: false }));
   });
