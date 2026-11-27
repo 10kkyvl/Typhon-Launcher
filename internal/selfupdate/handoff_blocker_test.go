@@ -177,6 +177,11 @@ func TestInstallStableIsRefusedBeforeItDownloadsWhileWorkRuns(t *testing.T) {
 	st := newBetaStand(t, "1.2.0", "stable")
 	started := captureWorkerStarts(t)
 	s := st.service(t, t.TempDir(), "1.3.0-beta.1", nil)
+	t.Cleanup(func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("ServiceShutdown() = %v", err)
+		}
+	})
 	if _, err := s.CheckForUpdate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -252,5 +257,40 @@ func TestInstallStableRollbackIsRefusedWhileWorkRuns(t *testing.T) {
 	}
 	if err := s.ServiceShutdown(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Work can start while the stable release downloads: the ask before the
+// download said no, the one before the apply says yes. That refusal is not a
+// failed install.
+func TestInstallStableRefusedAfterItsDownloadLeavesNoErrorInTheStatus(t *testing.T) {
+	st := newBetaStand(t, "1.2.0", "stable")
+	started := captureWorkerStarts(t)
+	s := st.service(t, t.TempDir(), "1.3.0-beta.1", nil)
+	t.Cleanup(func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("ServiceShutdown() = %v", err)
+		}
+	})
+	if _, err := s.CheckForUpdate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	before := s.GetStatus()
+	var asks atomic.Int32
+	s.SetHandoffBlocker(func() bool { return asks.Add(1) > 1 })
+
+	status, err := s.InstallStable(context.Background(), "en")
+
+	if got := uierr.Code(err); got != "selfupdate.work_running" {
+		t.Fatalf("InstallStable() = %v (code %q), want selfupdate.work_running", err, got)
+	}
+	if status.ErrorCode != "" || status.Error != "" {
+		t.Errorf("the refusal left errorCode %q, error %q in the status, want none", status.ErrorCode, status.Error)
+	}
+	if status.State != before.State || status.StableOffer != before.StableOffer {
+		t.Errorf("status after the refusal = state %q, stable offer %q; before = state %q, stable offer %q", status.State, status.StableOffer, before.State, before.StableOffer)
+	}
+	if len(started.specs) != 0 {
+		t.Errorf("a refused install started %d workers", len(started.specs))
 	}
 }

@@ -957,7 +957,7 @@ func (s *Service) backToOffer(cause error) Status {
 	s.status.Notes = ""
 	s.status.PublishedAt = time.Time{}
 	s.status.TotalBytes, s.status.DownloadedBytes, s.status.Delta = 0, 0, false
-	if s.status.Error == "" && !errors.Is(cause, context.Canceled) {
+	if s.status.Error == "" && !errors.Is(cause, context.Canceled) && !errors.Is(cause, ErrWorkRunning) {
 		s.status = errorStatus(s.status, "install", cause)
 	}
 	status := s.status
