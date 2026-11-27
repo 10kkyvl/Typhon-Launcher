@@ -30,7 +30,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
   import AttachLogs from './AttachLogs.svelte';
-  import { account, forgetReply, keepReply, keptReply, onReplyBack, returnReply } from './drafts';
+  import { account, forgetReply, keepReply, keptReply, onReplyBack, returnReply, returnShownReply } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { messageWhen } from './messageTime';
   import { bodyCounter, copyAction, isSendShortcut, sendKeys, sessionGone } from './sending';
@@ -108,9 +108,17 @@
     const off = onLogUploadStatus((next) => {
       if (sending) upload = next;
     });
-    // A reply to this request whose send failed after the request was left comes back into an empty box.
-    const offBack = onReplyBack((ticket, text) => {
-      if (ticket === number && !reply.trim()) reply = text;
+    // A reply to this request whose send failed after the request was left comes back into an empty box;
+    // while a reply of this box is on its way it is kept, and the box takes it when that send ends.
+    const offBack = onReplyBack({
+      get ticket() {
+        return number;
+      },
+      empty: () => !reply.trim(),
+      sending: () => sending,
+      take: (text) => {
+        reply = text;
+      },
     });
     return () => {
       onScreen = false;
@@ -213,12 +221,16 @@
       if (onScreen) await load();
     } catch (err) {
       const changed = started && account() !== who;
-      const back = started && !changed && returnReply(number, text, who);
       if (!onScreen || changed) {
-        if (started && !changed && back) toast(msg('tickets.replyNotSentKept', { subject: about }), 'danger');
-        else if (started && !changed) toast(msg('tickets.replyNotSentNewer', { subject: about }), 'danger', copyAction(text.trim()));
+        const placed = started && !changed ? returnReply(number, text, who) : null;
+        if (placed === 'box' || placed === 'kept') toast(msg('tickets.replyNotSentKept', { subject: about }), 'danger');
+        else if (placed === 'after') toast(msg('tickets.replyNotSentAfter', { subject: about }), 'danger');
+        else if (placed) toast(msg('tickets.replyNotSentNotKept', { subject: about }), 'danger', copyAction(text.trim()));
         return;
       }
+      // The failed reply is what the box shows: one that came back meanwhile goes before it.
+      const box = started ? returnShownReply(number, text, who) : null;
+      if (box !== null) reply = box;
       sending = false;
       const said = supportErrorText(err, msg('tickets.replyFailed'));
       if (accountErrorField(err) === 'body') {

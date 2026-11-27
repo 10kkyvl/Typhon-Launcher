@@ -346,8 +346,8 @@ describe('the kept drafts themselves', () => {
 
   it('take a failed reply back only while nothing newer is kept in its request', () => {
     keepReply(7, 'Written after');
-    expect([returnReply(7, 'Failed', me), keptReply(7)]).toEqual([false, 'Written after']);
-    expect([returnReply(8, 'Failed', me), keptReply(8)]).toEqual([true, 'Failed']);
+    expect([returnReply(7, 'Failed', me), keptReply(7)]).toEqual(['none', 'Written after']);
+    expect([returnReply(8, 'Failed', me), keptReply(8)]).toEqual(['kept', 'Failed']);
   });
 
   it('take nothing back for a guest, nor for an account other than the one the send started under', () => {
@@ -362,14 +362,14 @@ describe('the kept drafts themselves', () => {
         sending: () => false,
         take: (back) => heard.push(back),
       }),
-      onReplyBack((...back) => heard.push(back)),
+      onReplyBack({ ticket: 7, empty: () => true, sending: () => false, take: (text) => heard.push(text) }),
     ];
     try {
       as(null);
-      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me)]).toEqual([null, false]);
+      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me)]).toEqual([null, null]);
       as(`${me}-other`);
-      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me), keptRequest(), keptReply(7)]).toEqual([null, false, null, '']);
-      expect([returnRequest(DRAFT, form, null), returnReply(7, 'Failed', null)]).toEqual([null, false]);
+      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me), keptRequest(), keptReply(7)]).toEqual([null, null, null, '']);
+      expect([returnRequest(DRAFT, form, null), returnReply(7, 'Failed', null)]).toEqual([null, null]);
       expect(heard).toEqual([]);
     } finally {
       for (const stop of off) stop();

@@ -212,7 +212,7 @@ describe('a reply on its way', () => {
     await settled();
     expect({ box: replyBox().value, said: said() }).toEqual({
       box: 'Newer.',
-      said: [['danger', msg('tickets.replyNotSentNewer', { subject: 'Game will not start' })]],
+      said: [['danger', msg('tickets.replyNotSentNotKept', { subject: 'Game will not start' })]],
     });
     cleanup();
     await opened();
@@ -273,9 +273,83 @@ describe('a reply on its way', () => {
     const after = replyBox().value;
     await two.user.type(replyBox(), ' Third.');
     expect({ meanwhile, after, kept: keptReply(7) }).toEqual({
-      meanwhile: { said: [['danger', msg('tickets.replyNotSentKept', { subject: 'Game will not start' })]], box: 'Second.' },
+      meanwhile: { said: [['danger', msg('tickets.replyNotSentAfter', { subject: 'Game will not start' })]], box: 'Second.' },
       after: 'First.',
       kept: 'First. Third.',
+    });
+  });
+
+  it('that fails on screen after an earlier one came back meanwhile takes both into the box, the earlier first, and keeps that', async () => {
+    const first = held<ReturnType<typeof message>>();
+    const second = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const one = await opened();
+    await send(one.user, 'First.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    const two = await opened();
+    await send(two.user, 'Second.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    second.reject(new AccountError('network_error'));
+    await screen.findByRole('alert');
+    const here = { box: replyBox().value, kept: keptReply(7) };
+    cleanup();
+    await opened();
+    expect({ here, reopened: replyBox().value }).toEqual({
+      here: { box: 'First.\n\nSecond.', kept: 'First.\n\nSecond.' },
+      reopened: 'First.\n\nSecond.',
+    });
+  });
+
+  it('that fails on screen after an earlier one came back meanwhile keeps both as the player goes on typing', async () => {
+    const first = held<ReturnType<typeof message>>();
+    const second = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const one = await opened();
+    await send(one.user, 'First.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    const two = await opened();
+    await send(two.user, 'Second.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    second.reject(new AccountError('network_error'));
+    await screen.findByRole('alert');
+    await two.user.type(replyBox(), '!');
+    expect(keptReply(7)).toBe('First.\n\nSecond.!');
+  });
+
+  it('that fails after its view was left, an earlier one having come back meanwhile, is not kept: it says so and copies it', async () => {
+    const first = held<ReturnType<typeof message>>();
+    const second = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const one = await opened();
+    await send(one.user, 'First.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    const two = await opened();
+    await send(two.user, 'Second.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    cleanup();
+    second.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const toasted = { said: said(), actions: actions() };
+    const written = await copyFromToast(1);
+    await opened();
+    expect({ ...toasted, written, reopened: replyBox().value }).toEqual({
+      said: [
+        ['danger', msg('tickets.replyNotSentAfter', { subject: 'Game will not start' })],
+        ['danger', msg('tickets.replyNotSentNotKept', { subject: 'Game will not start' })],
+      ],
+      actions: [null, msg('tickets.copyText')],
+      written: ['Second.'],
+      reopened: 'First.',
     });
   });
 

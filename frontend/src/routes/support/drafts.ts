@@ -330,24 +330,63 @@ export function forgetReply(ticket: number): void {
   settle();
 }
 
-const replyBack = new Set<(ticket: number, text: string) => void>();
+/** An open reply box, as a reply that comes back sees it. */
+export interface ReplyBox {
+  readonly ticket: number;
+  /** It holds nothing but white space. */
+  empty(): boolean;
+  /** A reply of its own is on its way: the box shows it, and the kept slot is free. */
+  sending(): boolean;
+  /** Puts the text in the box. */
+  take(text: string): void;
+}
 
-export function onReplyBack(listener: (ticket: number, text: string) => void): () => void {
-  replyBack.add(listener);
-  return () => replyBack.delete(listener);
+const boxes = new Set<ReplyBox>();
+
+export function onReplyBack(box: ReplyBox): () => void {
+  boxes.add(box);
+  return () => boxes.delete(box);
 }
 
 /**
- * A send of a reply, started under the account `from`, failed: it is kept again, unless a newer reply is
- * kept in that request by now or another account (or no one) is signed in.
+ * Where a reply that came back went: into the open box (`box`); kept for its request, no box being open
+ * (`kept`); kept for the box once the reply on its way from it is done (`after`); nowhere, the request
+ * keeping another reply (`none`).
  */
-export function returnReply(ticket: number, text: string, from: string | null): boolean {
+export type ReplyPlaced = 'box' | 'kept' | 'after' | 'none';
+
+/**
+ * A send of a reply, started under the account `from`, failed after its view was left: it is kept
+ * again unless another reply is kept in that request by now. Answers where it went, or null once
+ * another account (or no one) is signed in: nothing is kept or heard then.
+ */
+export function returnReply(ticket: number, text: string, from: string | null): ReplyPlaced | null {
   // The text is lost with its account's session rather than given to whoever signed in since.
-  if (!from || owner() !== from) return false;
-  if (keptReply(ticket)) return false;
+  if (!from || owner() !== from) return null;
+  if (keptReply(ticket)) return 'none';
+  const box = [...boxes].find((open) => open.ticket === ticket);
+  // A box that shows text nothing keeps would overwrite the slot at its next key.
+  if (box && !box.empty() && !box.sending()) return 'none';
   const into = writable();
-  if (!into) return false;
+  if (!into) return null;
   into.replies.set(ticket, text);
-  for (const listener of [...replyBack]) listener(ticket, text);
-  return true;
+  if (!box) return 'kept';
+  if (box.sending()) return 'after';
+  box.take(text);
+  return 'box';
+}
+
+/**
+ * A send of a reply failed with its box on screen: the box keeps it, after a reply of this request that
+ * came back while it was on its way (the earlier first, a blank line between: neither was sent), and
+ * what the box then holds is what is kept. Answers that text, or null under another account.
+ */
+export function returnShownReply(ticket: number, text: string, from: string | null): string | null {
+  if (!from || owner() !== from) return null;
+  const into = writable();
+  if (!into) return null;
+  const before = into.replies.get(ticket);
+  const box = before ? `${before.trimEnd()}\n\n${text}` : text;
+  into.replies.set(ticket, box);
+  return box;
 }

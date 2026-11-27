@@ -115,7 +115,7 @@ async function requestOnItsWay() {
 function hearing() {
   const heard: unknown[] = [];
   const offs = [
-    onReplyBack((...back) => heard.push(back)),
+    onReplyBack({ ticket: 7, empty: () => true, sending: () => false, take: (text) => heard.push(text) }),
     onRequestBack({
       by: {},
       free: () => {
