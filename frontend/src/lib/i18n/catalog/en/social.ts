@@ -351,4 +351,6 @@ export const social: Record<SocialKey, Message> = {
   // 7-F1 friends
   'social.friendsPlayingNowHeading': 'Playing now',
   'social.friendsOthersHeading': 'Other friends',
+  'social.friendsSendRequestFailedTo': 'Could not send the request to {name}',
+  'social.friendsFailedWhy': '{what}. {why}',
 };

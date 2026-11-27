@@ -349,6 +349,8 @@ export const social = {
   // 7-F1 friends
   'social.friendsPlayingNowHeading': 'Играют сейчас',
   'social.friendsOthersHeading': 'Остальные друзья',
+  'social.friendsSendRequestFailedTo': 'Не удалось отправить заявку игроку {name}',
+  'social.friendsFailedWhy': '{what}. {why}',
 } as const;
 
 export type SocialKey = keyof typeof social;
