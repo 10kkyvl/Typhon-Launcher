@@ -31,6 +31,7 @@ vi.mock('../../lib/stores/messaging', async (original) => (await import('./profi
 
 // A cover that does not follow the pointer: the parallax asks for matchMedia, which jsdom lacks.
 const me: CurrentUser = player({ appearance: { parallax: false } as ProfileAppearance });
+const other: CurrentUser = player({ appearance: { parallax: false } as ProfileAppearance }, { id: 'u2', username: 'bob', displayName: 'Bob', email: 'bob@example.com' });
 const button = (name: string) => screen.getByRole('button', { name });
 const about = () => screen.getByRole('textbox', { name: msg('social.aboutTitle') }) as HTMLTextAreaElement;
 const said = () => get(toasts).map((toast) => [toast.kind, toast.message]);
@@ -148,6 +149,38 @@ describe('a header save still on its way when the page is left', () => {
 
     await waitFor(() => expect(said()).toContainEqual(['success', msg('social.profileUpdated')]));
     expect(said().filter(([kind]) => kind === 'danger')).toEqual([]);
+  });
+});
+
+describe('a header save answered after another account signed in', () => {
+  // A pressed Save and left; A signed out and B signed in; then the server answers A's save.
+  async function answeredUnderAnother(answer: (late: ReturnType<typeof pending<CurrentUser>>) => void) {
+    const late = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(late.promise);
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+    await user.click(button(msg('common.save')));
+
+    navigate('catalog');
+    confirmLeave();
+    unmount();
+    currentUser.set(other);
+    answer(late);
+
+    await waitFor(() => expect(get(savingProfile)).toBe(false));
+    await new Promise((settled) => setTimeout(settled, 0));
+  }
+
+  it('saved by the server, says nothing to the other account, and never that it was not saved', async () => {
+    await answeredUnderAnother((late) => late.resolve({ ...me, bio: 'Hi' }));
+
+    expect(said()).toEqual([]);
+  });
+
+  it('failed, says nothing about the first account to the other one', async () => {
+    await answeredUnderAnother((late) => late.reject(new AccountError('network_error')));
+
+    expect(said()).toEqual([]);
   });
 });
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { Calendar, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import { frameLook } from '../../lib/profile/frameLook';
@@ -167,6 +168,7 @@
   async function save() {
     if (!$currentUser || !dirty || $savingProfile || $isOffline) return;
     const handOff = focusHandOff();
+    const presser = $currentUser.id;
     fieldErrors = {};
     const patch: { displayName?: string; username?: string; bio?: string } = {};
     if (draft.displayName !== $currentUser.displayName) patch.displayName = draft.displayName;
@@ -180,6 +182,9 @@
       close(handOff);
       toast(msg('social.profileUpdated'), 'success');
     } catch (err) {
+      // The answer belongs to the account that pressed Save: under another one it says nothing, and the
+      // store reports a save the server accepted as `unauthenticated` once the account has changed.
+      if (get(currentUser)?.id !== presser) return;
       if (alive) await refuse(err);
       else toast(msg('profile.headerNotSaved', { reason: accountErrorText(err) }), 'danger');
     }
