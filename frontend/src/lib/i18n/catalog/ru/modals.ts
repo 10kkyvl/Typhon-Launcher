@@ -410,6 +410,9 @@ export const modals = {
   'modals.installConfirm': 'Подтвердить',
   'modals.installDismiss': 'Убрать',
   'modals.installManually': 'Установить вручную',
+  'modals.installReadFailed': 'Не удалось разобрать пакет',
+  'modals.installStartedFor': 'Установка «{title}» начата',
+  'modals.installRefusedFor': '«{title}»: {reason}',
   // LegalAcceptanceScreen.svelte
   'modals.legalAcceptTitle': 'Условия использования Typhon',
   'modals.legalAcceptUpdated': 'Условия обновлены {date}',
