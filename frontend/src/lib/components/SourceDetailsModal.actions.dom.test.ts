@@ -190,6 +190,24 @@ describe('SourceDetailsModal: refresh, enable and remove', () => {
 });
 
 describe('SourceDetailsModal: an action answering after the dialog was opened for another source', () => {
+  it('a removal that went through for the source before closes nothing: the dialog stays on the new one', async () => {
+    const removing = held<void>();
+    vi.mocked(removeSource).mockReturnValueOnce(removing.promise);
+    const { dialog, keys, rerender } = await openDialog();
+    await keys.click(button(dialog, msg('common.delete')));
+    const confirm = screen.getByRole('dialog', { name: msg('transfers.sourcesRemoveAction') });
+    await keys.click(within(confirm).getByRole('button', { name: msg('transfers.sourcesRemoveAction') }));
+    await rerender({ open: true, sourceId: 's2' });
+    const next = await screen.findByRole('dialog', { name: 'DODI' });
+
+    removing.resolve();
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(vi.mocked(removeSource).mock.calls).toEqual([['s1']]);
+    expect(screen.getByRole('dialog', { name: 'DODI' })).toBe(next);
+  });
+
   it('leaves the new source’s Refresh ready and reads nothing for it again', async () => {
     const refreshing = held<RefreshSummary>();
     vi.mocked(refreshSource).mockReturnValueOnce(refreshing.promise);

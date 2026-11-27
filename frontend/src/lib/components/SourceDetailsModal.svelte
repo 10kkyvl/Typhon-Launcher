@@ -261,8 +261,9 @@
     pending = {
       prompt: { ...removeSourcePrompt(current.name), text: msg('modals.sourceDetailsRemoveText', { name: current.name }) },
       run: async () => {
+        const mine = opening;
         await removeSource(current.id);
-        open = false;
+        if (mine === opening) open = false;
       },
     };
   }
