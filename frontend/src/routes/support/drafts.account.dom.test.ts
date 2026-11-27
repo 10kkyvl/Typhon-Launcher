@@ -6,7 +6,7 @@ import { AccountError, type CurrentUser } from '../../lib/services/account';
 import { createTicket, getTicket, replyTicket, ticketLimits, unreadTickets } from '../../lib/services/support';
 import { navigate, resetHistory, route } from '../../lib/stores/router';
 import { unreadReplies } from '../../lib/stores/support';
-import { toasts } from '../../lib/stores/toasts';
+import { holdToasts, toasts } from '../../lib/stores/toasts';
 import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
@@ -57,6 +57,7 @@ afterEach(() => {
   cleanup();
   expect(calls).toEqual([]);
   for (const mock of [ticketLimits, getTicket, replyTicket, createTicket, unreadTickets]) vi.mocked(mock).mockReset();
+  holdToasts(false);
   toasts.set([]);
   currentUser.set(null);
   authState.set('bootstrapping');
@@ -276,5 +277,90 @@ describe('a new request of A that fails once B is signed in', () => {
     first.resolve(ticket(41, 'Private matter of A'));
     await settled();
     expect(said()).toEqual([['success', msg('tickets.created', { ref: 'T-41' })]]);
+  });
+});
+
+describe("A's support toasts once A signs out", () => {
+  /** A's request fails beside text A typed: its toast names it and offers Copy. */
+  async function offeredToast() {
+    const first = await requestOnItsWay();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Typed meanwhile');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    const action = get(toasts)[0]?.action;
+    if (!action) throw new Error('the toast offers no Copy');
+    return action;
+  }
+
+  /** Runs `action` over a clipboard the test reads; answers what was written. */
+  async function copied(action: { run: () => void }) {
+    const written: string[] = [];
+    const before = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void written.push(text) }, configurable: true });
+    try {
+      action.run();
+      await settled();
+    } finally {
+      if (before) Object.defineProperty(navigator, 'clipboard', before);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+    return written;
+  }
+
+  it('are gone at the sign-out, even while a dialog holds toasts with an action, and B sees none of them', async () => {
+    await offeredToast();
+    const raised = said();
+    holdToasts(true);
+    cleanup();
+    signOut();
+    const signedOut = said();
+    signIn(`${a}-b`);
+    holdToasts(false);
+    expect({ raised, signedOut, underB: said() }).toEqual({
+      raised: [['danger', msg('tickets.requestNotSentOffered', { subject: 'Private matter of A' })]],
+      signedOut: [],
+      underB: [],
+    });
+  });
+
+  it('copy nothing and say nothing under B, even when the action is run after all', async () => {
+    const action = await offeredToast();
+    cleanup();
+    signOut();
+    signIn(`${a}-b`);
+    expect({ written: await copied(action), said: said() }).toEqual({ written: [], said: [] });
+  });
+
+  it('a reply not kept, and a request created, are gone at the sign-out too', async () => {
+    const first = await replyOnItsWay();
+    const view = await opened();
+    await view.user.type(replyBox(), 'Newer.');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    cleanup();
+    const created = await requestOnItsWay();
+    created.resolve(ticket(41, 'Private matter of A'));
+    await settled();
+    const raised = said();
+    signOut();
+    expect({ raised, signedOut: said() }).toEqual({
+      raised: [
+        ['danger', msg('tickets.replyNotSentNotKept', { subject: 'Game will not start' })],
+        ['success', msg('tickets.created', { ref: 'T-41' })],
+      ],
+      signedOut: [],
+    });
+  });
+
+  it('stay, and copy, while A is signed in', async () => {
+    const action = await offeredToast();
+    expect({ written: await copied(action), said: said() }).toEqual({
+      written: ['Private matter of A\n\nText of A.'],
+      said: [
+        ['danger', msg('tickets.requestNotSentOffered', { subject: 'Private matter of A' })],
+        ['success', msg('tickets.textCopied')],
+      ],
+    });
   });
 });

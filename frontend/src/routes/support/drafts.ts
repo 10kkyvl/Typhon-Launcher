@@ -1,4 +1,5 @@
 import { get, writable as store, type Readable } from 'svelte/store';
+import { dismissToast, queuedToasts, toast, toasts, type ToastAction, type ToastKind } from '../../lib/stores/toasts';
 import { currentUser } from '../../lib/stores/user';
 
 /**
@@ -60,23 +61,51 @@ export function account(): string | null {
   return owner();
 }
 
+/** Support toasts that name a text or a request of the account they were raised under, by toast id. */
+const raised = new Map<number, string>();
+
+function idle() {
+  if (kept || raised.size > 0) return;
+  stopWatching?.();
+  stopWatching = null;
+}
+
 function forget() {
   const requests = Boolean(kept?.request || kept?.spare);
   kept = null;
-  stopWatching?.();
-  stopWatching = null;
+  idle();
   if (requests) changed();
 }
 
-// Watched only while something is kept: a sign-in of another account drops it at once. Signing out
-// (the session gone) keeps it for the sign-in that follows.
+// Watched only while something is kept or said: a sign-in of another account drops what is kept at
+// once; signing out (the session gone) keeps it for the sign-in that follows. A toast of an account
+// goes as soon as that account is no longer the one signed in, whatever holds it on screen.
 function watchOwner() {
   if (stopWatching) return;
   const stop = currentUser.subscribe((user) => {
+    for (const [id, from] of raised) {
+      if (user?.id === from) continue;
+      raised.delete(id);
+      dismissToast(id);
+    }
     if (kept && user && user.id !== kept.owner) forget();
+    else idle();
   });
-  if (kept) stopWatching = stop;
+  if (kept || raised.size > 0) stopWatching = stop;
   else stop();
+}
+
+/**
+ * Shows a support toast that names a text, a subject or a request of the account `from`: it is
+ * dismissed once another account, or no one, is signed in.
+ */
+export function accountToast(from: string | null, message: string, kind: ToastKind, action?: ToastAction): void {
+  const id = toast(message, kind, action);
+  if (!from) return;
+  const live = new Set([...get(toasts), ...queuedToasts()].map((item) => item.id));
+  for (const gone of raised.keys()) if (!live.has(gone)) raised.delete(gone);
+  raised.set(id, from);
+  watchOwner();
 }
 
 // While something is kept its owner is watched, so a signed-in player is its owner: no one signed in

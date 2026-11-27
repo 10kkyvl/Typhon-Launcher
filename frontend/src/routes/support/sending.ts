@@ -4,6 +4,7 @@ import type { TextAreaCounter } from '../../lib/components/textArea';
 import { bodyLength } from '../../lib/support/draft';
 import { toast, type ToastAction } from '../../lib/stores/toasts';
 import { composing, onMacKeyboard } from '../../lib/utils/shortcut';
+import { account } from './drafts';
 
 /** A support call found the session gone: a Retry cannot help, signing in again can. */
 export function sessionGone(err: unknown): boolean {
@@ -29,13 +30,15 @@ export function isPlainEnter(event: KeyboardEvent): boolean {
 }
 
 /**
- * The action of a toast about a failed send whose text did not go back as a form's content (newer text
- * holds the form): it copies the text, so it is not lost with the toast or the offer. The result is said.
+ * The action of a toast about a text of the account `from` that is not in a form's fields (only
+ * offered, or kept nowhere): it copies the text, so it is not lost with the toast or the offer. The
+ * result is said. Under another account, or no one, it copies and says nothing.
  */
-export function copyAction(text: string): ToastAction {
+export function copyAction(text: string, from: string | null): ToastAction {
   return {
     label: msg('tickets.copyText'),
     run: () => {
+      if (!from || account() !== from) return;
       void copyText(text);
     },
   };

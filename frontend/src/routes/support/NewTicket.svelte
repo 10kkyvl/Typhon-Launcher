@@ -27,12 +27,12 @@
   import { logsStageText, uploadPercent } from '../../lib/support/progress';
   import { attachLogsByDefault, isTopic, parseTopic, topicOptions } from '../../lib/support/topics';
   import { goBack, navigate } from '../../lib/stores/router';
-  import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
   import {
     account,
+    accountToast,
     forgetRequest,
     keepRequest,
     offeredRequest,
@@ -185,17 +185,18 @@
   function sayDropped(text: RequestDraft) {
     const subject = text.subject.trim();
     const words = subject ? msg('tickets.draftDropped', { subject }) : msg('tickets.draftDroppedNoSubject');
-    toast(words, 'danger', copyAction(`${subject}\n\n${text.body.trim()}`.trim()));
+    const who = account();
+    accountToast(who, words, 'danger', copyAction(`${subject}\n\n${text.body.trim()}`.trim(), who));
   }
 
   // A failed send's toast says only where its text is: "back in the form" when the form holds it (or
   // will open with it); one only offered, or kept nowhere, says so and offers to copy it.
-  function sayPlaced(placed: Placed, sent: RequestDraft) {
+  function sayPlaced(placed: Placed, sent: RequestDraft, who: string | null) {
     const subject = sent.subject.trim();
-    const copy = copyAction(`${subject}\n\n${sent.body.trim()}`);
-    if (placed === 'form' || placed === 'kept') toast(msg('tickets.requestNotSentKept', { subject }), 'danger');
-    else if (placed === 'offered') toast(msg('tickets.requestNotSentOffered', { subject }), 'danger', copy);
-    else toast(msg('tickets.requestNotSentNotKept', { subject }), 'danger', copy);
+    const copy = copyAction(`${subject}\n\n${sent.body.trim()}`, who);
+    if (placed === 'form' || placed === 'kept') accountToast(who, msg('tickets.requestNotSentKept', { subject }), 'danger');
+    else if (placed === 'offered') accountToast(who, msg('tickets.requestNotSentOffered', { subject }), 'danger', copy);
+    else accountToast(who, msg('tickets.requestNotSentNotKept', { subject }), 'danger', copy);
   }
 
   // What the player typed is not lost to a restore: it is offered in turn, from what is kept.
@@ -295,14 +296,14 @@
       if (account() !== who) return;
       forgetRequest(me);
       announceCreated(outcome.value, onScreen, {
-        notify: (text) => toast(text, 'success'),
+        notify: (text) => accountToast(who, text, 'success'),
         open: (number) => navigate('support', { ticket: String(number) }),
       });
     } catch (err) {
       const changed = started && account() !== who;
       if (!onScreen || changed) {
         const placed = started && !changed ? returnRequest(sent, me, who) : null;
-        if (placed) sayPlaced(placed, sent);
+        if (placed) sayPlaced(placed, sent, who);
         return;
       }
       // The failed text is what the form shows: it is the draft, whatever was kept as one meanwhile.

@@ -30,7 +30,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
   import AttachLogs from './AttachLogs.svelte';
-  import { account, forgetReply, keepReply, keptReply, onReplyBack, returnReply, returnShownReply } from './drafts';
+  import { account, accountToast, forgetReply, keepReply, keptReply, onReplyBack, returnReply, returnShownReply } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { messageWhen } from './messageTime';
   import { bodyCounter, copyAction, isSendShortcut, sendKeys, sessionGone } from './sending';
@@ -223,9 +223,9 @@
       const changed = started && account() !== who;
       if (!onScreen || changed) {
         const placed = started && !changed ? returnReply(number, text, who) : null;
-        if (placed === 'box' || placed === 'kept') toast(msg('tickets.replyNotSentKept', { subject: about }), 'danger');
-        else if (placed === 'after') toast(msg('tickets.replyNotSentAfter', { subject: about }), 'danger');
-        else if (placed) toast(msg('tickets.replyNotSentNotKept', { subject: about }), 'danger', copyAction(text.trim()));
+        if (placed === 'box' || placed === 'kept') accountToast(who, msg('tickets.replyNotSentKept', { subject: about }), 'danger');
+        else if (placed === 'after') accountToast(who, msg('tickets.replyNotSentAfter', { subject: about }), 'danger');
+        else if (placed) accountToast(who, msg('tickets.replyNotSentNotKept', { subject: about }), 'danger', copyAction(text.trim(), who));
         return;
       }
       // The failed reply is what the box shows: one that came back meanwhile goes before it.
