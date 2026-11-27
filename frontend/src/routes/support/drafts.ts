@@ -122,6 +122,17 @@ function writable(): Kept | null {
   return kept;
 }
 
+/**
+ * What is kept for `from` while no one is signed in: a text on its way when the session ended comes
+ * back to it there, for the sign-in that follows. Another account's sign-in drops it (the watcher).
+ */
+function keptWhileOut(from: string): Kept | null {
+  if (kept && kept.owner !== from) return null;
+  kept ??= { owner: from, request: null, spare: null, replies: new Map() };
+  watchOwner();
+  return kept;
+}
+
 function settle() {
   if (kept && !kept.request && !kept.spare && kept.replies.size === 0) forget();
 }
@@ -286,11 +297,22 @@ export type Placed = 'form' | 'kept' | 'offered' | 'none';
  * A send of `draft` from `by`, started under the account `from`, failed after its form was left: the
  * text goes to the first free place. An open form that holds nothing takes it into its fields; else the
  * draft, when no form is open or the open one sends its own; else the spare. Answers where it went, or
- * null once another account (or no one) is signed in: nothing is kept or heard then.
+ * null when there is no one to tell: with no one signed in it is kept for `from` all the same (the
+ * draft, else the spare), and under another account it is not kept at all.
  */
 export function returnRequest(draft: RequestDraft, by: Writer, from: string | null): Placed | null {
+  if (!from) return null;
+  if (!owner()) {
+    const into = keptWhileOut(from);
+    if (!into) return null;
+    if (!into.request) into.request = { ...slot(draft), by };
+    else if (!into.spare) into.spare = slot(draft);
+    else return null;
+    changed();
+    return null;
+  }
   // The text is lost with its account's session rather than given to whoever signed in since.
-  if (!from || owner() !== from) return null;
+  if (owner() !== from) return null;
   const into = writable();
   if (!into) return null;
   const open = [...forms].filter((form) => form.by !== by);
@@ -386,12 +408,19 @@ export type ReplyPlaced = 'box' | 'kept' | 'after' | 'none';
 
 /**
  * A send of a reply, started under the account `from`, failed after its view was left: it is kept
- * again unless another reply is kept in that request by now. Answers where it went, or null once
- * another account (or no one) is signed in: nothing is kept or heard then.
+ * again unless another reply is kept in that request by now. Answers where it went, or null when
+ * there is no one to tell: with no one signed in it is kept for `from` all the same, and under another
+ * account it is not kept at all.
  */
 export function returnReply(ticket: number, text: string, from: string | null): ReplyPlaced | null {
+  if (!from) return null;
+  if (!owner()) {
+    const into = keptWhileOut(from);
+    if (into && !into.replies.has(ticket)) into.replies.set(ticket, text);
+    return null;
+  }
   // The text is lost with its account's session rather than given to whoever signed in since.
-  if (!from || owner() !== from) return null;
+  if (owner() !== from) return null;
   if (keptReply(ticket)) return 'none';
   const box = [...boxes].find((open) => open.ticket === ticket);
   // A box that shows text nothing keeps would overwrite the slot at its next key.

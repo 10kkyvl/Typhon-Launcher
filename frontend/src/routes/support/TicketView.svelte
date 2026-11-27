@@ -228,7 +228,8 @@
     } catch (err) {
       const changed = started && account() !== who;
       if (!onScreen || changed) {
-        const placed = started && !changed ? returnReply(number, text, who) : null;
+        // Under another account nothing is kept; with no one signed in it is kept for `who`, unsaid.
+        const placed = started ? returnReply(number, text, who) : null;
         if (placed === 'box' || placed === 'kept') accountToast(who, msg('tickets.replyNotSentKept', { subject: about }), 'danger');
         else if (placed === 'after') accountToast(who, msg('tickets.replyNotSentAfter', { subject: about }), 'danger');
         else if (placed) accountToast(who, msg('tickets.replyNotSentNotKept', { subject: about }), 'danger', copyAction(text.trim(), who));

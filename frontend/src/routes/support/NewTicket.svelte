@@ -302,7 +302,8 @@
     } catch (err) {
       const changed = started && account() !== who;
       if (!onScreen || changed) {
-        const placed = started && !changed ? returnRequest(sent, me, who) : null;
+        // Under another account nothing is kept; with no one signed in it is kept for `who`, unsaid.
+        const placed = started ? returnRequest(sent, me, who) : null;
         if (placed) sayPlaced(placed, sent, who);
         return;
       }

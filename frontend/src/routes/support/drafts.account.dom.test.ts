@@ -11,7 +11,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { held, LIMITS, message, thread, ticket } from '../../lib/testing/supportTesting';
-import { keptReply, keptRequest, onReplyBack, onRequestBack } from './drafts';
+import { keptReply, keptRequest, onReplyBack, onRequestBack, spareRequest } from './drafts';
 import Support from './Support.svelte';
 import TicketView from './TicketView.svelte';
 
@@ -218,14 +218,41 @@ describe('a reply of A that fails once B is signed in', () => {
     expect({ said: said(), reads: vi.mocked(getTicket).mock.calls.length - reads }).toEqual({ said: [['success', msg('tickets.replySent')]], reads: 0 });
   });
 
-  it('that fails with no one signed in is kept for no one and says nothing', async () => {
+  it('that fails with no one signed in says nothing then, and is in the box when A signs in again', async () => {
     const first = await replyOnItsWay();
     signOut();
     first.reject(new AccountError('unauthenticated'));
     await settled();
-    expect(said()).toEqual([]);
+    const signedOut = said();
+    signIn(a);
+    await opened();
+    expect({ signedOut, box: replyBox().value, said: said() }).toEqual({ signedOut: [], box: 'From A.', said: [] });
+  });
+
+  it('that fails with no one signed in is not B\'s: B finds an empty box, and A finds nothing after B', async () => {
+    const first = await replyOnItsWay();
+    signOut();
+    first.reject(new AccountError('unauthenticated'));
+    await settled();
     signIn(`${a}-b`);
-    expect(keptReply(7)).toBe('');
+    await opened();
+    const underB = { box: replyBox().value, kept: keptReply(7), said: said() };
+    cleanup();
+    signOut();
+    signIn(a);
+    expect({ underB, underA: keptReply(7) }).toEqual({ underB: { box: '', kept: '', said: [] }, underA: '' });
+  });
+
+  it('that fails with no one signed in leaves a reply A kept in that request as it was', async () => {
+    const first = await replyOnItsWay();
+    const { user } = await opened();
+    await user.type(replyBox(), 'Kept meanwhile.');
+    cleanup();
+    signOut();
+    first.reject(new AccountError('unauthenticated'));
+    await settled();
+    signIn(a);
+    expect(keptReply(7)).toBe('Kept meanwhile.');
   });
 });
 
@@ -260,6 +287,52 @@ describe('a new request of A that fails once B is signed in', () => {
     expect(said()).toEqual([['danger', msg('tickets.requestNotSentKept', { subject: 'Private matter of A' })]]);
     await newRequest();
     expect([subjectField().value, bodyField().value]).toEqual(['Private matter of A', 'Text of A.']);
+  });
+
+  it('that fails with no one signed in says nothing then, and is in the form when A signs in again', async () => {
+    const first = await requestOnItsWay();
+    signOut();
+    first.reject(new AccountError('unauthenticated'));
+    await settled();
+    const signedOut = said();
+    signIn(a);
+    await newRequest();
+    expect({ signedOut, form: [subjectField().value, bodyField().value], said: said() }).toEqual({
+      signedOut: [],
+      form: ['Private matter of A', 'Text of A.'],
+      said: [],
+    });
+  });
+
+  it('that fails with no one signed in is not B\'s: B finds an empty form, and A finds nothing after B', async () => {
+    const first = await requestOnItsWay();
+    signOut();
+    first.reject(new AccountError('unauthenticated'));
+    await settled();
+    signIn(`${a}-b`);
+    await newRequest();
+    const underB = { form: [subjectField().value, bodyField().value], kept: keptRequest(), spare: spareRequest(), said: said() };
+    cleanup();
+    signOut();
+    signIn(a);
+    expect({ underB, underA: [keptRequest(), spareRequest()] }).toEqual({
+      underB: { form: ['', ''], kept: null, spare: null, said: [] },
+      underA: [null, null],
+    });
+  });
+
+  it('that fails with no one signed in, a draft of A kept, is offered beside it when A signs in again', async () => {
+    const first = await requestOnItsWay();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Typed meanwhile');
+    cleanup();
+    signOut();
+    first.reject(new AccountError('unauthenticated'));
+    await settled();
+    signIn(a);
+    await newRequest();
+    const offered = screen.getByRole('button', { name: msg('tickets.draftRestore') }).closest('.notice')?.textContent ?? '';
+    expect({ subject: subjectField().value, names: offered.includes('Private matter of A') }).toEqual({ subject: 'Typed meanwhile', names: true });
   });
 
   it('that is created once B is signed in says nothing of it and opens nothing', async () => {
