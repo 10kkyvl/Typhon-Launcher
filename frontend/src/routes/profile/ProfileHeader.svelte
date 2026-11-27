@@ -129,11 +129,15 @@
     { id: 'signout', label: busy ? msg('social.signingOut') : msg('social.signOutLabel'), danger: true, separator: true },
   ]);
 
-  function startEditing() {
+  // An inline form opened by a command takes focus in its first field; the menu has given focus back
+  // to its trigger by now, and the fields leaving give it back there again.
+  async function startEditing() {
     if (!$currentUser || $isOffline) return;
     draft = { displayName: $currentUser.displayName, username: $currentUser.username, bio: $currentUser.bio };
     fieldErrors = {};
     editing = true;
+    await tick();
+    displayNameField?.focus();
   }
 
   function close(handOff: ReturnType<typeof focusHandOff>) {
@@ -184,7 +188,7 @@
   function onMenu(id: string) {
     if (id === 'edit') {
       if ($isOffline) toast(msg('social.editRequiresConnection'));
-      else startEditing();
+      else void startEditing();
     } else if (id === 'settings') {
       onsettings();
     } else if (id === 'signout') {

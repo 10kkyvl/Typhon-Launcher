@@ -107,6 +107,28 @@ describe("the header's editor on the base fields", () => {
   });
 });
 
+describe('opening the editor', () => {
+  it('puts focus in its first field, the display name; Cancel gives it back to More', async () => {
+    const { user } = await headerEditor();
+
+    await waitFor(() => expect(document.activeElement).toBe(field(msg('social.displayNameLabel'))));
+
+    await user.click(button(msg('common.cancel')));
+    await waitFor(() => expect(document.activeElement).toBe(opener()));
+  });
+
+  it('opened by the keyboard from More, puts focus in the display name', async () => {
+    const { user } = renderDom(Profile);
+    opener().focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: msg('social.editProfileLabel') })).toBeTruthy());
+    screen.getByRole('menuitem', { name: msg('social.editProfileLabel') }).focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(document.activeElement).toBe(field(msg('social.displayNameLabel'))));
+  });
+});
+
 describe('Save and Cancel', () => {
   it('Save stays focused and busy until the answer, sends once, and focus goes back to the opener', async () => {
     const answer = pending<CurrentUser>();
