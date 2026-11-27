@@ -122,6 +122,34 @@ describe('the privacy dialog', () => {
     expect(updateProfile).not.toHaveBeenCalled();
   });
 
+  it('"Delete account" focused when the connection goes keeps the focus, refused with its reason, and opens nothing', async () => {
+    const { user } = open();
+    const remove = inDialog(msg('profile.deleteAccountButton'));
+    remove.focus();
+
+    authState.set('offline');
+
+    await waitFor(() => expect(remove.getAttribute('aria-disabled')).toBe('true'));
+    expect(remove.matches(':disabled')).toBe(false);
+    expect(document.activeElement).toBe(remove);
+    expect(description(remove)).toBe(msg('social.settingsRequireConnection'));
+    await user.keyboard('{Enter}');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  });
+
+  it('"Delete account" while a save waits is refused with the saving words', async () => {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const { user } = open();
+    await user.click(inDialog(msg('common.save')));
+    const remove = inDialog(msg('profile.deleteAccountButton'));
+
+    expect({ ariaDisabled: remove.getAttribute('aria-disabled'), disabled: remove.matches(':disabled') }).toEqual({ ariaDisabled: 'true', disabled: false });
+    expect(description(remove)).toBe(msg('social.saving'));
+    answer.resolve(me);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
   it('Cancel closes without sending', async () => {
     const { user } = open();
 

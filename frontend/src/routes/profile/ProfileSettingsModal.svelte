@@ -134,7 +134,13 @@
   <div class="group danger">
     <h4>{msg('profile.dangerZoneTitle')}</h4>
     <p class="hint">{msg('profile.deleteAccountIntro')}</p>
-    <Button variant="danger" disabled={$isOffline || $savingProfile} onclick={() => (deleting = true)}>
+    <!-- Refused in the Tab order, not disabled: it can hold focus when the connection goes. -->
+    <Button
+      variant="danger"
+      disabled={$isOffline || $savingProfile}
+      reason={$isOffline ? msg('social.settingsRequireConnection') : $savingProfile ? msg('social.saving') : ''}
+      onclick={() => (deleting = true)}
+    >
       {msg('profile.deleteAccountButton')}
     </Button>
   </div>
