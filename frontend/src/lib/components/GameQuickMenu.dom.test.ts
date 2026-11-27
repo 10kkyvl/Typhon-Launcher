@@ -9,9 +9,11 @@ import { closeGameMenu, gameMenu } from '../stores/gameMenu';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import GameMenuHarness from '../testing/GameMenuHarness.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
@@ -42,10 +44,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeGameMenu();
   libraryGames.set([]);
   toasts.set([]);
   app.remove();
+  expect(sent).toEqual([]);
 });
 
 describe('the game leaving the library while its menu is open', () => {

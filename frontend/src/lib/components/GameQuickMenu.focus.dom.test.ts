@@ -7,11 +7,13 @@ import { closeGameMenu, openGameMenu } from '../stores/gameMenu';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import GameMenuHarness from '../testing/GameMenuHarness.svelte';
 import GameCard from './GameCard.svelte';
 import GameQuickMenu from './GameQuickMenu.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
@@ -34,11 +36,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeGameMenu();
   libraryGames.set([]);
   toasts.set([]);
   vi.clearAllMocks();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 // The list the menu was opened from drops the game (hidden from "All", shown again from "Hidden").

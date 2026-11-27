@@ -6,9 +6,11 @@ import { AccountError } from '../../lib/services/account';
 import { report as sendReport, vote, type Review } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
+import { resetBindings } from '../../lib/testing/fakeBinding';
+import { sentToGo } from '../../lib/testing/gameDialogsTesting';
 import ReviewCard from './ReviewCard.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/gameDialogsTesting')).goRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/reviews', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/reviews')>()),
@@ -37,10 +39,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   vi.mocked(vote).mockReset();
   vi.mocked(sendReport).mockReset();
   toasts.set([]);
   vi.restoreAllMocks();
+  expect(sent).toEqual([]);
 });
 
 describe('ReviewCard: voting', () => {

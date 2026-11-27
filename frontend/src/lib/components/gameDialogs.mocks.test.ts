@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest';
+import { wailsRuntime } from '../testing/dom';
 
 /**
  * The game and library dialogs reach Go through calls that act: `library.PlayGame` starts a real game
  * (the random pick), the review report, the metadata search and the log export leave the device, and
- * the rest write the library. So every test that mounts one of them runs on the Wails runtime of
+ * the rest write the library. So every test that imports one of them runs on the Wails runtime of
  * lib/testing/gameDialogsTesting.ts, whose `Call` records what a binding sends instead of sending it,
  * and asserts that nothing was sent: a call that slipped past the test's own mocks, through a real
  * service function or a binding, fails the test rather than reaching Go. The runtime is mocked once,
  * by exactly that factory; a second mock, an unmock or a real module taken with vi.importActual could
- * put the real runtime back, so each is refused. A source tripwire: what a mock answers is each
- * test's to get right.
+ * put the real runtime back, so each is refused. An import counts in any quote kind, and as `import(`.
+ *
+ * A test of a component that mounts a dialog at any depth (the game page, the library, the game menu,
+ * the review card, the shell) runs the dialog's code too. Those that open a dialog's flow (`HELD`)
+ * are held to the same rule. The rest run on lib/testing/dom.ts's runtime, which has no `Call`,
+ * `Browser` or `Clipboard`, so a binding that slips past their mocks throws before anything is sent;
+ * such a test may give it a `Call` only as a `vi.fn` written in place. A source tripwire: what a mock
+ * answers is each test's to get right.
  */
 const tests = import.meta.glob<string>(['../../**/*.test.ts', '!../../**/node_modules/**'], { query: '?raw', import: 'default', eager: true });
+const components = import.meta.glob<string>(['../../**/*.svelte', '!../../**/node_modules/**'], { query: '?raw', import: 'default', eager: true });
 
 const DIALOGS = [
   'GameStatusModal',
@@ -27,10 +35,37 @@ const DIALOGS = [
   'GameDialogsHarness',
 ];
 
-const MOUNTS = new RegExp(String.raw`\bimport\s+\w+\s+from\s+'[^']*\/(?:${DIALOGS.join('|')})\.svelte'`);
+/** An import of one of `names` (`import X from`, `import X, { y } from`, `import(`), in any quote kind. */
+const importOf = (names: string[]) =>
+  new RegExp(String.raw`(?:\bimport\b[^'"\x60;]*?\bfrom\s*|\bimport\s*\(\s*)(['"\x60])[^'"\x60]*\/(?:${names.join('|')})\.svelte\1`);
+
+const MOUNTS = importOf(DIALOGS);
+
+const base = (path: string) => (path.split('/').pop() ?? path).replace(/\.svelte$/, '');
+
+/** The components that mount a dialog, at any depth, by file name. */
+function wrappers(): string[] {
+  const found = new Set<string>();
+  for (;;) {
+    const mounts = importOf([...DIALOGS, ...found]);
+    const more = Object.entries(components)
+      .filter(([path, source]) => !DIALOGS.includes(base(path)) && !found.has(base(path)) && mounts.test(source))
+      .map(([path]) => base(path));
+    if (more.length === 0) return [...found].sort();
+    for (const name of more) found.add(name);
+  }
+}
+
+const WRAPPERS = wrappers();
+const WRAPS = importOf(WRAPPERS);
+
+// Tests of a wrapper that open a dialog's flow: the status and tags dialogs from the game menu, the
+// report from a review card.
+const HELD = ['./ContextMenu.dom.test.ts', './GameQuickMenu.dom.test.ts', './GameQuickMenu.focus.dom.test.ts', '../../routes/game/ReviewCard.dom.test.ts'];
 
 const RUNTIME = /^vi\.mock\('@wailsio\/runtime', async \(\) => \(await import\('(?:\.\.\/)+(?:lib\/)?testing\/gameDialogsTesting'\)\)\.goRuntime\(\)\);$/m;
-const ANY_RUNTIME = /\bvi\.(?:mock|doMock|unmock|doUnmock)\(\s*['"]@wailsio\/runtime['"]/g;
+const ANY_RUNTIME = /\bvi\.(?:mock|doMock|unmock|doUnmock)\(\s*['"`]@wailsio\/runtime['"`]/g;
+const REAL_MODULE = (source: string) => !/\bimportActual\b/.test(source) && !/\bvi\.(?:unmock|doUnmock)\(/.test(source);
 
 // A mock runs what the test writes in place, never a function handed over by reference (the real one
 // taken from vi.importActual), and no module is taken whole by a path the guard cannot read.
@@ -39,13 +74,25 @@ const BY_REFERENCE = /\.mockImplementation(?:Once)?\(\s*(?!async\b|function\b|\(
 const NEEDED: [string, (source: string) => boolean][] = [
   ['the recording runtime, once', (source) => RUNTIME.test(source) && (source.match(ANY_RUNTIME) ?? []).length === 1],
   ['nothing sent to Go', (source) => /const sent = sentToGo\(\);/.test(source) && /expect\(sent\)\.toEqual\(\[\]\);/.test(source)],
-  ['no real module behind a mock', (source) => !/\bimportActual\b/.test(source) && !/\bvi\.(?:unmock|doUnmock)\(/.test(source)],
+  ['no real module behind a mock', REAL_MODULE],
   ['no real function behind a mock', (source) => !BY_REFERENCE.test(source)],
 ];
 
 const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source)).map(([what]) => what);
 
-const mounting = Object.entries(tests).filter(([, source]) => MOUNTS.test(source));
+const PLAIN = /\(await import\(['"`](?:\.\.?\/)+(?:lib\/)?testing\/dom['"`]\)\)\.wailsRuntime\(\)/;
+
+const NEEDED_PLAIN: [string, (source: string) => boolean][] = [
+  ['the runtime of lib/testing/dom.ts, once', (source) => PLAIN.test(source) && (source.match(ANY_RUNTIME) ?? []).length === 1],
+  ['no Browser or Clipboard given to it', (source) => !/\b(?:Browser|Clipboard)\b/.test(source)],
+  ['a Call only as a vi.fn in place', (source) => (source.match(/\bCall\b/g) ?? []).length === (source.match(/\bCall: \{\s*ByID: vi\.fn\(/g) ?? []).length],
+  ['no real module behind a mock', REAL_MODULE],
+];
+
+const missingPlain = (source: string) => NEEDED_PLAIN.filter(([, holds]) => !holds(source)).map(([what]) => what);
+
+const mounting = Object.entries(tests).filter(([path, source]) => MOUNTS.test(source) || HELD.includes(path));
+const wrapping = Object.entries(tests).filter(([path, source]) => !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
 
 const SOUND = [
   "import GameTagsModal from './GameTagsModal.svelte';",
@@ -60,9 +107,26 @@ const SOUND = [
 ].join('\n');
 
 describe('tests that mount a game or library dialog', () => {
+  it.each([
+    "import GameCrashModal from './GameCrashModal.svelte';",
+    'import GameCrashModal from "./GameCrashModal.svelte";',
+    'import GameCrashModal from `./GameCrashModal.svelte`;',
+    "import GameCrashModal, { type Props } from './GameCrashModal.svelte';",
+    "const { default: GameCrashModal } = await import('./GameCrashModal.svelte');",
+    'const dialog = await import ("../components/GameCrashModal.svelte");',
+  ])('are found by %s', (line) => {
+    expect(MOUNTS.test(line)).toBe(true);
+  });
+
+  it.each([
+    "import source from './GameCrashModal.svelte?raw';",
+    'import source from "./GameCrashModal.svelte?raw";',
+    "import NotADialog from './GameCrashModalHost.svelte';",
+  ])('leave out %s', (line) => {
+    expect(MOUNTS.test(line)).toBe(false);
+  });
+
   it('are found', () => {
-    expect(MOUNTS.test("import GameCrashModal from './GameCrashModal.svelte';")).toBe(true);
-    expect(MOUNTS.test("import source from './GameCrashModal.svelte?raw';")).toBe(false);
     expect(mounting.map(([path]) => path)).toEqual(
       expect.arrayContaining([
         './GameStatusModal.dom.test.ts',
@@ -75,6 +139,7 @@ describe('tests that mount a game or library dialog', () => {
         './MetadataMatchModal.dom.test.ts',
         '../../routes/game/ReportReviewModal.dom.test.ts',
         '../../routes/game/GameDialogs.dom.test.ts',
+        ...HELD,
       ]),
     );
   });
@@ -93,6 +158,7 @@ describe('tests that mount a game or library dialog', () => {
 
   it.each([
     ['a second mock', "vi.doMock('@wailsio/runtime', async (original) => await original());"],
+    ['a second mock in other quotes', 'vi.doMock("@wailsio/runtime", async (original) => await original());'],
     ['an unmock', "vi.unmock('@wailsio/runtime');"],
   ])('refuse %s of the runtime', (_case, line) => {
     expect(missing(`${SOUND}\n${line}`)).toContain('the recording runtime, once');
@@ -115,5 +181,41 @@ describe('tests that mount a game or library dialog', () => {
 
   it('run on the recording runtime and see nothing sent to Go', () => {
     expect(mounting.map(([path, source]) => [path, missing(source)]).filter(([, gaps]) => gaps.length > 0)).toEqual([]);
+  });
+});
+
+describe('tests of a component that mounts a game or library dialog', () => {
+  it('know the components that mount one, at any depth', () => {
+    expect(WRAPPERS).toEqual(expect.arrayContaining(['App', 'GameDetails', 'GameQuickMenu', 'GameReviews', 'GameSaves', 'Library', 'ReviewCard']));
+    expect(WRAPPERS).not.toContain('GameCard');
+  });
+
+  it('are found', () => {
+    expect(wrapping.map(([path]) => path)).toEqual(
+      expect.arrayContaining([
+        '../../routes/game/GameReviews.dom.test.ts',
+        '../../routes/game/GameDetails.data.dom.test.ts',
+        '../../routes/library/Library.state.dom.test.ts',
+        '../../routes/gameMenuOpeners.dom.test.ts',
+      ]),
+    );
+  });
+
+  it('rely on a runtime that has no Call, Browser or Clipboard', () => {
+    expect(Object.keys(wailsRuntime()).filter((key) => ['Call', 'Browser', 'Clipboard'].includes(key))).toEqual([]);
+  });
+
+  it('refuse another runtime, a Browser or Clipboard, or a Call that is not a vi.fn in place', () => {
+    const plain = "vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());";
+    expect(missingPlain(plain)).toEqual([]);
+    expect(missingPlain(`${plain}\nconst extra = { Call: { ByID: vi.fn(() => new Promise(() => {})) } };`)).toEqual([]);
+    expect(missingPlain(`${plain}\nconst extra = { Browser: { OpenURL: vi.fn() } };`)).toContain('no Browser or Clipboard given to it');
+    expect(missingPlain(`${plain}\nconst extra = { Call: real.Call };`)).toContain('a Call only as a vi.fn in place');
+    expect(missingPlain(`${plain}\nvi.doUnmock('@wailsio/runtime');`)).toContain('the runtime of lib/testing/dom.ts, once');
+    expect(missingPlain("vi.mock('@wailsio/runtime', async () => ({ Events: { On: vi.fn() } }));")).toContain('the runtime of lib/testing/dom.ts, once');
+  });
+
+  it('run on the recording runtime, or on the one that cannot send', () => {
+    expect(wrapping.map(([path, source]) => [path, missingPlain(source)]).filter(([, gaps]) => gaps.length > 0)).toEqual([]);
   });
 });
