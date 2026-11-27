@@ -280,7 +280,7 @@
             </Button>
           {:else}
             <Button size="sm" data-profile-edit onclick={onedit}>{msg('profileStyle.edit')}</Button>
-            <AvatarEditor size="sm" disabled={$isOffline} />
+            <AvatarEditor size="sm" disabled={$isOffline} reason={$isOffline ? msg('social.editRequiresConnection') : ''} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ props })}
                 <IconButton {...props} data-header-menu label={msg('social.moreLabel')}>

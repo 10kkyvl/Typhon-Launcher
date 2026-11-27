@@ -17,14 +17,28 @@
   import type { CropRect } from '../utils/crop';
   import { msg } from '../i18n';
 
-  let { size = 'md', disabled = false }: { size?: 'md' | 'sm'; disabled?: boolean } = $props();
+  let {
+    size = 'md',
+    disabled = false,
+    reason,
+  }: {
+    size?: 'md' | 'sm';
+    disabled?: boolean;
+    /**
+     * Why the buttons are refused while `disabled`: they then stay in the Tab order and say it, as a
+     * Button with a reason does. Pass '' while there is none. Without it, `disabled` disables them.
+     */
+    reason?: string;
+  } = $props();
 
   let cropOpen = $state(false);
   let cropSrc = $state('');
   let failure = $state('');
   let confirmingRemove = $state(false);
 
-  const busy = $derived($pickingAvatar || $uploadingAvatar || $removingAvatar);
+  // The picker is "Change avatar"'s own work: it stays busy under the focus it was pressed with. An
+  // upload or a removal runs in a dialog of its own, which holds the focus meanwhile.
+  const working = $derived($uploadingAvatar || $removingAvatar);
 
   async function pick() {
     failure = '';
@@ -63,10 +77,17 @@
 
 <div class="avatar-editor">
   <div class="buttons">
-    <Button {size} disabled={busy || disabled} onclick={pick}>
+    <Button {size} busy={$pickingAvatar} disabled={working || disabled} reason={reason === undefined ? undefined : disabled ? reason : ''} onclick={pick}>
       {$pickingAvatar ? msg('ui.avatarPicking') : msg('ui.avatarChange')}
     </Button>
-    <Button {size} variant="danger" disabled={busy || disabled || !$currentUser?.avatarUrl} onclick={() => (confirmingRemove = true)}>
+    <!-- With no avatar there is nothing to remove: it stays plainly disabled. -->
+    <Button
+      {size}
+      variant="danger"
+      disabled={$pickingAvatar || working || disabled || !$currentUser?.avatarUrl}
+      reason={reason === undefined ? undefined : disabled && $currentUser?.avatarUrl ? reason : ''}
+      onclick={() => (confirmingRemove = true)}
+    >
       {$removingAvatar ? msg('ui.avatarRemoving') : msg('ui.avatarRemove')}
     </Button>
   </div>
