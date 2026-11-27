@@ -249,6 +249,15 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.moveGameRetry': 'Try again',
   'modals.moveGameStarting': 'Starting…',
   'modals.moveGameStart': 'Move',
+  'modals.moveGameChecking': 'Checking the folder…',
+  'modals.moveGameInBackground': 'Continue in background',
+  'modals.moveGameCancelNote':
+    'Cancelling before the copy and its check finish leaves the game in its current folder. Once the files are in the new place, the move finishes.',
+  'modals.moveGameStartedFor': 'Moving "{title}" has started',
+  'modals.moveGameStartFailedFor': 'Could not start moving "{title}"',
+  'modals.moveGameStartFailedForReason': 'Could not start moving "{title}": {reason}',
+  'modals.moveGameCancelFailedFor': 'Could not cancel moving "{title}"',
+  'modals.moveGameCancelFailedForReason': 'Could not cancel moving "{title}": {reason}',
 
   // MetadataMatchModal.svelte
   'modals.metadataMatchApplied': '"{title}" matched with IGDB',

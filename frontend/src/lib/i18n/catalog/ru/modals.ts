@@ -246,6 +246,15 @@ export const modals = {
   'modals.moveGameRetry': 'Попробовать снова',
   'modals.moveGameStarting': 'Начинаем…',
   'modals.moveGameStart': 'Перенести',
+  'modals.moveGameChecking': 'Проверяем папку…',
+  'modals.moveGameInBackground': 'Продолжить в фоне',
+  'modals.moveGameCancelNote':
+    'Отмена до конца копирования и проверки оставит игру в прежней папке. Если файлы уже на новом месте, перенос завершится.',
+  'modals.moveGameStartedFor': 'Перенос «{title}» начат',
+  'modals.moveGameStartFailedFor': 'Не удалось начать перенос «{title}»',
+  'modals.moveGameStartFailedForReason': 'Не удалось начать перенос «{title}»: {reason}',
+  'modals.moveGameCancelFailedFor': 'Не удалось отменить перенос «{title}»',
+  'modals.moveGameCancelFailedForReason': 'Не удалось отменить перенос «{title}»: {reason}',
 
   // MetadataMatchModal.svelte
   'modals.metadataMatchApplied': '«{title}» сопоставлена с IGDB',
