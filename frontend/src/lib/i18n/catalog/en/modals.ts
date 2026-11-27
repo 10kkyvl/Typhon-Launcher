@@ -277,6 +277,13 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.releaseMatchSearching': 'Searching…',
   'modals.releaseMatchIgnore': 'Ignore',
   'modals.releaseMatchConfirm': 'Confirm',
+  'modals.releaseMatchCandidatesFailed': 'Could not look up the candidates: {reason}',
+  'modals.releaseMatchSearchFailed': 'The search failed: {reason}',
+  'modals.releaseMatchConfirmFailed': 'The match was not saved: {reason}',
+  'modals.releaseMatchIgnoreFailed': 'Could not ignore the release: {reason}',
+  'modals.releaseMatchUnknownReason': 'unknown reason, try again',
+  'modals.releaseMatchFailedFor': 'Could not match the release “{title}”: {reason}',
+  'modals.releaseMatchIgnoreFailedFor': 'Could not ignore the release “{title}”: {reason}',
 
   // SourceDetailsModal.svelte
   'modals.sourceDetailsStatusAll': 'All',

@@ -274,6 +274,13 @@ export const modals = {
   'modals.releaseMatchSearching': 'Поиск…',
   'modals.releaseMatchIgnore': 'Игнорировать',
   'modals.releaseMatchConfirm': 'Подтвердить',
+  'modals.releaseMatchCandidatesFailed': 'Не удалось найти кандидатов: {reason}',
+  'modals.releaseMatchSearchFailed': 'Поиск не удался: {reason}',
+  'modals.releaseMatchConfirmFailed': 'Сопоставление не сохранено: {reason}',
+  'modals.releaseMatchIgnoreFailed': 'Не удалось проигнорировать релиз: {reason}',
+  'modals.releaseMatchUnknownReason': 'причина неизвестна, попробуйте ещё раз',
+  'modals.releaseMatchFailedFor': 'Не удалось сопоставить релиз «{title}»: {reason}',
+  'modals.releaseMatchIgnoreFailedFor': 'Не удалось проигнорировать релиз «{title}»: {reason}',
 
   // SourceDetailsModal.svelte
   'modals.sourceDetailsStatusAll': 'Все',
