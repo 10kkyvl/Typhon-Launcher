@@ -17,6 +17,7 @@ export const modals = {
   'modals.legalLoadFailed': 'Не удалось загрузить документ. Попробуйте ещё раз.',
   'modals.legalUnavailableOutsideApp': 'Правовые документы недоступны вне приложения.',
   'modals.legalLoading': 'Загрузка документа…',
+  'modals.legalEmpty': 'В документе нет текста',
 
   // SourcesNoticeModal.svelte
   'modals.sourcesNoticeReviewTitle': 'Уведомление об источниках',

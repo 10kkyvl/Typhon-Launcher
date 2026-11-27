@@ -20,6 +20,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.legalLoadFailed': 'Failed to load the document. Please try again.',
   'modals.legalUnavailableOutsideApp': 'Legal documents are unavailable outside the app.',
   'modals.legalLoading': 'Loading document…',
+  'modals.legalEmpty': 'The document has no text',
 
   // SourcesNoticeModal.svelte
   'modals.sourcesNoticeReviewTitle': 'Sources notice',
