@@ -78,6 +78,8 @@
   let previewRetrying = $state(false);
   let previewSeq = 0;
   let snapshotRetrying = $state(false);
+  // The header's own editor holds typed text: it keeps no draft, so leaving loses it.
+  let headerUnsaved = $state(false);
   // The store starts on an empty snapshot and says nothing of having been answered: the figures are
   // known once it holds another one (a read of an earlier visit) or once a read set it while the page
   // is on screen.
@@ -329,13 +331,14 @@
     if (editing && $currentUser?.id !== owner) leaveEditing();
   });
 
+  // One guard for both editors: the router holds one, and the player gets one question.
   $effect(() => {
-    if (!dirty) return;
+    if (!dirty && !headerUnsaved) return;
     return registerLeaveGuard({
-      dirty: () => dirty,
+      dirty: () => dirty || headerUnsaved,
       prompt: () => ({
         title: msg('profile.leaveTitle'),
-        text: msg('profile.leaveText'),
+        text: msg(headerUnsaved ? (dirty ? 'profile.leaveBothText' : 'profile.leaveHeaderText') : 'profile.leaveText'),
         confirm: msg('profile.leaveConfirm'),
         cancel: msg('profile.leaveStay'),
       }),
@@ -456,6 +459,7 @@
           statusText={shown.statusText ?? ''}
           onedit={startEditing}
           onsettings={openSettings}
+          bind:unsaved={headerUnsaved}
         />
 
         {#if !isGuest && !answered && !editing}

@@ -6,7 +6,7 @@ import raw from './Profile.svelte?raw';
 const source = raw.replace(/\r\n/g, '\n');
 
 function harness(register: typeof registerLeaveGuard) {
-  const start = source.indexOf('  $effect(() => {\n    if (!dirty) return;');
+  const start = source.indexOf('  $effect(() => {\n    if (!dirty && !headerUnsaved) return;');
   const end = source.indexOf('\n  $effect(', start + 1);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
@@ -17,6 +17,7 @@ function harness(register: typeof registerLeaveGuard) {
     'msg',
     `
     let dirty = false;
+    const headerUnsaved = false;
     ${js}
     return { setDirty: (value) => { dirty = value; } };
   `,

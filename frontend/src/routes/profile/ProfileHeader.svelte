@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { Calendar, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import { frameLook } from '../../lib/profile/frameLook';
@@ -45,6 +45,7 @@
     appearance,
     statusEmoji,
     statusText,
+    unsaved = $bindable(false),
   }: {
     running: GameRef[];
     /** The figures, or null until the first read has answered them. */
@@ -59,6 +60,8 @@
     appearance: ProfileAppearance;
     statusEmoji: string;
     statusText: string;
+    /** The editor is open with text the player typed and has not saved: the page asks before it is left. */
+    unsaved?: boolean;
   } = $props();
 
   const uid = $props.id();
@@ -109,6 +112,16 @@
   );
 
   const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
+
+  $effect(() => {
+    unsaved = editing && dirty;
+  });
+
+  // A save answered after the page was left has no editor to speak in.
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   const menuItems = $derived<MenuItem[]>([
     { id: 'edit', label: msg('social.editProfileLabel') },
@@ -163,7 +176,8 @@
       close(handOff);
       toast(msg('social.profileUpdated'), 'success');
     } catch (err) {
-      await refuse(err);
+      if (alive) await refuse(err);
+      else toast(msg('profile.headerNotSaved', { reason: accountErrorText(err) }), 'danger');
     }
   }
 
