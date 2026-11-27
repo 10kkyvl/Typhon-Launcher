@@ -14,6 +14,7 @@
     uploadingAvatar,
   } from '../stores/user';
   import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
   import type { CropRect } from '../utils/crop';
   import { msg } from '../i18n';
 
@@ -35,6 +36,10 @@
   let cropSrc = $state('');
   let failure = $state('');
   let confirmingRemove = $state(false);
+  let buttons = $state<HTMLElement>();
+  // Set by a removal that went through: "Remove avatar", the dialog's opener, is disabled by then, so
+  // focus goes on to "Change avatar" once the dialog has closed.
+  let removed: ReturnType<typeof focusHandOff> | null = null;
 
   // The picker is "Change avatar"'s own work: it stays busy under the focus it was pressed with. An
   // upload or a removal runs in a dialog of its own, which holds the focus meanwhile.
@@ -66,18 +71,27 @@
 
   async function remove() {
     failure = '';
+    const handOff = focusHandOff();
     try {
       await deleteAvatar();
+      removed = handOff;
       toast(msg('ui.avatarDeleted'), 'success');
     } catch (err) {
       failure = accountErrorText(err, msg('ui.avatarDeleteFailed'));
     }
   }
+
+  function closeRemove() {
+    confirmingRemove = false;
+    const handOff = removed;
+    removed = null;
+    if (handOff) void handOff(() => buttons?.querySelector<HTMLElement>('[data-avatar-change]'));
+  }
 </script>
 
 <div class="avatar-editor">
-  <div class="buttons">
-    <Button {size} busy={$pickingAvatar} disabled={working || disabled} reason={reason === undefined ? undefined : disabled ? reason : ''} onclick={pick}>
+  <div class="buttons" bind:this={buttons}>
+    <Button {size} data-avatar-change busy={$pickingAvatar} disabled={working || disabled} reason={reason === undefined ? undefined : disabled ? reason : ''} onclick={pick}>
       {$pickingAvatar ? msg('ui.avatarPicking') : msg('ui.avatarChange')}
     </Button>
     <!-- With no avatar there is nothing to remove: it stays plainly disabled. -->
@@ -103,7 +117,7 @@
 />
 
 {#if confirmingRemove}
-  <ConfirmModal prompt={removeAvatarPrompt()} onconfirm={remove} onclose={() => (confirmingRemove = false)} />
+  <ConfirmModal prompt={removeAvatarPrompt()} onconfirm={remove} onclose={closeRemove} />
 {/if}
 
 <style>

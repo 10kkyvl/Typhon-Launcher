@@ -1,7 +1,7 @@
-import { cleanup, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../../lib/i18n';
-import { pickAvatar, type AvatarImage } from '../../lib/services/account';
+import { pickAvatar, removeAvatar, type AvatarImage } from '../../lib/services/account';
 import { EMPTY_SNAPSHOT, getProfileSnapshot } from '../../lib/services/profile';
 import { profileSnapshot } from '../../lib/stores/profile';
 import { navigate, resetHistory } from '../../lib/stores/router';
@@ -45,6 +45,7 @@ afterEach(() => {
   expect(calls).toEqual([]);
   vi.mocked(getProfileSnapshot).mockReset();
   vi.mocked(pickAvatar).mockReset();
+  vi.mocked(removeAvatar).mockReset();
   // A picker a failed test left open would hold the next test's button.
   pickingAvatar.set(false);
   resetHistory();
@@ -123,5 +124,42 @@ describe('"Remove avatar" when the connection goes', () => {
       { ariaDisabled: null, disabled: false, reason: '' },
       { ariaDisabled: null, disabled: false, reason: '' },
     ]);
+  });
+});
+
+describe('"Remove avatar" confirmed from the keyboard', () => {
+  // The button that opened the dialog turns disabled once the avatar is gone: focus would fall to
+  // <body> in Chromium (jsdom drops it there too, as the dialog cannot focus a disabled button).
+  it('hands focus to "Change avatar" once the avatar is removed', async () => {
+    currentUser.set(player({}, { avatarUrl: 'https://cdn.example/a.png' }));
+    vi.mocked(removeAvatar).mockResolvedValue(player());
+    const { user } = renderDom(Profile);
+    button(msg('ui.avatarRemove')).focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+
+    within(dialog).getByRole('button', { name: msg('ui.avatarRemove') }).focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(button(msg('ui.avatarChange'))));
+    expect(button(msg('ui.avatarRemove')).matches(':disabled')).toBe(true);
+  });
+
+  it('refused, says so under the buttons and focus goes back to "Remove avatar", which is still there', async () => {
+    currentUser.set(player({}, { avatarUrl: 'https://cdn.example/a.png' }));
+    vi.mocked(removeAvatar).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(Profile);
+    const remove = button(msg('ui.avatarRemove'));
+    remove.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+
+    within(dialog).getByRole('button', { name: msg('ui.avatarRemove') }).focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText(msg('ui.avatarDeleteFailed'))).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(remove));
   });
 });
