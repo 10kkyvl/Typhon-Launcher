@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { wailsRuntime } from '../testing/dom';
+import { ANY_RUNTIME, NEEDED_PLAIN, REAL_MODULE, gaps, importOf, wrappers } from '../testing/mounts';
 
 /**
  * The game and library dialogs reach Go through calls that act: `library.PlayGame` starts a real game
@@ -35,28 +36,9 @@ const DIALOGS = [
   'GameDialogsHarness',
 ];
 
-/** An import of one of `names` (`import X from`, `import X, { y } from`, `import(`), in any quote kind. */
-const importOf = (names: string[]) =>
-  new RegExp(String.raw`(?:\bimport\b[^'"\x60;]*?\bfrom\s*|\bimport\s*\(\s*)(['"\x60])[^'"\x60]*\/(?:${names.join('|')})\.svelte\1`);
-
 const MOUNTS = importOf(DIALOGS);
 
-const base = (path: string) => (path.split('/').pop() ?? path).replace(/\.svelte$/, '');
-
-/** The components that mount a dialog, at any depth, by file name. */
-function wrappers(): string[] {
-  const found = new Set<string>();
-  for (;;) {
-    const mounts = importOf([...DIALOGS, ...found]);
-    const more = Object.entries(components)
-      .filter(([path, source]) => !DIALOGS.includes(base(path)) && !found.has(base(path)) && mounts.test(source))
-      .map(([path]) => base(path));
-    if (more.length === 0) return [...found].sort();
-    for (const name of more) found.add(name);
-  }
-}
-
-const WRAPPERS = wrappers();
+const WRAPPERS = wrappers(DIALOGS, components);
 const WRAPS = importOf(WRAPPERS);
 
 // Tests of a wrapper that open a dialog's flow: the status and tags dialogs from the game menu, the
@@ -64,8 +46,6 @@ const WRAPS = importOf(WRAPPERS);
 const HELD = ['./ContextMenu.dom.test.ts', './GameQuickMenu.dom.test.ts', './GameQuickMenu.focus.dom.test.ts', '../../routes/game/ReviewCard.dom.test.ts'];
 
 const RUNTIME = /^vi\.mock\('@wailsio\/runtime', async \(\) => \(await import\('(?:\.\.\/)+(?:lib\/)?testing\/gameDialogsTesting'\)\)\.goRuntime\(\)\);$/m;
-const ANY_RUNTIME = /\bvi\.(?:mock|doMock|unmock|doUnmock)\(\s*['"`]@wailsio\/runtime['"`]/g;
-const REAL_MODULE = (source: string) => !/\bimportActual\b/.test(source) && !/\bvi\.(?:unmock|doUnmock)\(/.test(source);
 
 // A mock runs what the test writes in place, never a function handed over by reference (the real one
 // taken from vi.importActual), and no module is taken whole by a path the guard cannot read.
@@ -80,16 +60,7 @@ const NEEDED: [string, (source: string) => boolean][] = [
 
 const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source)).map(([what]) => what);
 
-const PLAIN = /\(await import\(['"`](?:\.\.?\/)+(?:lib\/)?testing\/dom['"`]\)\)\.wailsRuntime\(\)/;
-
-const NEEDED_PLAIN: [string, (source: string) => boolean][] = [
-  ['the runtime of lib/testing/dom.ts, once', (source) => PLAIN.test(source) && (source.match(ANY_RUNTIME) ?? []).length === 1],
-  ['no Browser or Clipboard given to it', (source) => !/\b(?:Browser|Clipboard)\b/.test(source)],
-  ['a Call only as a vi.fn in place', (source) => (source.match(/\bCall\b/g) ?? []).length === (source.match(/\bCall: \{\s*ByID: vi\.fn\(/g) ?? []).length],
-  ['no real module behind a mock', REAL_MODULE],
-];
-
-const missingPlain = (source: string) => NEEDED_PLAIN.filter(([, holds]) => !holds(source)).map(([what]) => what);
+const missingPlain = (source: string) => gaps(NEEDED_PLAIN, source);
 
 const mounting = Object.entries(tests).filter(([path, source]) => MOUNTS.test(source) || HELD.includes(path));
 const wrapping = Object.entries(tests).filter(([path, source]) => !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
