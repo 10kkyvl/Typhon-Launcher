@@ -5,7 +5,8 @@ import { AccountError, updateProfile, type CurrentUser } from '../../lib/service
 import { accountErrorText } from '../../lib/services/accountMessages';
 import { EMPTY_SNAPSHOT, getProfileSnapshot } from '../../lib/services/profile';
 import { profileSnapshot } from '../../lib/stores/profile';
-import { navigate, resetHistory } from '../../lib/stores/router';
+import { get } from 'svelte/store';
+import { leaveRequest, navigate, resetHistory, route, stayHere } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { authState, currentUser, savingProfile } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
@@ -60,6 +61,7 @@ afterEach(() => {
   expect(calls).toEqual([]);
   vi.mocked(getProfileSnapshot).mockReset();
   vi.mocked(updateProfile).mockReset();
+  stayHere();
   resetHistory();
   currentUser.set(null);
   authState.set('bootstrapping');
@@ -126,6 +128,40 @@ describe('opening the editor', () => {
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(document.activeElement).toBe(field(msg('social.displayNameLabel'))));
+  });
+});
+
+describe('More → Edit while the editor is already open', () => {
+  async function editAgain(user: Awaited<ReturnType<typeof headerEditor>>['user']) {
+    await user.click(opener());
+    await user.click(screen.getByRole('menuitem', { name: msg('social.editProfileLabel') }));
+  }
+
+  it('keeps the typed text and puts focus in the display name', async () => {
+    const { user } = await headerEditor();
+    await user.type(field(msg('social.aboutTitle')), 'Hi');
+
+    await editAgain(user);
+
+    expect((field(msg('social.aboutTitle')) as HTMLTextAreaElement).value).toBe('Hi');
+    await waitFor(() => expect(document.activeElement).toBe(field(msg('social.displayNameLabel'))));
+  });
+
+  it('during a save that then fails, keeps the typed text, and leaving still asks', async () => {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const { user } = await headerEditor();
+    await user.type(field(msg('social.aboutTitle')), 'Hi');
+    await user.click(button(msg('common.save')));
+
+    await editAgain(user);
+    answer.reject(new AccountError('network_error'));
+
+    await waitFor(() => expect(button(msg('common.save')).getAttribute('aria-busy')).toBeNull());
+    expect((field(msg('social.aboutTitle')) as HTMLTextAreaElement).value).toBe('Hi');
+    navigate('catalog');
+    expect(get(route).name).toBe('profile');
+    expect(get(leaveRequest)?.prompt().text).toBe(msg('profile.leaveHeaderText'));
   });
 });
 

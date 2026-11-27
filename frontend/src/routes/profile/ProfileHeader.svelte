@@ -134,12 +134,15 @@
   ]);
 
   // An inline form opened by a command takes focus in its first field; the menu has given focus back
-  // to its trigger by now, and the fields leaving give it back there again.
+  // to its trigger by now, and the fields leaving give it back there again. Opened again while it is
+  // open, it keeps what was typed and only takes focus.
   async function startEditing() {
-    if (!$currentUser || $isOffline) return;
-    draft = { displayName: $currentUser.displayName, username: $currentUser.username, bio: $currentUser.bio };
-    fieldErrors = {};
-    editing = true;
+    if (!editing) {
+      if (!$currentUser || $isOffline) return;
+      draft = { displayName: $currentUser.displayName, username: $currentUser.username, bio: $currentUser.bio };
+      fieldErrors = {};
+      editing = true;
+    }
     await tick();
     displayNameField?.focus();
   }
@@ -195,7 +198,7 @@
 
   function onMenu(id: string) {
     if (id === 'edit') {
-      if ($isOffline) toast(msg('social.editRequiresConnection'));
+      if ($isOffline && !editing) toast(msg('social.editRequiresConnection'));
       else void startEditing();
     } else if (id === 'settings') {
       onsettings();
