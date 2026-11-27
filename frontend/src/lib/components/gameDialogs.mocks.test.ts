@@ -88,9 +88,12 @@ const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source))
 const missingPlain = (source: string) => gaps(NEEDED_PLAIN, source);
 
 const mounting = Object.entries(tests).filter(([path, source]) => MOUNTS.test(source) || HELD.includes(path));
-// A guard quotes import lines in its own self-tests: it mounts nothing.
-const GUARD = /\.mocks\.test\.ts$/;
-const wrapping = Object.entries(tests).filter(([path, source]) => !GUARD.test(path) && !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
+// The source guards that quote a wrapper's import line in their own self-tests: they mount nothing.
+// By path, so a test that mounts one cannot leave the check by being named like a guard.
+const GUARDS = ['./settingsDialogs.mocks.test.ts'];
+const wrappingOf = (entries: [string, string][]) =>
+  entries.filter(([path, source]) => !GUARDS.includes(path) && !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
+const wrapping = wrappingOf(Object.entries(tests));
 
 const SOUND = [
   "import GameTagsModal from './GameTagsModal.svelte';",
@@ -209,6 +212,27 @@ describe('tests of a component that mounts a game or library dialog', () => {
         '../../routes/gameMenuOpeners.dom.test.ts',
       ]),
     );
+  });
+
+  it('are read whatever they are called: one named like a guard is still held to the rule', () => {
+    const hidden = [
+      "import { it } from 'vitest';",
+      "import Sources from './Sources.svelte';",
+      "it('mounts the sources page on the real runtime', () => {",
+      '  render(Sources);',
+      '});',
+    ].join('\n');
+    const path = '../../routes/sources/Sources.mocks.test.ts';
+
+    expect(wrappingOf([[path, hidden]]).map(([found]) => found)).toEqual([path]);
+    expect(missingPlain(hidden)).toContain('the runtime of lib/testing/dom.ts, once');
+  });
+
+  it('leave out only the source guards that quote a wrapper’s import, each named by its path', () => {
+    for (const path of GUARDS) {
+      expect(tests[path], path).toMatch(/import\.meta\.glob<string>\([^)]*\.test\.ts[\s\S]*?query: '\?raw'/);
+      expect(WRAPS.test(tests[path]), path).toBe(true);
+    }
   });
 
   it('rely on a runtime that has no Call, Browser or Clipboard', () => {
