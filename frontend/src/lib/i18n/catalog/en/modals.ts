@@ -50,6 +50,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addDownloadElevateAheadLabel': 'Confirm administrator rights now',
   'modals.addDownloadElevateAheadSub': 'This download holds an installer that needs rights. Confirm now and the install runs without you; otherwise it waits for your confirmation',
   'modals.addDownloadStart': 'Start download',
+  'modals.addDownloadNeedsMagnet': 'Paste a link that starts with magnet:',
+  'modals.addDownloadRefusedFor': 'Could not start downloading "{title}": {reason}',
   'modals.addDownloadRestartNeeded':
     'The network changed while the download was starting, so the torrent details were fetched again. Press "Start download" once more.',
   'modals.addDownloadFetchFailed': 'Could not fetch the torrent details',

@@ -47,6 +47,8 @@ export const modals = {
   'modals.addDownloadElevateAheadLabel': 'Подтвердить права администратора сейчас',
   'modals.addDownloadElevateAheadSub': 'В загрузке установщик — ему нужны права. Подтвердите сейчас, и установка пройдёт без вас; иначе она дождётся вашего подтверждения',
   'modals.addDownloadStart': 'Начать загрузку',
+  'modals.addDownloadNeedsMagnet': 'Вставьте ссылку, которая начинается с magnet:',
+  'modals.addDownloadRefusedFor': 'Не удалось начать загрузку «{title}»: {reason}',
   'modals.addDownloadRestartNeeded':
     'Пока загрузка запускалась, сменилась сеть, и данные торрента получены заново. Нажмите «Начать загрузку» ещё раз.',
   'modals.addDownloadFetchFailed': 'Не удалось получить данные торрента',
