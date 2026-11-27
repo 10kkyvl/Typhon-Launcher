@@ -206,7 +206,8 @@
     applyFailures = failures;
   }
 
-  const anyPicked = $derived(Object.values(picked).some(Boolean));
+  // Only the rows still listed: a saved path leaves the list but keeps its tick in `picked`.
+  const anyPicked = $derived(found?.found.some((item) => picked[item.platform]) ?? false);
   const heldReason = $derived(applying ? msg('emul.detectApplying') : '');
 </script>
 

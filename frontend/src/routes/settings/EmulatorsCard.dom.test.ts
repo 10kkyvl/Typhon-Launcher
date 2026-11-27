@@ -318,4 +318,21 @@ describe('EmulatorsCard: the found emulators', () => {
     expect(vi.mocked(setEmulatorPath).mock.calls.map(([platform]) => platform)).toEqual(['ps2', 'psp', 'psp']);
     expect(toastTexts()).toEqual([msg('emul.detectApplied')]);
   });
+
+  it('holds Apply when the path left after a partial save is unticked: a saved path that left the list does not count', async () => {
+    const refused = new Error('typhon:library.invalid_path: nope');
+    vi.mocked(setEmulatorPath).mockResolvedValueOnce({ ...PS2, path: '/apps/pcsx2', status: 'ready' }).mockRejectedValueOnce(refused);
+    const { dialog, apply, box, user } = await openFound();
+    await user.click(apply());
+    await within(dialog).findByRole('alert');
+
+    await user.click(box('PPSSPP'));
+
+    expect(apply().getAttribute('aria-disabled')).toBe('true');
+    expect(description(apply())).toContain(msg('emul.detectPickOne'));
+    await user.click(apply());
+    expect(dialog.isConnected).toBe(true);
+    expect(setEmulatorPath).toHaveBeenCalledTimes(2);
+    expect(toastTexts()).toEqual([]);
+  });
 });
