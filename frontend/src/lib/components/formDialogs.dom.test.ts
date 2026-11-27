@@ -1,22 +1,15 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { AccountError } from '../services/account';
 import { proposeLibraryPath, selectFolder, type Settings } from '../services/settings';
 import { createLibrary } from '../stores/settings';
 import { toasts } from '../stores/toasts';
-import { authState, deleteAccount } from '../stores/user';
 import { user } from '../testing/dom';
 import AvatarCropModal from './AvatarCropModal.svelte';
-import DeleteAccountModal from './DeleteAccountModal.svelte';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: true }));
-vi.mock('../stores/user', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../stores/user')>()),
-  deleteAccount: vi.fn(),
-}));
 vi.mock('../services/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/settings')>()),
   selectFolder: vi.fn(),
@@ -50,53 +43,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  authState.set('bootstrapping');
   toasts.set([]);
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   document.body.replaceChildren();
-});
-
-describe('DeleteAccountModal', () => {
-  it('says a wrong password by its field and marks it wrong; the delete button stays focused and busy while it runs', async () => {
-    authState.set('authenticated');
-    const deletion = deferred<void>();
-    vi.mocked(deleteAccount).mockReturnValueOnce(deletion.promise);
-    render(DeleteAccountModal, { target: app, props: { onclose: vi.fn() } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('profile.deleteAccountConfirmTitle') });
-    const password = within(dialog).getByLabelText(msg('profile.deleteAccountPassword'));
-    await keys.type(password, 'secret');
-    const remove = within(dialog).getByRole('button', { name: msg('profile.deleteAccountConfirmButton') });
-    remove.focus();
-
-    await keys.keyboard('{Enter}');
-
-    expect(remove.getAttribute('aria-busy')).toBe('true');
-    expect(document.activeElement).toBe(remove);
-
-    deletion.reject(new AccountError('invalid_credentials'));
-    const alert = await within(dialog).findByRole('alert');
-    expect(alert.textContent?.trim()).toBe(msg('profile.deleteAccountWrongPassword'));
-    expect(password.getAttribute('aria-invalid')).toBe('true');
-    expect((password.getAttribute('aria-describedby') ?? '').split(' ')).toContain(alert.id);
-  });
-
-  it('says a failure that is not the password in a danger notice', async () => {
-    authState.set('authenticated');
-    vi.mocked(deleteAccount).mockRejectedValueOnce(new AccountError('server_error'));
-    render(DeleteAccountModal, { target: app, props: { onclose: vi.fn() } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('profile.deleteAccountConfirmTitle') });
-    const password = within(dialog).getByLabelText(msg('profile.deleteAccountPassword'));
-    await keys.type(password, 'secret');
-
-    await keys.click(within(dialog).getByRole('button', { name: msg('profile.deleteAccountConfirmButton') }));
-
-    const alert = await within(dialog).findByRole('alert');
-    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
-    expect(password.getAttribute('aria-invalid')).not.toBe('true');
-  });
 });
 
 describe('LibrarySetupModal', () => {

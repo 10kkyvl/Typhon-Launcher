@@ -4,24 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudErrorText } from '../cloudsaves/messages';
 import { msg } from '../i18n';
 import { libraryErrorText } from '../library/errors';
-import { AccountError } from '../services/account';
 import { cloudResolveConflict, type CloudConflict } from '../services/cloudsaves';
 import { selectEmulatorFile } from '../services/emulators';
 import { cloudConflictTarget, cloudStatus } from '../stores/cloudsaves';
 import { askForEmulator, emulatorPrompt } from '../stores/emulatorPrompt';
 import { toasts } from '../stores/toasts';
-import { authState, deleteAccount } from '../stores/user';
 import { user } from '../testing/dom';
 import CloudConflictModal from './CloudConflictModal.svelte';
-import DeleteAccountModal from './DeleteAccountModal.svelte';
 import EmulatorNeededModal from './EmulatorNeededModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
-vi.mock('../stores/user', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../stores/user')>()),
-  deleteAccount: vi.fn(),
-}));
 vi.mock('../services/cloudsaves', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/cloudsaves')>()),
   cloudResolveConflict: vi.fn(),
@@ -54,33 +47,12 @@ afterEach(() => {
   get(emulatorPrompt)?.settle(false);
   cloudConflictTarget.set(null);
   cloudStatus.set(null);
-  authState.set('bootstrapping');
   toasts.set([]);
   app.remove();
   vi.clearAllMocks();
 });
 
 describe('a dialog busy with its operation', () => {
-  it('DeleteAccountModal: Escape does nothing while the deletion runs, and a refusal shows in the dialog', async () => {
-    authState.set('authenticated');
-    const deletion = held();
-    vi.mocked(deleteAccount).mockReturnValueOnce(deletion.promise);
-    const onclose = vi.fn();
-    render(DeleteAccountModal, { target: app, props: { onclose } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('profile.deleteAccountConfirmTitle') });
-    await keys.type(within(dialog).getByLabelText(msg('profile.deleteAccountPassword')), 'secret');
-    await keys.click(within(dialog).getByRole('button', { name: msg('profile.deleteAccountConfirmButton') }));
-
-    await keys.keyboard('{Escape}');
-    expect(onclose).not.toHaveBeenCalled();
-
-    deletion.fail(new AccountError('invalid_credentials'));
-    expect((await within(dialog).findByRole('alert')).textContent).toBe(msg('profile.deleteAccountWrongPassword'));
-    expect(dialog.isConnected).toBe(true);
-    expect(onclose).not.toHaveBeenCalled();
-  });
-
   it('CloudConflictModal: Escape does nothing while the conflict is resolved, and a failure shows in the dialog', async () => {
     const conflict = { localUpdatedAt: '2026-11-01T10:00:00Z', remoteUpdatedAt: '2026-11-02T10:00:00Z', localSize: 10, remoteSize: 20, remoteDevice: 'Deck' } as CloudConflict;
     cloudStatus.set({ enabled: true, signedIn: true, usedBytes: 0, quotaBytes: 0, maxBytes: 0, error: '', games: [{ gameId: 'g1', state: 'conflict', code: '', message: '', at: '', syncedAt: '', conflict }] });

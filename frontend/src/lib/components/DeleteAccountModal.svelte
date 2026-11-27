@@ -1,21 +1,39 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import TextField from './TextField.svelte';
   import { AccountError } from '../services/account';
   import { accountErrorText } from '../services/accountMessages';
-  import { authState, deleteAccount } from '../stores/user';
+  import { authState, currentUser, deleteAccount } from '../stores/user';
   import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { msg } from '../i18n';
 
+  /**
+   * Deletes the signed-in account for good, after its password. Delete is never the first focus and is
+   * held until a password is typed; while the deletion runs nothing in the dialog acts and it cannot be
+   * dismissed. The profile settings mount one instance per press, and a session that ends swaps the
+   * app's whole tree for the sign-in screen, this dialog with it, before another account can sign in:
+   * an answer under another account can only reach an instance that is gone, which says it in a toast
+   * naming the account that pressed.
+   */
   let { onclose }: { onclose: () => void } = $props();
   const uid = $props.id();
+  const fieldId = `${uid}-password`;
+  const failureId = `${uid}-failure`;
 
   let password = $state('');
   let running = $state(false);
   let error = $state('');
   // The refusal was the password itself: it is said by the field, which is marked wrong.
   let wrongPassword = $state(false);
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   const isWrongPassword = (err: unknown) => err instanceof AccountError && err.code === 'invalid_credentials';
 
@@ -26,29 +44,43 @@
 
   async function confirm() {
     if (running || !password) return;
+    const presser = get(currentUser);
+    // The focus the press holds (Delete, or the field for Enter) goes to the words of a refusal.
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     running = true;
     error = '';
     wrongPassword = false;
     try {
       await deleteAccount(password);
       toast(msg('profile.deleteAccountDone'), 'success');
-      onclose();
+      if (alive) onclose();
+      return;
     } catch (err) {
       const text = failureText(err);
-      if ($authState === 'authenticated' || $authState === 'offline') {
-        error = text;
-        wrongPassword = isWrongPassword(err);
-      } else {
+      if (!alive) {
+        toast(msg('profile.deleteAccountFailedFor', { name: presser?.username ?? '', reason: text }), 'danger');
+        return;
+      }
+      const stayed = (get(authState) === 'authenticated' || get(authState) === 'offline') && get(currentUser)?.id === presser?.id;
+      if (!stayed) {
         toast(text, 'danger');
         onclose();
+        return;
       }
+      error = text;
+      wrongPassword = isWrongPassword(err);
     } finally {
-      running = false;
+      if (alive) running = false;
     }
+    await hand(() => document.getElementById(wrongPassword ? fieldId : failureId));
   }
+
+  const heldReason = $derived(running ? msg('modals.actionRunning') : '');
+  const needsPassword = $derived(!running && !password);
 </script>
 
-<Modal dismissible={!running} open title={msg('profile.deleteAccountConfirmTitle')} width="44rem" {onclose}>
+<Modal dismissible={!running} busy={running} open title={msg('profile.deleteAccountConfirmTitle')} width="44rem" initialFocus={`#${fieldId}`} {onclose}>
   <form
     class="form"
     onsubmit={(event) => {
@@ -57,25 +89,20 @@
     }}
   >
     <p class="text">{msg('profile.deleteAccountConfirmText')}</p>
-    <div class="field">
-      <label class="field-label" for="{uid}-password">{msg('profile.deleteAccountPassword')}</label>
-      <input
-        id="{uid}-password"
-        class="input"
-        type="password"
-        autocomplete="off"
-        readonly={running}
-        aria-invalid={wrongPassword ? 'true' : undefined}
-        aria-describedby={error && wrongPassword ? `${uid}-error` : undefined}
-        bind:value={password}
-      />
-      {#if error && wrongPassword}<p class="error" id="{uid}-error" role="alert">{error}</p>{/if}
-    </div>
-    {#if error && !wrongPassword}<Notice tone="danger" compact>{error}</Notice>{/if}
+    <TextField
+      id={fieldId}
+      label={msg('profile.deleteAccountPassword')}
+      type="password"
+      autocomplete="current-password"
+      readonly={running}
+      error={wrongPassword ? error : ''}
+      bind:value={password}
+    />
+    {#if error && !wrongPassword}<Notice tone="danger" compact id={failureId} tabindex={-1}>{error}</Notice>{/if}
   </form>
   {#snippet footer()}
-    <Button disabled={running} onclick={onclose}>{msg('common.cancel')}</Button>
-    <Button variant="danger" disabled={!running && !password} busy={running} onclick={confirm}>
+    <Button disabled={running} reason={heldReason} onclick={onclose}>{msg('common.cancel')}</Button>
+    <Button variant="danger" disabled={needsPassword} reason={needsPassword ? msg('profile.deleteAccountPasswordNeeded') : ''} busy={running} onclick={confirm}>
       {running ? msg('profile.deleteAccountBusy') : msg('profile.deleteAccountConfirmButton')}
     </Button>
   {/snippet}
@@ -91,22 +118,5 @@
   .text {
     color: var(--text-2);
     line-height: 1.55;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-  }
-
-  .field-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
-  }
-
-  .error {
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 </style>
