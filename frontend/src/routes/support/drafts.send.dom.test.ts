@@ -349,7 +349,7 @@ describe('a new request on its way', () => {
     await vi.waitFor(() => expect(shownRequest()).toEqual(SENT));
   });
 
-  it('that fails after the player typed another keeps the newer one, and a toast says the failed one was not sent', async () => {
+  it('that fails after the player typed another keeps the newer one in the form, and a toast says the failed one is only offered', async () => {
     const { first } = await requestOnItsWay();
     cleanup();
     const { user } = await newRequest();
@@ -357,13 +357,48 @@ describe('a new request on its way', () => {
     first.reject(new AccountError('network_error'));
     await settled();
     await settled();
-    expect({ subject: subjectField().value, said: said() }).toEqual({
+    expect({ subject: subjectField().value, said: said(), actions: actions() }).toEqual({
       subject: 'Another matter',
-      said: [['danger', msg('tickets.requestNotSentNewer', { subject: 'Cannot sign in' })]],
+      said: [['danger', msg('tickets.requestNotSentOffered', { subject: 'Cannot sign in' })]],
+      actions: [msg('tickets.copyText')],
     });
     cleanup();
     await newRequest();
     expect(subjectField().value).toBe('Another matter');
+  });
+
+  it('that fails with the form and the offer both taken is kept nowhere, says so and offers Copy; the one offer stays', async () => {
+    const one = held<ReturnType<typeof ticket>>();
+    const two = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(one.promise).mockReturnValueOnce(two.promise);
+    for (const [subject, sends] of [['First matter', 1], ['Second matter', 2]] as const) {
+      const view = await newRequest();
+      await view.user.type(subjectField(), subject);
+      await view.user.type(bodyField(), `Text of ${subject}.`);
+      if (logsSwitch().getAttribute('aria-checked') === 'true') await view.user.click(logsSwitch());
+      await view.user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+      await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(sends));
+      cleanup();
+    }
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Typed meanwhile');
+    one.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(offer()).not.toBeNull());
+    two.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    const here = { said: said(), actions: actions(), offered: offer(), kept: keptRequest()?.subject, spare: spareRequest()?.subject };
+    expect({ ...here, written: await copyFromToast(1) }).toEqual({
+      said: [
+        ['danger', msg('tickets.requestNotSentOffered', { subject: 'First matter' })],
+        ['danger', msg('tickets.requestNotSentNotKept', { subject: 'Second matter' })],
+      ],
+      actions: [msg('tickets.copyText'), msg('tickets.copyText')],
+      offered: `${msg('tickets.draftKept', { subject: 'First matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+      kept: 'Typed meanwhile',
+      spare: 'First matter',
+      written: ['Second matter\n\nText of Second matter.'],
+    });
   });
 
   it('that fails while the plain form is open again with only its topic changed comes back into it, and is kept as the player goes on', async () => {
@@ -398,7 +433,7 @@ describe('a new request on its way', () => {
     await user.type(bodyField(), 'Still typing.');
     expect({ ...back, offeredWhileTyping: offer() !== null }).toEqual({
       subject: 'Another matter',
-      said: [['danger', msg('tickets.requestNotSentNewer', { subject: 'Cannot sign in' })]],
+      said: [['danger', msg('tickets.requestNotSentOffered', { subject: 'Cannot sign in' })]],
       offered: `${msg('tickets.draftKept', { subject: 'Cannot sign in' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
       offeredWhileTyping: true,
     });
@@ -485,7 +520,7 @@ describe('a new request on its way', () => {
     await newRequest();
     expect({ meanwhile, later: shownRequest() }).toEqual({
       meanwhile: {
-        said: [['danger', msg('tickets.requestNotSentNewer', { subject: 'Cannot sign in' })]],
+        said: [['danger', msg('tickets.requestNotSentOffered', { subject: 'Cannot sign in' })]],
         offered: true,
         restoreHeld: true,
         subject: 'Another matter',

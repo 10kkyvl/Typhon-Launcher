@@ -43,6 +43,7 @@
     restoreRequest,
     returnRequest,
     returnShown,
+    type Placed,
     type RequestDraft,
     type Writer,
   } from './drafts';
@@ -187,6 +188,16 @@
     toast(words, 'danger', copyAction(`${subject}\n\n${text.body.trim()}`.trim()));
   }
 
+  // A failed send's toast says only where its text is: "back in the form" when the form holds it (or
+  // will open with it); one only offered, or kept nowhere, says so and offers to copy it.
+  function sayPlaced(placed: Placed, sent: RequestDraft) {
+    const subject = sent.subject.trim();
+    const copy = copyAction(`${subject}\n\n${sent.body.trim()}`);
+    if (placed === 'form' || placed === 'kept') toast(msg('tickets.requestNotSentKept', { subject }), 'danger');
+    else if (placed === 'offered') toast(msg('tickets.requestNotSentOffered', { subject }), 'danger', copy);
+    else toast(msg('tickets.requestNotSentNotKept', { subject }), 'danger', copy);
+  }
+
   // What the player typed is not lost to a restore: it is offered in turn, from what is kept.
   async function restore() {
     if (!offer || sending) return;
@@ -291,9 +302,7 @@
       const changed = started && account() !== who;
       if (!onScreen || changed) {
         const placed = started && !changed ? returnRequest(sent, me, who) : null;
-        const subject = sent.subject.trim();
-        if (placed === 'form' || placed === 'kept') toast(msg('tickets.requestNotSentKept', { subject }), 'danger');
-        else if (placed) toast(msg('tickets.requestNotSentNewer', { subject }), 'danger', copyAction(`${subject}\n\n${sent.body.trim()}`));
+        if (placed) sayPlaced(placed, sent);
         return;
       }
       // The failed text is what the form shows: it is the draft, whatever was kept as one meanwhile.

@@ -291,7 +291,7 @@ describe('a failed send and the ways in', () => {
     expect(shown().offered).toBeNull();
     first.reject(new AccountError('network_error'));
     await vi.waitFor(() => expect(shown()).toEqual({ ...BETA_FORM, offered: OFFER }));
-    expect(get(toasts).map((t) => t.message)).toEqual([msg('tickets.requestNotSentNewer', { subject: 'Old matter' })]);
+    expect(get(toasts).map((t) => [t.message, t.action?.label ?? null])).toEqual([[msg('tickets.requestNotSentOffered', { subject: 'Old matter' }), msg('tickets.copyText')]]);
     expect({ polite: notice()?.querySelectorAll('[role="status"]').length, alerts: screen.queryAllByRole('alert').length }).toEqual({ polite: 1, alerts: 0 });
   });
 
