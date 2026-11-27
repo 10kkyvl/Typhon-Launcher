@@ -34,6 +34,16 @@ const DIALOGS = [
   'ReportReviewModal',
   'GameDialogs',
   'GameDialogsHarness',
+  // The dialogs of sources and updates: adding or refreshing a source fetches its feed, removing one
+  // deletes its releases, a match rewrites a release's game, and the update dialogs start a game's
+  // download or the launcher's restart.
+  'ReleaseMatchModal',
+  'AddSourceModal',
+  'SourceDetailsModal',
+  'SourcesNoticeModal',
+  'ReleaseNotesModal',
+  'UpdateRestartModal',
+  'UpdateCard',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -42,8 +52,23 @@ const WRAPPERS = wrappers(DIALOGS, components);
 const WRAPS = importOf(WRAPPERS);
 
 // Tests of a wrapper that open a dialog's flow: the status and tags dialogs from the game menu, the
-// report from a review card.
-const HELD = ['./ContextMenu.dom.test.ts', './GameQuickMenu.dom.test.ts', './GameQuickMenu.focus.dom.test.ts', '../../routes/game/ReviewCard.dom.test.ts'];
+// report from a review card, the restart dialog from the sidebar and the banner in a seamless restart.
+const HELD = [
+  './ContextMenu.dom.test.ts',
+  './GameQuickMenu.dom.test.ts',
+  './GameQuickMenu.focus.dom.test.ts',
+  '../../routes/game/ReviewCard.dom.test.ts',
+  './UpdateRestartModal.handoff.dom.test.ts',
+];
+
+// Tests of the whole settings page, which mounts the sources notice and, through the About tab's
+// banner, the restart dialog. Each runs on lib/testing/dom.ts's runtime, which has no Call, so a
+// binding that slips past its mocks throws before anything is sent; each breaks one rule of the
+// wrapper check, named here, and belongs to the settings pages. No other test joins them.
+const SETTINGS_PAGE: Record<string, string> = {
+  '../../routes/settings/AboutTab.rows.dom.test.ts': 'no Browser or Clipboard given to it',
+  '../../routes/settings/DownloadsTab.dom.test.ts': 'no real module behind a mock',
+};
 
 const RUNTIME = /^vi\.mock\('@wailsio\/runtime', async \(\) => \(await import\('(?:\.\.\/)+(?:lib\/)?testing\/gameDialogsTesting'\)\)\.goRuntime\(\)\);$/m;
 
@@ -110,6 +135,16 @@ describe('tests that mount a game or library dialog', () => {
         './MetadataMatchModal.dom.test.ts',
         '../../routes/game/ReportReviewModal.dom.test.ts',
         '../../routes/game/GameDialogs.dom.test.ts',
+        './ReleaseMatchModal.dom.test.ts',
+        './AddSourceModal.dom.test.ts',
+        './SourceDetailsModal.dom.test.ts',
+        './SourceDetailsModal.controls.dom.test.ts',
+        './SourceDetailsModal.actions.dom.test.ts',
+        './SourcesNoticeModal.dom.test.ts',
+        './ReleaseNotesModal.dom.test.ts',
+        './UpdateRestartModal.dom.test.ts',
+        './UpdateCard.dom.test.ts',
+        './UpdateCard.test.ts',
         ...HELD,
       ]),
     );
@@ -157,7 +192,9 @@ describe('tests that mount a game or library dialog', () => {
 
 describe('tests of a component that mounts a game or library dialog', () => {
   it('know the components that mount one, at any depth', () => {
-    expect(WRAPPERS).toEqual(expect.arrayContaining(['App', 'GameDetails', 'GameQuickMenu', 'GameReviews', 'GameSaves', 'Library', 'ReviewCard']));
+    expect(WRAPPERS).toEqual(
+      expect.arrayContaining(['App', 'GameDetails', 'GameQuickMenu', 'GameReviews', 'GameSaves', 'Library', 'ReviewCard', 'Sources', 'Settings', 'UpdateBanner', 'SidebarStatus', 'GameSections']),
+    );
     expect(WRAPPERS).not.toContain('GameCard');
   });
 
@@ -187,6 +224,22 @@ describe('tests of a component that mounts a game or library dialog', () => {
   });
 
   it('run on the recording runtime, or on the one that cannot send', () => {
-    expect(wrapping.map(([path, source]) => [path, missingPlain(source)]).filter(([, gaps]) => gaps.length > 0)).toEqual([]);
+    expect(
+      wrapping
+        .filter(([path]) => !(path in SETTINGS_PAGE))
+        .map(([path, source]) => [path, missingPlain(source)])
+        .filter(([, gaps]) => gaps.length > 0),
+    ).toEqual([]);
+  });
+
+  it('leave the settings page’s tests only the one gap each is named for, on the runtime that cannot send', () => {
+    const named = Object.keys(SETTINGS_PAGE);
+    expect(wrapping.map(([path]) => path)).toEqual(expect.arrayContaining(named));
+    for (const path of named) {
+      const source = tests[path];
+      expect([path, missingPlain(source)]).toEqual([path, [SETTINGS_PAGE[path]]]);
+      expect(source).toMatch(PLAIN);
+      expect(source).not.toMatch(/\bCall\b/);
+    }
   });
 });

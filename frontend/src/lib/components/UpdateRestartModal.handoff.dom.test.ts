@@ -8,11 +8,13 @@ import { selfUpdateStatus } from '../stores/selfupdate';
 import { toasts } from '../stores/toasts';
 import { endUpdateShow, updateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import SidebarStatus from './SidebarStatus.svelte';
 import UpdateBanner from './UpdateBanner.svelte';
 import UpdateShow from './UpdateShow.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/selfupdate')>()),
@@ -34,10 +36,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
   endUpdateShow();
   toasts.set([]);
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 async function confirmRestart() {

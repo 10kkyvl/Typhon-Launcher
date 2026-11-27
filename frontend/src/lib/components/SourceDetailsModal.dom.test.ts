@@ -7,6 +7,8 @@ import { sourceErrorText } from '../sources/sourceErrors';
 import { sources } from '../stores/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import SourceDetailsModal from './SourceDetailsModal.svelte';
 
 const source = {
@@ -24,7 +26,7 @@ const source = {
   entries: 3,
 } as unknown as Source;
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/sources', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/sources')>()),
@@ -45,10 +47,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   toasts.set([]);
   sources.set([]);
   app.remove();
   vi.restoreAllMocks();
+  expect(sent).toEqual([]);
 });
 
 async function askToRemove() {

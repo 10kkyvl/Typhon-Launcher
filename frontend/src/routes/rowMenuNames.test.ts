@@ -1,7 +1,7 @@
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@wailsio/runtime', () => ({ Events: { On: vi.fn(() => () => {}) }, Window: {} }));
+vi.mock('@wailsio/runtime', async () => (await import('../lib/testing/dom')).wailsRuntime());
 vi.mock('../lib/services/backend', () => ({ inWails: false }));
 
 import Downloads from './downloads/Downloads.svelte';

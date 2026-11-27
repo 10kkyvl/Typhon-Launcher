@@ -1,7 +1,15 @@
 import { render } from 'svelte/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 import UpdateCard from './UpdateCard.svelte';
+afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
+  expect(sent).toEqual([]);
+});
 import { locale } from '../i18n';
 import { stepLabels } from '../stores/updates';
 import type { Update } from '../services/updates';
