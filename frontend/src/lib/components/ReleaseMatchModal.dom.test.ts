@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { msg } from '../i18n';
+import { msg, type MessageKey } from '../i18n';
 import { confirmMatch, getMatchCandidates, ignoreRelease, searchGames, type CatalogGame, type MatchCandidate, type ReleaseView } from '../services/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
@@ -25,12 +25,12 @@ const release = {
 } as unknown as ReleaseView;
 const other = { ...release, release: { ...release.release, id: 'r2', rawTitle: 'Celeste v2' } } as ReleaseView;
 
-const candidate = (gameId: string, title: string, patch: Partial<MatchCandidate> = {}): MatchCandidate => ({ gameId, title, score: 0.9, method: 'title', source: 'local', ...patch });
+const candidate = (gameId: string, title: string, patch: Partial<MatchCandidate> = {}): MatchCandidate => ({ gameId, title, score: 0.9, method: 'fuzzy', source: 'local', ...patch });
 const game = (id: string, title: string): CatalogGame => ({ id, title, sortTitle: title }) as CatalogGame;
 // Go's own words after the code: none of them may reach the screen.
 const goError = (code: string) => new Error(`typhon:${code}: GO TEXT`);
 // A row is named by its title (a row of the list before the kit read on into its platforms and score).
-const named = (title: string) => new RegExp(`^${title}(?=$| title| Windows)`);
+const named = (title: string) => new RegExp(`^${title}(?=$| ${msg('modals.releaseMatchMethodFuzzy')}| Windows)`);
 const goText = () => document.body.textContent?.includes('GO TEXT') || get(toasts).some((toast) => toast.message.includes('GO TEXT'));
 
 let app: HTMLDivElement;
@@ -140,6 +140,38 @@ describe('ReleaseMatchModal: the candidates', () => {
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent?.trim()).toBe(msg('modals.releaseMatchCandidatesFailed', { reason: msg('modals.releaseMatchUnknownReason') }));
     expect(goText()).toBe(false);
+  });
+});
+
+describe('ReleaseMatchModal: how a candidate was found', () => {
+  it.each<[string, MessageKey]>([
+    ['external_id', 'modals.releaseMatchMethodExternalId'],
+    ['override', 'modals.releaseMatchMethodOverride'],
+    ['exact_title', 'modals.releaseMatchMethodExactTitle'],
+    ['alias', 'modals.releaseMatchMethodAlias'],
+    ['fuzzy', 'modals.releaseMatchMethodFuzzy'],
+    ['provisional', 'modals.releaseMatchMethodProvisional'],
+    ['server_title', 'modals.releaseMatchMethodServerTitle'],
+    ['none', 'modals.releaseMatchMethodUnknown'],
+    ['someday_new', 'modals.releaseMatchMethodUnknown'],
+  ])('says %s in words with the score, never the code', async (method, words) => {
+    vi.mocked(getMatchCandidates).mockResolvedValue([candidate('a', 'Hades', { method, score: 0.72, year: 2020 })]);
+    const { dialog } = openDialog();
+
+    const row = await within(dialog).findByRole('radio', { name: /^Hades/ });
+
+    expect(row.textContent).toContain(`2020 · ${msg(words)} · 72%`);
+    expect(row.textContent).not.toContain(method);
+  });
+
+  it('says a candidate from the server catalog by where it came from, with no score', async () => {
+    vi.mocked(getMatchCandidates).mockResolvedValue([candidate('a', 'Hades', { method: 'none', source: 'server' })]);
+    const { dialog } = openDialog();
+
+    const row = await within(dialog).findByRole('radio', { name: /^Hades/ });
+
+    expect(row.textContent).toContain(msg('modals.releaseMatchFromCatalog'));
+    expect(row.textContent).not.toContain('%');
   });
 });
 

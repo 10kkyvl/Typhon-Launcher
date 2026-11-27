@@ -242,6 +242,19 @@
     });
   }
 
+  // How Go found a candidate (`catalog.Method`), in the player's words; a method this table does not
+  // know yet gets the neutral word, never the code.
+  const METHOD_WORDS: Record<string, MessageKey> = {
+    external_id: 'modals.releaseMatchMethodExternalId',
+    override: 'modals.releaseMatchMethodOverride',
+    exact_title: 'modals.releaseMatchMethodExactTitle',
+    alias: 'modals.releaseMatchMethodAlias',
+    fuzzy: 'modals.releaseMatchMethodFuzzy',
+    provisional: 'modals.releaseMatchMethodProvisional',
+    server_title: 'modals.releaseMatchMethodServerTitle',
+  };
+  const methodWords = (method: string) => msg(Object.hasOwn(METHOD_WORDS, method) ? METHOD_WORDS[method] : 'modals.releaseMatchMethodUnknown');
+
   const candidateRows = $derived<OptionItem[]>(
     ordered.map((candidate) => ({
       id: candidate.gameId,
@@ -249,7 +262,7 @@
       note: candidate.platforms && candidate.platforms.length > 0 ? candidate.platforms.join(', ') : undefined,
       fact: [
         candidate.year ? String(candidate.year) : '',
-        candidate.source === 'server' ? msg('modals.releaseMatchFromCatalog') : `${candidate.method} · ${Math.round(candidate.score * 100)}%`,
+        candidate.source === 'server' ? msg('modals.releaseMatchFromCatalog') : `${methodWords(candidate.method)} · ${Math.round(candidate.score * 100)}%`,
       ]
         .filter(Boolean)
         .join(' · '),
