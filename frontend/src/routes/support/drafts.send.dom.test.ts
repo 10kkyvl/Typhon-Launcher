@@ -353,6 +353,46 @@ describe('a reply on its way', () => {
     });
   });
 
+  it('that fails after its view was left reads nothing for a reload held back for it', async () => {
+    const first = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise);
+    const { user } = await opened();
+    await send(user, 'First.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    unreadReplies.set(1);
+    await settled();
+    cleanup();
+    const reads = vi.mocked(getTicket).mock.calls.length;
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    expect(vi.mocked(getTicket).mock.calls.length - reads).toBe(0);
+  });
+
+  it('holds a reload asked for while the next reply is on its way until that one answers, when the read of the one before ends meanwhile', async () => {
+    const first = held<ReturnType<typeof message>>();
+    const second = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { user } = await opened();
+    const read = held<ReturnType<typeof thread>>();
+    vi.mocked(getTicket).mockReturnValueOnce(read.promise);
+    await send(user, 'First.');
+    first.resolve(message(4, 'user', 'First.', 'x'));
+    await vi.waitFor(() => expect(getTicket).toHaveBeenCalledTimes(2));
+    await send(user, 'Second.');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    unreadReplies.set(1);
+    await settled();
+    read.resolve(thread(TICKET, []));
+    await settled();
+    await settled();
+    const whileSecond = vi.mocked(getTicket).mock.calls.length;
+    second.resolve(message(5, 'user', 'Second.', 'y'));
+    await settled();
+    await settled();
+    expect({ whileSecond, after: vi.mocked(getTicket).mock.calls.length }).toEqual({ whileSecond: 2, after: 3 });
+  });
+
   it('that fails with its request on screen stays in the box and is kept, said in the form and not by a toast', async () => {
     vi.mocked(replyTicket).mockRejectedValue(new AccountError('network_error'));
     const { user } = await opened();
@@ -564,6 +604,24 @@ describe('a new request on its way', () => {
     expect({ form: shownRequest(), offered: offer() }).toEqual({
       form: SENT,
       offered: `${msg('tickets.draftKept', { subject: 'Typed meanwhile' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+    });
+  });
+
+  it('offered later is said once, politely; the offer a Restore leaves is a standing fact, not said again', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(offer()).not.toBeNull());
+    const plate = () => screen.getByRole('button', { name: msg('tickets.draftRestore') }).closest('.notice');
+    const late = plate()?.querySelectorAll('[role="status"]').length;
+    await user.click(screen.getByRole('button', { name: msg('tickets.draftRestore') }));
+    await vi.waitFor(() => expect(subjectField().value).toBe('Cannot sign in'));
+    expect({ late, swapped: plate()?.querySelectorAll('[role]').length, offered: offer() }).toEqual({
+      late: 1,
+      swapped: 0,
+      offered: `${msg('tickets.draftKept', { subject: 'Another matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
     });
   });
 

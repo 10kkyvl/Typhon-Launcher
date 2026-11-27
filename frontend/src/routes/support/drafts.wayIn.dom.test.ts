@@ -3,7 +3,10 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError, type CurrentUser } from '../../lib/services/account';
+import type { LibraryGame } from '../../lib/services/library';
+import { igdbIdsOf } from '../../lib/services/profile';
 import { createTicket, getTicket, ticketLimits, unreadTickets } from '../../lib/services/support';
+import { libraryGames } from '../../lib/stores/library';
 import { navigate, resetHistory } from '../../lib/stores/router';
 import { unreadReplies } from '../../lib/stores/support';
 import { toasts } from '../../lib/stores/toasts';
@@ -20,6 +23,8 @@ vi.mock('../../../bindings/typhon/internal/account', async (original) => (await 
 vi.mock('../../lib/services/support', async (original) => (await import('../../lib/testing/supportTesting')).supportService(await original()));
 vi.mock('../../lib/services/logsUpload', async () => (await import('../../lib/testing/supportTesting')).logsUpload());
 vi.mock('../../lib/services/account', async (original) => (await import('../../lib/testing/supportTesting')).accountOpeners(await original()));
+// The game picker maps library games to catalog ids through the profile service: answered here.
+vi.mock('../../lib/services/profile', async (original) => ({ ...(await original<object>()), igdbIdsOf: vi.fn() }));
 
 // The ways into the new-request form, as the route gives them to the support page: the list's "New
 // request" sets nothing; the Beta badge sets the topic and a subject; the Move dialog and Settings set
@@ -44,12 +49,15 @@ beforeEach(() => {
   vi.mocked(ticketLimits).mockResolvedValue(LIMITS);
   vi.mocked(unreadTickets).mockResolvedValue(0);
   vi.mocked(getTicket).mockResolvedValue(thread(ticket(7, 'Request 7'), []));
+  vi.mocked(igdbIdsOf).mockResolvedValue({ 'canon-1': '42' });
+  libraryGames.set([{ id: 'game-1', title: 'A game', canonicalGameId: 'canon-1' } as LibraryGame]);
 });
 
 afterEach(() => {
   cleanup();
   expect(calls).toEqual([]);
-  for (const mock of [ticketLimits, getTicket, createTicket, unreadTickets]) vi.mocked(mock).mockReset();
+  for (const mock of [ticketLimits, getTicket, createTicket, unreadTickets, igdbIdsOf]) vi.mocked(mock).mockReset();
+  libraryGames.set([]);
   toasts.set([]);
   currentUser.set(null);
   authState.set('bootstrapping');
@@ -338,5 +346,95 @@ describe('a failed send and the ways in', () => {
     cleanup();
     await open(PLAIN);
     expect({ afterKey, later: shown() }).toEqual({ afterKey: SWAP_OFFER, later: { ...BETA_FORM, subject: 'Beta 2.0: x', offered: SWAP_OFFER } });
+  });
+});
+
+describe('the writer rule, pinned', () => {
+  async function pickGame(user: ReturnType<typeof renderDom>['user']) {
+    await user.click(screen.getByRole('button', { name: msg('tickets.gameChoose') }));
+    await user.click(await screen.findByRole('button', { name: 'A game' }));
+  }
+  const chosenGame = () => document.querySelector('.chosen-title')?.textContent ?? null;
+
+  /** A request typed in the plain form, sent and left on its way. */
+  async function onItsWay() {
+    const first = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(first.promise);
+    const { user } = await open(PLAIN);
+    await user.type(subjectField(), 'Old matter');
+    await user.type(bodyField(), 'Still broken.');
+    await user.click(logsSwitch());
+    await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    return first;
+  }
+
+  it('a game picked in a prefilled form makes it the writer: the game is kept, the older draft stays offered', async () => {
+    await oldDraft();
+    const { user } = await open(MOVE);
+    await pickGame(user);
+    cleanup();
+    await open(PLAIN);
+    expect({ game: chosenGame(), offered: shown().offered }).toEqual({ game: 'A game', offered: SWAP_OFFER });
+  });
+
+  it('a topic changed once the form is the writer is carried into the draft, the logs switch set by hand', async () => {
+    const { user } = await open(PLAIN);
+    await user.type(subjectField(), 'Cannot sign in');
+    // Set by hand, the switch stays as it is on a topic change: only the topic changes then.
+    await user.click(logsSwitch());
+    await user.click(topicBox());
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicAccount') }));
+    cleanup();
+    await open(PLAIN);
+    expect(shown().topic).toBe(msg('tickets.topicAccount'));
+  });
+
+  it('a form that holds only a game is not free: a request that comes back is offered beside it', async () => {
+    const first = await onItsWay();
+    const { user } = await open(PLAIN);
+    await pickGame(user);
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(notice()).not.toBeNull());
+    expect({ game: chosenGame(), subject: subjectField().value, said: get(toasts).map((t) => t.message) }).toEqual({
+      game: 'A game',
+      subject: '',
+      said: [msg('tickets.requestNotSentOffered', { subject: 'Old matter' })],
+    });
+  });
+
+  it('a form that holds nothing and only offers another request takes the one that comes back into its fields', async () => {
+    const first = await onItsWay();
+    await oldDraft('Offered matter');
+    await open(MOVE);
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(subjectField().value).toBe('Old matter'));
+    const offered = shown().offered;
+    cleanup();
+    await open(PLAIN);
+    expect({ offered, said: get(toasts).map((t) => t.message), later: [subjectField().value, shown().offered] }).toEqual({
+      offered: `${msg('tickets.draftKept', { subject: 'Offered matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+      said: [msg('tickets.requestNotSentKept', { subject: 'Old matter' })],
+      later: ['Old matter', `${msg('tickets.draftKept', { subject: 'Offered matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`],
+    });
+  });
+
+  it('a form that holds nothing takes no text that would push a kept one out: with both places taken it is kept nowhere', async () => {
+    const first = await onItsWay();
+    await oldDraft('Spare matter');
+    const beta = await open(BETA);
+    await beta.user.type(bodyField(), 'Beta text.');
+    cleanup();
+    await open(MOVE);
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(get(toasts)).toHaveLength(1));
+    const here = { subject: subjectField().value, said: get(toasts).map((t) => [t.message, t.action?.label ?? null]) };
+    cleanup();
+    await open(PLAIN);
+    expect({ here, later: [subjectField().value, bodyField().value, shown().offered] }).toEqual({
+      here: { subject: '', said: [[msg('tickets.requestNotSentNotKept', { subject: 'Old matter' }), msg('tickets.copyText')]] },
+      later: ['Beta 2.0: ', 'Beta text.', `${msg('tickets.draftKept', { subject: 'Spare matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`],
+    });
   });
 });
