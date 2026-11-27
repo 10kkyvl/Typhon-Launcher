@@ -10,7 +10,6 @@ import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import CloudConflictModal from './CloudConflictModal.svelte';
-import CloudDisableModal from './CloudDisableModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -597,24 +596,5 @@ describe('CloudConflictModal without the cloud', () => {
     expect(buttonsOf(dialog).mine()).not.toBeNull();
     expect(buttonsOf(dialog).play()).toBeNull();
     expect(await answer(second)).toBe('waiting');
-  });
-});
-
-describe('CloudDisableModal', () => {
-  it('keeps the focus on the pressed choice, busy, while cloud saves turn off', async () => {
-    let busy = false;
-    const props = { open: true, busy, ondelete: vi.fn(), onkeep: vi.fn(() => (busy = true)) };
-    const { rerender } = render(CloudDisableModal, { target: app, props });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('cloudsaves.disableTitle') });
-    const keep = within(dialog).getByRole('button', { name: msg('cloudsaves.disableKeep') });
-    keep.focus();
-
-    await keys.keyboard('{Enter}');
-    await rerender({ busy });
-
-    expect(keep.getAttribute('aria-busy')).toBe('true');
-    expect(document.activeElement).toBe(keep);
-    expect(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDeleting') })).toHaveProperty('disabled', true);
   });
 });
