@@ -359,17 +359,27 @@ describe('MetadataMatchModal: a match applied for one game, answered after the d
     expect(within(dialog).getByRole('button', { name: msg('common.cancel') }).getAttribute('aria-disabled')).toBeNull();
   });
 
-  it('a refusal says nothing in the new game\'s dialog and leaves it live', async () => {
+  it('a refusal is said once, in a toast naming the game it was about with the reason, nothing in the new game\'s dialog, which stays live', async () => {
     const { applied, onapplied, dialog, celesteRow } = await applyThenTurn();
 
     applied.reject(new Error('typhon:metadata.busy: already running'));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.metadataMatchFailedForReason', { title: 'Hades', reason: msg('errMetadata.metadataBusy') }), 'danger']]);
     expect(within(dialog).queryByRole('alert')).toBeNull();
-    expect(get(toasts)).toEqual([]);
+    expect(dialog.textContent).not.toContain('already running');
     expect(onapplied).not.toHaveBeenCalled();
     expect(celesteRow.isConnected).toBe(true);
     expect(celesteRow.closest('[role="radiogroup"]')?.getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('a refusal without words for its code names the game in the bare sentence, never Go\'s text', async () => {
+    const { applied } = await applyThenTurn();
+
+    applied.reject(new Error('typhon:metadata.something_new: upstream said no'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.metadataMatchFailedFor', { title: 'Hades' }), 'danger']]);
   });
 });
 

@@ -187,6 +187,29 @@ describe('GameDialogs: the dialogs of a page that lost its game come back for th
     expect(buttons.filter((button) => button.getAttribute('aria-disabled') === 'true' || button.getAttribute('aria-busy') === 'true')).toEqual([]);
   });
 
+  it('a status refusal for the game before is one toast naming that game, nothing in the next library game\'s dialog', async () => {
+    const saved = held<LibraryGame>();
+    vi.mocked(setStatus).mockReturnValueOnce(saved.promise);
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open status' }));
+    const first = await screen.findByRole('dialog', { name: msg('modals.gameStatusTitle') });
+    await keys.click(within(first).getByRole('button', { name: msg('games.statusPlaying') }));
+
+    await rerender({ game: undefined, canonicalId: 'igdb:9', title: 'Catalog only' });
+    await rerender({ game: celeste, canonicalId: 'igdb:2', title: 'Celeste' });
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.gameStatusTitle') });
+    saved.reject(new Error('typhon:library.game_not_found: no game'));
+    await settle();
+    await settle();
+
+    expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([
+      [msg('modals.gameStatusFailedForReason', { title: 'Hades', reason: msg('library.game_not_found') }), 'danger'],
+    ]);
+    expect(dialog.isConnected).toBe(true);
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+
   it('a match answer for the game before, from the dialogs the page took down, leaves the next game\'s dialog and metadata alone', async () => {
     const applied = held<MetadataView>();
     vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'igdb:1' ? [hadesMatch] : [celesteMatch]));

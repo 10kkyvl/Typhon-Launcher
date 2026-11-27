@@ -7,6 +7,7 @@
   import { COMPLETED_MIN, completionDateIssue, dateFromInput, dateInputValue, dayValue } from '../game/completion';
   import { libraryErrorText } from '../library/errors';
   import { setCompletedAt, setStatus, type LibraryGame } from '../services/library';
+  import { toast } from '../stores/toasts';
   import { focusHandOff } from '../utils/focusHandOff';
   import { errorCode, hasMessage, msg } from '../i18n';
 
@@ -82,12 +83,14 @@
   });
 
   // What was pressed is written to the game it was pressed for, date included, even when the dialog
-  // has moved on; only the opening it was pressed in hears the answer.
+  // has moved on; only the opening it was pressed in hears the answer. A refusal that opening no
+  // longer shows is said once, in a toast naming the game.
   async function apply(status: GameStatus, from: GameStatus | 'save' = status) {
     if (saving) return;
     const at = opening;
     const heard = () => alive && at === opening;
     const id = game.id;
+    const title = game.title;
     const changes = status !== current;
     const date = isFinished(status) ? dateFromInput(day) : null;
     // The focus the pressed button holds goes to the words of a refusal: the date field for a date.
@@ -107,7 +110,10 @@
       if (date) await setCompletedAt(id, date);
       if (heard()) open = false;
     } catch (err) {
-      if (!heard()) return;
+      if (!heard()) {
+        toast(refusedFor(title, err, statusDone), 'danger');
+        return;
+      }
       if (statusDone) dateFailure = dateFailureText(err);
       else failure = libraryErrorText(err, msg('modals.gameStatusUpdateFailed'));
     } finally {
@@ -124,6 +130,14 @@
   function dateFailureText(err: unknown): string {
     const code = errorCode(err);
     return hasMessage(code) ? msg('games.blocks.statusDateFailedReason', { reason: msg(code) }) : msg('games.blocks.statusDateFailed');
+  }
+
+  function refusedFor(title: string, err: unknown, statusDone: boolean): string {
+    const code = errorCode(err);
+    if (statusDone) {
+      return hasMessage(code) ? msg('modals.gameStatusDateFailedForReason', { title, reason: msg(code) }) : msg('modals.gameStatusDateFailedFor', { title });
+    }
+    return hasMessage(code) ? msg('modals.gameStatusFailedForReason', { title, reason: msg(code) }) : msg('modals.gameStatusFailedFor', { title });
   }
 
   function pick(status: GameStatus) {

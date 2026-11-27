@@ -7,7 +7,7 @@
     type MetadataCandidate,
     type MetadataView,
   } from '../services/metadata';
-  import { metadataErrorText } from '../metadata/metadataErrors';
+  import { REASONS, metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
@@ -17,7 +17,7 @@
   import OptionList from './OptionList.svelte';
   import SearchInput from './SearchInput.svelte';
   import Spinner from './Spinner.svelte';
-  import { msg } from '../i18n';
+  import { errorCode, msg } from '../i18n';
   import { focusHandOff } from '../utils/focusHandOff';
 
   /**
@@ -199,12 +199,13 @@
 
   // `hand`: taken at the press; a refusal brings the list back with the words of it, which take the
   // focus the press held.
-  // The match was made for the game it was pressed for even when the dialog has moved on: the toast
-  // names that game, and the dialog and the page now on screen are left as they are.
+  // The match was made, or refused, for the game it was pressed for even when the dialog has moved
+  // on: a toast names that game, and the dialog and the page now on screen are left as they are.
   async function apply(candidate: MetadataCandidate, hand: ReturnType<typeof focusHandOff>) {
     if (applying) return;
     const at = opening;
     const heard = () => alive && at === opening;
+    const title = gameTitle;
     applying = true;
     applyingId = candidate.providerId;
     failure = '';
@@ -212,7 +213,10 @@
     try {
       view = await applyMetadataMatch(gameId, candidate.providerId);
     } catch (err) {
-      if (!heard()) return;
+      if (!heard()) {
+        toast(refusedFor(title, err), 'danger');
+        return;
+      }
       failure = metadataErrorText(err);
       settle();
       await hand(() => document.getElementById(failureId));
@@ -223,6 +227,11 @@
     settle();
     open = false;
     onapplied?.(view);
+  }
+
+  function refusedFor(title: string, err: unknown): string {
+    const reason = REASONS[errorCode(err)];
+    return reason ? msg('modals.metadataMatchFailedForReason', { title, reason: msg(reason) }) : msg('modals.metadataMatchFailedFor', { title });
   }
 
   function settle() {
