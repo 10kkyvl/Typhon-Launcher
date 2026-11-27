@@ -224,6 +224,40 @@ describe("the edit bar's Cancel and Reset", () => {
     await waitFor(() => expect(document.activeElement).toBe(editControl()));
   });
 
+  // A pointer press in the macOS WebKit view moves no focus: the control focused before Save keeps
+  // focus while the save runs, and a natively disabled button would drop it to <body> in Chromium.
+  for (const name of ['common.cancel', 'profile.resetLayout'] as const) {
+    it(`${name === 'common.cancel' ? 'Cancel' : 'Reset'} holding focus while a save starts keeps it, refused with the saving words, and asks nothing`, async () => {
+      const answer = pending<CurrentUser>();
+      vi.mocked(updateProfile).mockReturnValue(answer.promise);
+      const me = still();
+      const { user } = await editor(me);
+      await change(user);
+      const control = button(msg(name));
+      control.focus();
+
+      await fireEvent.click(button(msg('common.save')));
+
+      await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('true'));
+      expect({ disabled: control.matches(':disabled'), reason: description(control) }).toEqual({ disabled: false, reason: msg('social.saving') });
+      expect(document.activeElement).toBe(control);
+      await user.keyboard('{Enter}');
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      answer.resolve(me);
+      await waitFor(() => expect(screen.queryByRole('button', { name: msg('common.save') })).toBeNull());
+    });
+  }
+
+  it('Cancel and Reset with no save running are free and say no reason', async () => {
+    await editor();
+
+    expect([button(msg('common.cancel')), button(msg('profile.resetLayout'))].map((control) => ({ ariaDisabled: control.getAttribute('aria-disabled'), disabled: control.matches(':disabled'), reason: description(control) }))).toEqual([
+      { ariaDisabled: null, disabled: false, reason: '' },
+      { ariaDisabled: null, disabled: false, reason: '' },
+    ]);
+  });
+
   it('Reset asks before it puts the layout back', async () => {
     const { user } = await editor();
 

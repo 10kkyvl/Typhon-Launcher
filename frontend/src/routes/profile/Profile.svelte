@@ -437,10 +437,12 @@
                 <span class="topbar-sub">{msg('profile.editingHint')}</span>
               {/if}
             </div>
-            <Button size="sm" variant="ghost" disabled={saving} onclick={askReset}>
+            <!-- Refused, never disabled, while the save runs: a pointer press on Save moves no focus in
+                 the macOS view, so either may still hold it. -->
+            <Button size="sm" variant="ghost" disabled={saving} reason={saving ? msg('social.saving') : ''} onclick={askReset}>
               <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
             </Button>
-            <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
+            <Button variant="ghost" disabled={saving} reason={saving ? msg('social.saving') : ''} onclick={cancel}>{msg('common.cancel')}</Button>
             <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Refused, it
                  stays in the Tab order and says why: the reason changes under a focus it holds (the
                  connection coming back to an unchanged draft), it never turns disabled. -->

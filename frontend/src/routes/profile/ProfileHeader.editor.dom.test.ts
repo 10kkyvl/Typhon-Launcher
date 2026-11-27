@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../../lib/i18n';
 import { AccountError, updateProfile, type CurrentUser } from '../../lib/services/account';
@@ -196,6 +196,35 @@ describe('Save and Cancel', () => {
 
     expect(screen.queryByRole('textbox', { name: msg('social.aboutTitle') })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(opener()));
+  });
+
+  // A pointer press in the macOS WebKit view moves no focus: Cancel keeps the focus it had while the
+  // save starts, and a natively disabled button would drop it to <body> in Chromium.
+  it('Cancel holding focus while a save starts keeps it, refused with the saving words, and a press closes nothing', async () => {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const { user } = await headerEditor();
+    await user.type(field(msg('social.aboutTitle')), 'Hi');
+    const cancel = button(msg('common.cancel'));
+    cancel.focus();
+
+    await fireEvent.click(button(msg('common.save')));
+
+    await waitFor(() => expect(cancel.getAttribute('aria-disabled')).toBe('true'));
+    expect({ disabled: cancel.matches(':disabled'), reason: description(cancel) }).toEqual({ disabled: false, reason: msg('social.saving') });
+    expect(document.activeElement).toBe(cancel);
+    await user.keyboard('{Enter}');
+    expect((field(msg('social.aboutTitle')) as HTMLTextAreaElement).value).toBe('Hi');
+
+    answer.resolve({ ...me, bio: 'Hi' });
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: msg('social.aboutTitle') })).toBeNull());
+  });
+
+  it('Cancel with no save running is free and says no reason', async () => {
+    await headerEditor();
+    const cancel = button(msg('common.cancel'));
+
+    expect({ ariaDisabled: cancel.getAttribute('aria-disabled'), disabled: cancel.matches(':disabled'), reason: description(cancel) }).toEqual({ ariaDisabled: null, disabled: false, reason: '' });
   });
 
   it('a refused username is said at that field, which takes focus', async () => {

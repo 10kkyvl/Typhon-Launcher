@@ -396,7 +396,9 @@
       </div>
       <div class="foot">
         {#if fieldErrors.general}<div class="general"><Notice tone="danger" compact>{fieldErrors.general}</Notice></div>{/if}
-        <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>{msg('common.cancel')}</Button>
+        <!-- Refused, never disabled, while a save runs: a pointer press on Save moves no focus in the
+             macOS view, so Cancel may still hold it. -->
+        <Button variant="ghost" disabled={$savingProfile} reason={$savingProfile ? msg('social.saving') : ''} onclick={cancelEditing}>{msg('common.cancel')}</Button>
         <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Refused, offline
              or with nothing to save, it stays in the Tab order and says why. -->
         <Button
