@@ -14,6 +14,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { held, LIMITS, thread, ticket, words } from '../../lib/testing/supportTesting';
+import { keptRequest, returnRequest, spareRequest } from './drafts';
 import Support from './Support.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -435,6 +436,31 @@ describe('the writer rule, pinned', () => {
     expect({ here, later: [subjectField().value, bodyField().value, shown().offered] }).toEqual({
       here: { subject: '', said: [[msg('tickets.requestNotSentNotKept', { subject: 'Old matter' }), msg('tickets.copyText')]] },
       later: ['Beta 2.0: ', 'Beta text.', `${msg('tickets.draftKept', { subject: 'Spare matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`],
+    });
+  });
+
+  it('a first key in a prefilled form that pushes out a draft another form wrote, the spare taken, names it and copies it', async () => {
+    await oldDraft();
+    returnRequest({ topic: 'account', game: null, subject: 'Spare matter', body: 'Spare body.', attachLogs: false, logsTouched: false }, {}, get(currentUser)?.id ?? null);
+    await open(BETA);
+    cleanup();
+    const move = await open(MOVE);
+    await move.user.type(bodyField(), 'x');
+    const said = get(toasts).map((t) => [t.message, t.action?.label ?? null]);
+    const written: string[] = [];
+    const before = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void written.push(text) }, configurable: true });
+    try {
+      get(toasts)[0]?.action?.run();
+      await settled();
+    } finally {
+      if (before) Object.defineProperty(navigator, 'clipboard', before);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+    expect({ said, written, kept: [keptRequest()?.body, spareRequest()?.subject] }).toEqual({
+      said: [[msg('tickets.draftDropped', { subject: 'Old matter' }), msg('tickets.copyText')]],
+      written: ['Old matter\n\nStill broken.'],
+      kept: ['x', 'Spare matter'],
     });
   });
 });

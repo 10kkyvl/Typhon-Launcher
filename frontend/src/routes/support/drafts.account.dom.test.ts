@@ -427,6 +427,24 @@ describe("A's support toasts once A signs out", () => {
     });
   });
 
+  it('are still watched once nothing of A is kept any more: a reply toast with Copy is gone at the sign-out', async () => {
+    const first = await replyOnItsWay();
+    const view = await opened();
+    await view.user.type(replyBox(), 'Newer.');
+    first.reject(new AccountError('network_error'));
+    await settled();
+    const raised = said();
+    await view.user.clear(replyBox());
+    const kept = keptReply(7);
+    cleanup();
+    signOut();
+    expect({ raised, kept, signedOut: said() }).toEqual({
+      raised: [['danger', msg('tickets.replyNotSentNotKept', { subject: 'Game will not start' })]],
+      kept: '',
+      signedOut: [],
+    });
+  });
+
   it('stay, and copy, while A is signed in', async () => {
     const action = await offeredToast();
     expect({ written: await copied(action), said: said() }).toEqual({
