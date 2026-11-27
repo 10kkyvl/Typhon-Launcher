@@ -16,8 +16,8 @@ describe('screens show a failed load instead of an empty state', () => {
   const LINE = /\{#if \$profileFailed\}\s*<p[^>]*role="alert"/;
 
   it('the profile screen shows the profile statistics failure with a retry, kept while it runs', () => {
-    expect(profile).toMatch(/\{#if \$profileFailed \|\| snapshotRetrying\}\s*(<div[^>]*>)?\s*<Notice tone="danger" bind:retrying=\{snapshotRetrying\} retry=\{\{[^}]*run: retrySnapshot[^>]*>\{msg\('profile\.loadFailed'\)\}/);
-    expect(profile).toMatch(/async function retrySnapshot\(\)[\s\S]*?await refreshProfile\(\);\s*return !get\(profileFailed\);/);
+    // The store's refresh answers whether the newest read came: Retry waits for the read the page will show.
+    expect(profile).toMatch(/\{#if \$profileFailed \|\| snapshotRetrying\}\s*(<div[^>]*>)?\s*<Notice tone="danger" bind:retrying=\{snapshotRetrying\} retry=\{\{[^}]*run: refreshProfile \}\}[^>]*>\{msg\('profile\.loadFailed'\)\}/);
   });
 
   it.each([

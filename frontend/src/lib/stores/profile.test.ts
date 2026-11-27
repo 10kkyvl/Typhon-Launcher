@@ -51,6 +51,8 @@ async function load() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A failed test can leave answers queued; the next test starts with none.
+  fetchSnapshot.mockReset();
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -91,6 +93,49 @@ describe('profile snapshot', () => {
     await store.refreshProfile();
 
     expect((get(store.profileSnapshot) as unknown as { marker: string }).marker).toBe('kept');
+  });
+});
+
+describe('what a refresh answers', () => {
+  it('true when the read came, false when it failed', async () => {
+    const { store } = await load();
+    fetchSnapshot.mockResolvedValueOnce(snapshot('x')).mockRejectedValueOnce(new Error('offline'));
+
+    expect(await store.refreshProfile()).toBe(true);
+    expect(await store.refreshProfile()).toBe(false);
+  });
+
+  it('a read replaced by a newer one answers with the newer one\'s result, not its own', async () => {
+    const { store } = await load();
+    const older = deferred<ProfileSnapshot>();
+    const newer = deferred<ProfileSnapshot>();
+    fetchSnapshot.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    let answered: boolean | 'waiting' = 'waiting';
+
+    const first = store.refreshProfile().then((ok) => (answered = ok));
+    const second = store.refreshProfile();
+    older.reject(new Error('late failure'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(answered).toBe('waiting');
+    newer.resolve(snapshot('new'));
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+  });
+
+  it('follows a chain of replacements to the newest read, which failed', async () => {
+    const { store } = await load();
+    const reads = [deferred<ProfileSnapshot>(), deferred<ProfileSnapshot>(), deferred<ProfileSnapshot>()];
+    for (const read of reads) fetchSnapshot.mockReturnValueOnce(read.promise);
+
+    const answers = reads.map(() => store.refreshProfile());
+    reads[0].resolve(snapshot('first'));
+    reads[1].resolve(snapshot('second'));
+    reads[2].reject(new Error('offline'));
+
+    expect(await Promise.all(answers)).toEqual([false, false, false]);
+    expect(get(store.profileFailed)).toBe(true);
   });
 });
 

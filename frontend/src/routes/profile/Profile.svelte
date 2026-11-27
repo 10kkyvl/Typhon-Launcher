@@ -281,11 +281,6 @@
     picked = { ...picked, [pick.igdbId]: pick.game };
   }
 
-  async function retrySnapshot(): Promise<boolean> {
-    await refreshProfile();
-    return !get(profileFailed);
-  }
-
   // An answer of a read that a newer one or the editor's closing replaced is dropped.
   async function loadPreview(): Promise<boolean | undefined> {
     const id = ++previewSeq;
@@ -415,7 +410,7 @@
 
   {#if $profileFailed || snapshotRetrying}
     <div class="load-error">
-      <Notice tone="danger" bind:retrying={snapshotRetrying} retry={{ label: msg('common.retry'), run: retrySnapshot }}>{msg('profile.loadFailed')}</Notice>
+      <Notice tone="danger" bind:retrying={snapshotRetrying} retry={{ label: msg('common.retry'), run: refreshProfile }}>{msg('profile.loadFailed')}</Notice>
     </div>
   {/if}
 

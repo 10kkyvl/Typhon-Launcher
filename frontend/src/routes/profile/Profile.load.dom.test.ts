@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../../lib/i18n';
 import type { CurrentUser, ProfileBlock } from '../../lib/services/account';
 import { EMPTY_SNAPSHOT, getProfilePreview, getProfileSnapshot, type ProfileSnapshot } from '../../lib/services/profile';
-import { profileDraft, profileFailed, profileSnapshot } from '../../lib/stores/profile';
+import { profileDraft, profileFailed, profileSnapshot, refreshProfile } from '../../lib/stores/profile';
 import { navigate, resetHistory, stayHere } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { authState, currentUser } from '../../lib/stores/user';
@@ -124,6 +124,29 @@ describe('the first read of the profile', () => {
     // Said again: the failure comes into the alert anew.
     await waitFor(() => expect(screen.getByText(msg('profile.loadFailed')).closest('.message')).not.toBe(before));
     expect(values()).toEqual([]);
+  });
+});
+
+describe('a snapshot Retry replaced by a newer read of the store', () => {
+  it('stays busy until the newer read answers, and says nothing failed when that one comes', async () => {
+    vi.mocked(getProfileSnapshot).mockRejectedValueOnce(new Error('offline'));
+    signIn();
+    const { user } = renderDom(Profile);
+    await screen.findByText(msg('profile.loadFailed'));
+    const pressed = pending<ProfileSnapshot>();
+    const newer = pending<ProfileSnapshot>();
+    vi.mocked(getProfileSnapshot).mockReturnValueOnce(pressed.promise).mockReturnValueOnce(newer.promise);
+
+    await user.click(retry());
+    const replacing = refreshProfile();
+    pressed.reject(new Error('offline'));
+    await new Promise((settled) => setTimeout(settled, 0));
+
+    expect(retry().getAttribute('aria-busy')).toBe('true');
+    newer.resolve(SNAPSHOT);
+    expect(await replacing).toBe(true);
+    await waitFor(() => expect(screen.queryByText(msg('profile.loadFailed'))).toBeNull());
+    expect(screen.getAllByText('12').length).toBeGreaterThan(0);
   });
 });
 

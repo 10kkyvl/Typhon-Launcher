@@ -18,18 +18,29 @@ export const profileDraft = writable<ProfileDraft | null>(null);
 
 let started = false;
 let seq = 0;
+let newest: Promise<boolean> = Promise.resolve(true);
 
-export async function refreshProfile() {
+/**
+ * Reads the snapshot again. Answers whether the read came (true) or failed (false); a read that a newer
+ * one replaced answers with the newest read's result, so a caller waits for what the page will show.
+ */
+export function refreshProfile(): Promise<boolean> {
   const id = ++seq;
-  try {
-    const snap = await getProfileSnapshot();
-    if (id !== seq) return;
-    profileSnapshot.set(snap);
-    profileFailed.set(false);
-  } catch {
-    if (id !== seq) return;
-    profileFailed.set(true);
-  }
+  const read = (async (): Promise<boolean> => {
+    try {
+      const snap = await getProfileSnapshot();
+      if (id !== seq) return newest;
+      profileSnapshot.set(snap);
+      profileFailed.set(false);
+      return true;
+    } catch {
+      if (id !== seq) return newest;
+      profileFailed.set(true);
+      return false;
+    }
+  })();
+  newest = read;
+  return read;
 }
 
 function snapshotKey(user: CurrentUser | null): string | null {
