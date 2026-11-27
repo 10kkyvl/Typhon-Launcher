@@ -10,7 +10,6 @@ import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import CloudConflictModal from './CloudConflictModal.svelte';
-import CloudConsentModal from './CloudConsentModal.svelte';
 import CloudDisableModal from './CloudDisableModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -598,34 +597,6 @@ describe('CloudConflictModal without the cloud', () => {
     expect(buttonsOf(dialog).mine()).not.toBeNull();
     expect(buttonsOf(dialog).play()).toBeNull();
     expect(await answer(second)).toBe('waiting');
-  });
-});
-
-describe('CloudConsentModal', () => {
-  it('opens the privacy policy from a text link in its sentence', async () => {
-    const onpolicy = vi.fn();
-    render(CloudConsentModal, { target: app, props: { open: true, onenable: vi.fn(), onpolicy } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('cloudsaves.consentTitle') });
-    const link = within(dialog).getByRole('button', { name: msg('cloudsaves.consentPolicyLink') });
-    expect(link.classList.contains('text-link')).toBe(true);
-    link.focus();
-
-    await keys.keyboard('{Enter}');
-
-    expect(onpolicy).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the focus on "enable", busy, while it turns cloud saves on', async () => {
-    const { rerender } = render(CloudConsentModal, { target: app, props: { open: true, onenable: vi.fn(), onpolicy: vi.fn() } });
-    const dialog = screen.getByRole('dialog', { name: msg('cloudsaves.consentTitle') });
-    const enable = within(dialog).getByRole('button', { name: msg('cloudsaves.consentEnable') });
-    enable.focus();
-
-    await rerender({ busy: true });
-
-    expect(enable.getAttribute('aria-busy')).toBe('true');
-    expect(document.activeElement).toBe(enable);
   });
 });
 

@@ -88,6 +88,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // A setting that was not saved just happened.
+  'lib/components/CloudConsentModal.svelte': [['danger', true]],
   // A failed read of the library's tags, and a failed save or delete of the collection, just happened.
   'lib/components/CollectionModal.svelte': [
     ['danger', true],
