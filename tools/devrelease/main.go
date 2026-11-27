@@ -174,7 +174,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	paths, cleanup, err := buildLaunchers(ctx, cfg, versions, stdout, stderr)
+	paths, cleanup, err := buildLaunchers(ctx, cfg, versions, launcherBuild(cfg, stdout, stderr), stdout, stderr)
 	if err != nil {
 		return err
 	}

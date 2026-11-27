@@ -115,20 +115,27 @@ func say(w io.Writer, line string) error {
 	return nil
 }
 
-// buildLaunchers resolves the chain's launchers and, for a Windows build,
-// keeps the generated resource only as long as the builds need it.
-func buildLaunchers(ctx context.Context, cfg config, versions []string, stdout, stderr io.Writer) ([]string, func(), error) {
-	if !cfg.windows {
-		return resolveArtifacts(ctx, cfg, versions, goBuild(stdout, stderr))
+// launcherBuild is the build of the mode: a devmock launcher, or a qa
+// typhon.exe for the Windows chain.
+func launcherBuild(cfg config, stdout, stderr io.Writer) buildFunc {
+	if cfg.windows {
+		return goBuildWindows(stdout, stderr)
 	}
-	if cfg.artifact != "" {
-		return resolveArtifacts(ctx, cfg, versions, goBuildWindows(stdout, stderr))
+	return goBuild(stdout, stderr)
+}
+
+// buildLaunchers resolves the chain's launchers with build and, for a
+// Windows build, keeps the generated resource only as long as the builds
+// need it.
+func buildLaunchers(ctx context.Context, cfg config, versions []string, build buildFunc, stdout, stderr io.Writer) ([]string, func(), error) {
+	if !cfg.windows || cfg.artifact != "" {
+		return resolveArtifacts(ctx, cfg, versions, build)
 	}
 	drop, err := windowsResource(ctx, stdout, stderr)
 	if err != nil {
 		return nil, nil, err
 	}
-	paths, cleanup, err := resolveArtifacts(ctx, cfg, versions, goBuildWindows(stdout, stderr))
+	paths, cleanup, err := resolveArtifacts(ctx, cfg, versions, build)
 	if derr := drop(); derr != nil {
 		if cleanup != nil {
 			cleanup()
