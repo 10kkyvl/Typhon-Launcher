@@ -62,6 +62,23 @@ function missing(source: string): string[] {
   return gaps;
 }
 
+// Every module a file imports: `from '…'`, a bare `import '…'`, or `import('…')`, under any quote kind.
+const IMPORTED = /(?:\bfrom\s*|\bimport\s*\(?\s*)(['"`])((?:(?!\1).)*)\1/g;
+const GUARDED = new Set(LINES.map(([, , module]) => moduleOf(module)));
+
+/**
+ * The imports of a mocked module with a query or a hash: Vite loads such a path as a module of its own,
+ * which the mock does not replace. `?raw` reads the source text and runs nothing.
+ */
+function queried(source: string): string[] {
+  return [...source.matchAll(IMPORTED)]
+    .map((match) => match[2])
+    .filter((path) => {
+      const url = new URL(path, HERE);
+      return GUARDED.has(moduleOf(path)) && ((url.search !== '' && url.search !== '?raw') || url.hash !== '');
+    });
+}
+
 /** The functions of a source file that call its generated binding (`<binding>.`). */
 function bindingCalls(source: string, binding: string): string[] {
   const names: string[] = [];
@@ -128,6 +145,37 @@ describe('tests that mount a profile part', () => {
       expect(missing(`${whole}\n${line}\n`), line).toContain('no real function behind a mock');
     }
     expect(missing(`${whole}\nvi.mocked(updateProfile).mockImplementation(async () => player());\n`)).toEqual([]);
+  });
+});
+
+describe('every test of this folder', () => {
+  it('imports no mocked module by a path with a query, which would load the real one', () => {
+    // The guard's own self-tests name such paths as text.
+    const others = Object.entries(tests).filter(([path]) => path !== './Profile.mocks.test.ts');
+    expect(others.length).toBeGreaterThanOrEqual(20);
+    expect(others.map(([path, source]) => [path, queried(source)]).filter(([, found]) => found.length > 0)).toEqual([]);
+  });
+
+  it('refuses a query on any mocked module under any import form, and lets ?raw and other modules through', () => {
+    for (const line of [
+      "const real = await import('../../lib/services/account?real');",
+      'const real = (await import("../../lib/services/account?real" as string)) as typeof account;',
+      'import * as real from `../../lib/services/profileCover.ts?x=1`;',
+      "import { getProfileSnapshot } from '../../lib/services/profile?import';",
+      "import '../../lib/stores/messaging?side';",
+      "const binding = await import('../../../bindings/typhon/internal/account/index.js?v=2');",
+      "const real = await import('../../lib/services/account#real');",
+    ]) {
+      expect(queried(line), line).toHaveLength(1);
+    }
+    for (const line of [
+      "import source from '../../lib/services/account.ts?raw';",
+      "import { updateProfile } from '../../lib/services/account';",
+      "import raw from './Profile.svelte?raw';",
+      "const art = await import('../../lib/stores/metadata?x=1');",
+    ]) {
+      expect(queried(line), line).toEqual([]);
+    }
   });
 });
 
