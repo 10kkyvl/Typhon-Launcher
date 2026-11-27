@@ -564,10 +564,70 @@ describe('the read of a start (the stored session checked behind the splash)', (
 
     const started = store.initSocial();
     store.authState.set('authenticated');
+    await flush();
+    const kicksBefore = asked(store.service)[0];
     answer.resolve(page(2, 1));
     await started;
+    await flush();
 
     expect(held(store)).toEqual({ friends: 2, incoming: 1, loaded: true, error: null });
+    expect([kicksBefore, asked(store.service)[0]]).toEqual([0, 1]);
+  });
+
+  // Go's Kick empties the page it holds, and a Friends() still running then answers that empty page.
+  it('has the kick sent only once its answer is in, so the page it brings stays', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    await flush();
+    const kicksBefore = asked(store.service)[0];
+    answer.resolve(page(2, 0));
+    await started;
+    await flush();
+
+    expect({ kicksBefore, kicks: asked(store.service)[0], friends: held(store).friends }).toEqual({
+      kicksBefore: 0,
+      kicks: 1,
+      friends: 2,
+    });
+  });
+
+  it('that fails once signed in still has the kick sent, once', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    await flush();
+    const kicksBefore = asked(store.service)[0];
+    answer.reject(new Error('timeout'));
+    await started;
+    await flush();
+
+    expect([kicksBefore, asked(store.service)[0]]).toEqual([0, 1]);
+    expect(store.toast).not.toHaveBeenCalled();
+  });
+
+  it('whose session a sign-out ended sends no kick after its answer: the next sign-in’s kick is the only one', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    store.authState.set('unauthenticated');
+    store.authState.set('authenticated');
+    await flush();
+    const kicksBefore = asked(store.service)[0];
+    answer.resolve(page(2, 0));
+    await started;
+    await flush();
+
+    expect([kicksBefore, asked(store.service)[0]]).toEqual([1, 1]);
   });
 
   it('that fails is the state only, never a toast; a failure before the sign-in settled is forgotten then', async () => {

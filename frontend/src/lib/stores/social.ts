@@ -244,9 +244,14 @@ export async function initSocial(): Promise<void> {
     resetFeed();
     if (before === 'bootstrapping' && state === 'authenticated') {
       // The stored session checked at the start is confirmed: the same account, so the start's read
-      // and its page stay. A failure it had before is forgotten: the kick has Go read again.
+      // and its page stay. A failure it had before is forgotten: the kick has Go read again. Go's
+      // kick empties the page it holds, which the start's Friends() still running would answer: the
+      // kick waits for that answer, and a session ended meanwhile sent its own.
       if (!get(friendsLoaded)) friendsLoadError.set(null);
-      kick().catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
+      const confirmed = session;
+      (opening ?? Promise.resolve(false))
+        .then(() => (confirmed === session ? kick() : undefined))
+        .catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
       return;
     }
     forget();

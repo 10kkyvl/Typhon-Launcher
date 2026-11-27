@@ -53,6 +53,8 @@ describe('Friends: the first route of a signed-in start', () => {
     authState.set('authenticated');
     render(Friends, { target: document.getElementById('app') as HTMLElement, props: {} });
     await tick();
+    // Go's Kick empties the page its Friends() still running would answer: the kick waits for the answer.
+    expect(kick).not.toHaveBeenCalled();
     answer(PAGE);
 
     expect(await screen.findByText('Ana')).toBeTruthy();
