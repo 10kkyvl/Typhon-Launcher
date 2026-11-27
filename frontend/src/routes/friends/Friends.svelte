@@ -34,6 +34,7 @@
     friendsPage,
     incomingCount,
     needsSocialConsent,
+    readFriendsOnArrival,
     reloadFriends,
     showFriendsState,
   } from '../../lib/stores/social';
@@ -254,8 +255,9 @@
   // The screen says a failed first read in its notice: the store's own reads do not toast it too.
   $effect(() => showFriendsState());
 
-  // Read on arrival and again whenever the session changes under the screen (a guest signs in, the
-  // connection comes back): the store forgets the lists of a session that ended.
+  // Read on arrival (the start's read stands for it while it runs) and again whenever the session
+  // changes under the screen (a guest signs in, the connection comes back): the store forgets the
+  // lists of a session that ended.
   // The consent given in the screen's dialog shows in the settings at once but reaches Go only when the
   // dialog's save lands; the dialog then reads the friends itself (loadFriends) and closes. So while
   // it is open the screen reads nothing, and once it closed with the consent given, only the blocked list.
@@ -272,7 +274,7 @@
         readByConsent = true;
         return;
       }
-      if (!readByConsent) void reloadFriends();
+      if (!readByConsent) void readFriendsOnArrival();
       readByConsent = false;
       void loadBlocks();
     });

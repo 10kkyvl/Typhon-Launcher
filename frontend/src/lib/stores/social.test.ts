@@ -72,13 +72,29 @@ function page(friends: number, incoming: number) {
   };
 }
 
+/** A launcher started signed out, and then a sign-in: nothing has been read for the account yet. */
 async function load() {
   vi.resetModules();
   const social = await import('./social');
   const { authState } = await import('./user');
   await social.initSocial();
+  authState.set('unauthenticated');
   authState.set('authenticated');
   return { ...social, authState };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flush() {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
 beforeEach(() => {
@@ -305,20 +321,6 @@ describe('the first read of the friends', () => {
     expect(get(friendsPage).friends.length).toBe(4);
   });
 
-  it('a start asks Go for nothing before the session is settled, and only kicks it once signed in', async () => {
-    vi.resetModules();
-    const service = await import('../services/social');
-    const social = await import('./social');
-    const { authState } = await import('./user');
-
-    await social.initSocial();
-    expect(get(authState)).toBe('bootstrapping');
-    authState.set('authenticated');
-    await Promise.resolve();
-
-    expect([service.kick, service.refresh, service.friends].map((call) => vi.mocked(call).mock.calls.length)).toEqual([1, 0, 0]);
-  });
-
   it('a session that ends forgets the read and its failure', async () => {
     const { authState, friendsLoaded, friendsLoadError, reloadFriends, service } = await signedIn();
     vi.mocked(service.friends).mockResolvedValueOnce(page(1, 0));
@@ -388,5 +390,144 @@ describe('the read after the sync consent (loadFriends)', () => {
 
     expect(get(friendsLoadError)).toBeInstanceOf(AccountError);
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe('the read of a start (the stored session checked behind the splash)', () => {
+  /** A launcher that starts: the store is started while the stored session is checked. */
+  async function starting() {
+    vi.resetModules();
+    const service = await import('../services/social');
+    const { toast } = await import('./toasts');
+    const { Events } = await import('@wailsio/runtime');
+    vi.mocked(service.friends).mockReset();
+    vi.mocked(service.refresh).mockReset();
+    const social = await import('./social');
+    const { authState } = await import('./user');
+    const handler = () =>
+      vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as (event: { data: unknown }) => void;
+    return { ...social, authState, service, toast, handler };
+  }
+
+  const held = (store: Awaited<ReturnType<typeof starting>>) => ({
+    friends: get(store.friendsPage).friends.length,
+    incoming: get(store.incomingCount),
+    loaded: get(store.friendsLoaded),
+    error: get(store.friendsLoadError),
+  });
+  const asked = (service: Awaited<ReturnType<typeof starting>>['service']) =>
+    [service.kick, service.refresh, service.friends].map((call) => vi.mocked(call).mock.calls.length);
+
+  it('S5 a signed-in start has the page the moment the splash goes: one Friends(), one kick, no refresh', async () => {
+    const store = await starting();
+    vi.mocked(store.service.friends).mockResolvedValue(page(3, 1) as never);
+
+    await store.initSocial();
+    store.authState.set('authenticated');
+    await flush();
+
+    expect(held(store)).toEqual({ friends: 3, incoming: 1, loaded: true, error: null });
+    expect(asked(store.service)).toEqual([1, 0, 1]);
+    expect(store.toast).not.toHaveBeenCalled();
+  });
+
+  it('an answer that comes after the stored session was confirmed is the page of that account', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    answer.resolve(page(2, 1));
+    await started;
+
+    expect(held(store)).toEqual({ friends: 2, incoming: 1, loaded: true, error: null });
+  });
+
+  it('that fails is the state only, never a toast; a failure before the sign-in settled is forgotten then', async () => {
+    const store = await starting();
+    const failure = new Error('timeout');
+    vi.mocked(store.service.friends).mockRejectedValueOnce(failure);
+
+    await store.initSocial();
+    expect(held(store)).toEqual({ friends: 0, incoming: 0, loaded: false, error: failure });
+
+    store.authState.set('authenticated');
+
+    expect(held(store)).toEqual({ friends: 0, incoming: 0, loaded: false, error: null });
+    expect(store.toast).not.toHaveBeenCalled();
+  });
+
+  it('that fails once signed in is the state only, never a toast', async () => {
+    const store = await starting();
+    const failure = new Error('timeout');
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    answer.reject(failure);
+    await started;
+
+    expect(held(store)).toEqual({ friends: 0, incoming: 0, loaded: false, error: failure });
+    expect(store.toast).not.toHaveBeenCalled();
+  });
+
+  it('gives way to a newer page Go sent while it ran', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    store.handler()({ data: page(1, 0) });
+    answer.resolve(page(4, 2));
+    await started;
+
+    expect(held(store)).toEqual({ friends: 1, incoming: 0, loaded: true, error: null });
+  });
+
+  it('is the Friends screen’s read when the screen arrives while it runs: no second read', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    const arrival = store.readFriendsOnArrival();
+    answer.resolve(page(2, 0));
+
+    expect(await arrival).toBe(true);
+    await started;
+    expect(asked(store.service)).toEqual([1, 0, 1]);
+    expect(held(store).friends).toBe(2);
+  });
+
+  it('is not the read of a screen that arrives after it answered: that one reads as on any arrival', async () => {
+    const store = await starting();
+    vi.mocked(store.service.friends).mockResolvedValueOnce(page(2, 0) as never).mockResolvedValueOnce(page(3, 0) as never);
+
+    await store.initSocial();
+    store.authState.set('authenticated');
+
+    expect(await store.readFriendsOnArrival()).toBe(true);
+    expect(asked(store.service)).toEqual([1, 1, 2]);
+    expect(held(store).friends).toBe(3);
+  });
+
+  it('does not stand for a read asked after an action: that one waits for a read that starts after it', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never).mockResolvedValueOnce(page(5, 0) as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    const afterAction = store.reloadFriends();
+    answer.resolve(page(2, 0));
+
+    expect(await afterAction).toBe(true);
+    await started;
+    expect(asked(store.service)).toEqual([1, 1, 2]);
+    expect(held(store).friends).toBe(5);
   });
 });

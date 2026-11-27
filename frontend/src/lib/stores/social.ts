@@ -149,6 +149,45 @@ function startRead(): Promise<boolean> {
   return flight;
 }
 
+// The start's read while it runs: the Friends screen that arrives meanwhile takes it as its own.
+let opening: Promise<boolean> | null = null;
+
+/**
+ * The Friends screen's read on arrival. The start's read, while it runs, stands for it: asked when the
+ * launcher started, it predates nothing the player did. Otherwise as `reloadFriends`.
+ */
+export function readFriendsOnArrival(): Promise<boolean> {
+  return opening ?? reloadFriends();
+}
+
+/**
+ * Reads the page Go holds while the stored session is checked, so that every reader of the store (the
+ * badges, the request notification, Activity, the game page) has it as the splash goes, not at Go's
+ * first poll after the kick. Its failure is the state only: at boot nobody says it. A read asked while
+ * it runs (after an action) waits for one more, as with any read in flight.
+ */
+function readAtStart(): Promise<boolean> {
+  const started = session;
+  const before = heard;
+  const flight = fetchFriends().then(
+    (page) => {
+      if (started === session) answered(page, before);
+      return get(friendsLoaded);
+    },
+    (err: unknown) => {
+      if (started === session && !get(friendsLoaded)) friendsLoadError.set(err);
+      return get(friendsLoaded);
+    },
+  );
+  opening = flight;
+  inFlight = flight;
+  void flight.then(() => {
+    if (opening === flight) opening = null;
+    if (inFlight === flight) inFlight = null;
+  });
+  return flight;
+}
+
 async function readAgain(): Promise<boolean> {
   const started = session;
   try {
@@ -182,16 +221,24 @@ export async function initSocial(): Promise<void> {
 
   let previous: string | undefined;
   authState.subscribe((state) => {
-    const changed = previous !== state;
+    const before = previous;
     previous = state;
-    if (!changed) return;
+    if (before === state) return;
+    resetFeed();
+    if (before === 'bootstrapping' && state === 'authenticated') {
+      // The stored session checked at the start is confirmed: the same account, so the start's read
+      // and its page stay. A failure it had before is forgotten: the kick has Go read again.
+      if (!get(friendsLoaded)) friendsLoadError.set(null);
+      kick().catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
+      return;
+    }
     session += 1;
     // A read of the session that ended does not hold the next one's.
     inFlight = null;
     followUp = null;
+    opening = null;
     friendsLoaded.set(false);
     friendsLoadError.set(null);
-    resetFeed();
     if (state !== 'authenticated') {
       setPage(emptyFriendsPage());
       return;
@@ -205,7 +252,6 @@ export async function initSocial(): Promise<void> {
     consentWithheld = needs;
     if (changed && needs) resetFeed();
   });
-  // Nothing is read here: a read in the unsettled start belongs to no account (the change of session
-  // drops or resets it). The kick of a signed-in session has Go read and send the page itself, and the
-  // Friends screen reads on arrival and on a change of session.
+
+  await readAtStart();
 }

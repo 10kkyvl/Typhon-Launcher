@@ -64,6 +64,8 @@ function mount(props: { tab?: string } = {}) {
 beforeAll(async () => {
   settings.set({ accountSync: true } as Settings);
   await initSocial();
+  // Started signed out: each test then signs in, a change of account that clears what the start read.
+  authState.set('unauthenticated');
   friendsEvent = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as typeof friendsEvent;
 });
 
@@ -82,7 +84,7 @@ afterEach(() => {
   expect(calls).toEqual([]);
   cleanup();
   document.body.replaceChildren();
-  authState.set('bootstrapping');
+  authState.set('unauthenticated');
   // Back to each mock's own answer: a queued answer a test left unused must not reach the next one.
   vi.resetAllMocks();
   vi.unstubAllGlobals();
@@ -184,11 +186,11 @@ describe('Friends: the first read of the friends', () => {
   });
 });
 
-describe('Friends: the reads of a signed-in start', () => {
-  // The store asks nothing while the session is not settled (stores/social.test.ts pins a start with
-  // no screen: one kick, no read); Go's poll after the kick sends the page with social:friends.
+describe('Friends: the reads of a sign-in', () => {
+  // A start is pinned in Friends.start.dom.test.ts (the screen as the first route) and in
+  // stores/social.test.ts (no screen); Go's poll after the kick sends the page with social:friends.
   it('the screen there at the sign-in reads once: one kick, one refresh, one Friends(), one blocked list', async () => {
-    authState.set('bootstrapping');
+    authState.set('unauthenticated');
     vi.clearAllMocks();
     authState.set('authenticated');
     mount();

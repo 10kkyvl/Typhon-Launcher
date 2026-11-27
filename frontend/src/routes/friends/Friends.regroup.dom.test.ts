@@ -46,6 +46,8 @@ async function mount(page: FriendsPage) {
 beforeAll(async () => {
   settings.set({ accountSync: true } as Settings);
   await initSocial();
+  // Started signed out: each test then signs in, a change of account that clears what the start read.
+  authState.set('unauthenticated');
   friendsEvent = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as typeof friendsEvent;
 });
 
@@ -63,7 +65,7 @@ afterEach(() => {
   expect(calls).toEqual([]);
   cleanup();
   document.body.replaceChildren();
-  authState.set('bootstrapping');
+  authState.set('unauthenticated');
   vi.resetAllMocks();
   vi.unstubAllGlobals();
 });
