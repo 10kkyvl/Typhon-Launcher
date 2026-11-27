@@ -11,8 +11,8 @@
   import { chooseSavesDir } from '../game/actions/saves';
   import { emulationPlatform, isEmulated } from '../library/emulation';
   import { selectImageFile } from '../services/emulators';
-  import { errorCode, hasMessage, msg } from '../i18n';
-  import { installErrorText } from '../install/installErrors';
+  import { errorCode, msg } from '../i18n';
+  import { propertiesErrorText as errorText } from '../game/propertiesErrors';
   import { defaultWrapper, describeImports, presetsFor, problemActions, progressView } from '../game/compatMode';
   import {
     clearSavesDir,
@@ -38,8 +38,7 @@
   } from '../services/wrappers';
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
   import { libraryGames, runningGames } from '../stores/library';
-  import { settings } from '../stores/settings';
-  import { gameModeKeys, inheritLabel, withOverride, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
+  import { withOverride, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
   import { focusableIn } from '../layers/focus';
   import { focusHandOff } from '../utils/focusHandOff';
@@ -79,26 +78,6 @@
   let gameModeError = $state('');
   let gameModeShown = $state(false);
   let gameModeMac = $state(false);
-
-  const gameModeTitles = {
-    highPerformance: 'settings.gameModePowerLabel',
-    hideLauncher: 'settings.gameModeHideLabel',
-    raisePriority: 'settings.gameModePriorityLabel',
-  } as const;
-
-  const gameModeRows = $derived(
-    gameModeKeys
-      .filter((key) => !(gameModeMac && key !== 'hideLauncher'))
-      .map((key) => ({
-        key,
-        title: msg(gameModeTitles[key]),
-        options: [
-          { id: 'inherit', label: inheritLabel(Boolean($settings?.gameMode?.[key])) },
-          { id: 'on', label: msg('modals.propertiesGameModeOn') },
-          { id: 'off', label: msg('modals.propertiesGameModeOff') },
-        ],
-      })),
-  );
 
   let compat = $state<WrapperInfo | null>(null);
   let compatLoading = $state(false);
@@ -141,15 +120,6 @@
   });
 
   const argsDirty = $derived(argsLine !== argsSaved);
-
-  // Go's library and emulator reasons are lower-case clauses: said after the action that failed.
-  // The other domains' messages are whole sentences.
-  function errorText(err: unknown, fallback: string): string {
-    const code = errorCode(err);
-    if (/^(library|emulators)\./.test(code) && hasMessage(code)) return msg('modals.propertiesFailedReason', { action: fallback, reason: msg(code) });
-    if (hasMessage(code)) return msg(code);
-    return installErrorText(err, fallback);
-  }
 
   /** A write answered after its opening passed: said once, in a toast naming its game. */
   function sayLate(title: string, failure?: string) {
@@ -591,7 +561,7 @@
       <PropertiesPlaying
         {game}
         {gameModeShown}
-        {gameModeRows}
+        {gameModeMac}
         {gameModeError}
         ongamemode={changeGameMode}
         {presence}

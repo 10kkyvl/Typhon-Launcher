@@ -3,16 +3,16 @@
   import Select from './Select.svelte';
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
-  import { overrideState, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
-  import type { SelectOption } from './select';
+  import { gameModeKeys, inheritLabel, overrideState, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
   import type { LibraryGame } from '../services/library';
+  import { settings } from '../stores/settings';
 
   // What GamePropertiesModal sets for the time the game runs: the game mode overrides and whether
   // friends see it. The dialog holds their state and does their writes.
   let {
     game,
     gameModeShown,
-    gameModeRows,
+    gameModeMac,
     gameModeError,
     ongamemode,
     presence,
@@ -22,7 +22,8 @@
   }: {
     game: LibraryGame;
     gameModeShown: boolean;
-    gameModeRows: { key: GameModeKey; title: string; options: SelectOption[] }[];
+    /** On macOS only hiding the launcher applies. */
+    gameModeMac: boolean;
     gameModeError: string;
     ongamemode: (key: GameModeKey, state: OverrideState) => void;
     presence: boolean;
@@ -32,6 +33,26 @@
   } = $props();
   const uid = $props.id();
   const held = $derived(msg('modals.actionRunning'));
+
+  const gameModeTitles = {
+    highPerformance: 'settings.gameModePowerLabel',
+    hideLauncher: 'settings.gameModeHideLabel',
+    raisePriority: 'settings.gameModePriorityLabel',
+  } as const;
+
+  const gameModeRows = $derived(
+    gameModeKeys
+      .filter((key) => !(gameModeMac && key !== 'hideLauncher'))
+      .map((key) => ({
+        key,
+        title: msg(gameModeTitles[key]),
+        options: [
+          { id: 'inherit', label: inheritLabel(Boolean($settings?.gameMode?.[key])) },
+          { id: 'on', label: msg('modals.propertiesGameModeOn') },
+          { id: 'off', label: msg('modals.propertiesGameModeOff') },
+        ],
+      })),
+  );
 </script>
 
 {#if gameModeShown}
