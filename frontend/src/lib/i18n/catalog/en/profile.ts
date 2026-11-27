@@ -156,4 +156,7 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.editOffline': 'No connection to the server. What you typed stays here, and you can save it once the connection is back.',
   'profile.statFriends': 'Friends',
   'profile.offlineNote': 'No connection to the server: the profile shows the last data it had, and you can change it once the connection is back.',
+  'profile.leaveHeaderText': 'The name, username and About text you typed are not saved. If you leave, they are lost.',
+  'profile.leaveBothText': 'The profile changes are not saved yet. If you leave, the name, username and About text you typed are lost; the other changes stay as a draft until you come back to the profile.',
+  'profile.headerNotSaved': 'The name, username and About text were not saved. {reason}',
 };
