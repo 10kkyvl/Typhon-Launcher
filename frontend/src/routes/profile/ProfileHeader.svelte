@@ -117,8 +117,11 @@
     $savingProfile ? '' : $isOffline ? msg('social.editRequiresConnection') : !dirty ? msg('state.accountErrorNoChanges') : '',
   );
 
+  // The header's own save is on its way: leaving asks nothing about it, a late failure is said in a toast.
+  let sending = $state(false);
+
   $effect(() => {
-    unsaved = editing && dirty;
+    unsaved = editing && dirty && !sending;
   });
 
   // A save answered after the page was left has no editor to speak in.
@@ -180,8 +183,9 @@
     if (draft.displayName !== $currentUser.displayName) patch.displayName = draft.displayName;
     if (draft.username !== $currentUser.username) patch.username = draft.username;
     if (draft.bio !== $currentUser.bio) patch.bio = draft.bio;
+    sending = true;
     try {
-      if (!(await saveProfile(patch))) {
+      if (!(await saveProfile(patch).finally(() => (sending = false)))) {
         fieldErrors = { general: msg('profile.saveBusy') };
         return;
       }

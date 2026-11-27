@@ -117,6 +117,8 @@ describe('leaving with typed text in the header editor', () => {
 });
 
 describe('a header save still on its way when the page is left', () => {
+  // Nothing asks while the header's own save runs: its answer is still to come, and a failure is said
+  // in a toast once the page is gone.
   it('failing, is said once in a toast naming what was not saved, in catalogued words', async () => {
     const answer = pending<CurrentUser>();
     vi.mocked(updateProfile).mockReturnValue(answer.promise);
@@ -125,7 +127,8 @@ describe('a header save still on its way when the page is left', () => {
     await user.click(button(msg('common.save')));
 
     navigate('catalog');
-    confirmLeave();
+    expect(get(leaveRequest)).toBeNull();
+    expect(get(route).name).toBe('catalog');
     unmount();
     answer.reject(new AccountError('network_error'));
 
@@ -143,12 +146,34 @@ describe('a header save still on its way when the page is left', () => {
     await user.click(button(msg('common.save')));
 
     navigate('catalog');
-    confirmLeave();
+    expect(get(leaveRequest)).toBeNull();
+    expect(get(route).name).toBe('catalog');
     unmount();
     answer.resolve({ ...me, bio: 'Hi' });
 
     await waitFor(() => expect(said()).toContainEqual(['success', msg('social.profileUpdated')]));
     expect(said().filter(([kind]) => kind === 'danger')).toEqual([]);
+  });
+});
+
+describe("leaving while the header's own save runs and the edit bar holds changes", () => {
+  it("asks about the bar's changes only", async () => {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const { user } = await headerEditor();
+    await user.type(about(), 'Hi');
+    await user.click(button(msg('profileStyle.edit')));
+    const themes = screen.getByRole('radiogroup', { name: msg('profile.theme') });
+    await user.click(within(themes).getAllByRole('radio').find((radio) => radio.getAttribute('aria-checked') !== 'true') as HTMLElement);
+    await user.click(screen.getAllByRole('button', { name: msg('common.save') }).find((save) => !save.closest('.topbar')) as HTMLElement);
+
+    navigate('catalog');
+
+    expect(get(route).name).toBe('profile');
+    expect(get(leaveRequest)?.prompt().text).toBe(msg('profile.leaveText'));
+    stayHere();
+    answer.resolve({ ...me, bio: 'Hi' });
+    await waitFor(() => expect(get(savingProfile)).toBe(false));
   });
 });
 
