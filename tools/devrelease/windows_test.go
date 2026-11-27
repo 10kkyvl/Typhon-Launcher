@@ -246,6 +246,45 @@ func TestRunWindowsWritesUpdatePS1ForTheLiveSource(t *testing.T) {
 	}
 }
 
+// devmock does not compile for Windows, so on a Windows host the tool serves
+// only the qa chain and says how to ask for it instead of trying a build.
+func TestRunOnAWindowsHostNeedsTheWindowsMode(t *testing.T) {
+	exe := fakeExes(t, []string{"1.4.2"})[0]
+	for _, tc := range []struct {
+		name    string
+		host    string
+		args    []string
+		refused bool
+	}{
+		{name: "windows host, build", host: "windows", args: []string{"-version", "1.4.2"}, refused: true},
+		{name: "windows host, artifact", host: "windows", args: []string{"-version", "1.4.2", "-artifact", exe}, refused: true},
+		{name: "windows host, -windows", host: "windows", args: []string{"-windows", "-version", "1.4.2", "-artifact", exe}},
+		{name: "darwin host, artifact", host: "darwin", args: []string{"-version", "1.4.2", "-artifact", exe}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			restore := hostOS
+			hostOS = tc.host
+			t.Cleanup(func() { hostOS = restore })
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			var stdout bytes.Buffer
+			err := run(ctx, append(tc.args, "-port", "0"), &stdout, &bytes.Buffer{})
+			if !tc.refused {
+				if err != nil {
+					t.Fatalf("run() = %v, want the source to start", err)
+				}
+				return
+			}
+			if !errors.Is(err, errDevmockOnWindows) || !strings.Contains(err.Error(), "-windows") {
+				t.Fatalf("run() = %v, want errDevmockOnWindows naming -windows", err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("run() printed %q before refusing", stdout.String())
+			}
+		})
+	}
+}
+
 func TestMacOSModeWritesNoPowerShellFile(t *testing.T) {
 	state := t.TempDir()
 	ctx, cancel := context.WithCancel(t.Context())

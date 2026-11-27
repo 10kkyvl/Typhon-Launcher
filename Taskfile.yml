@@ -90,12 +90,15 @@ tasks:
       - go test -tags devmock ./internal/...
 
   devrelease:
-    summary: Serves a signed fake update manifest and artifact for the devmock launcher (VERSION=x.y.z, extra flags after --)
-    platforms: [darwin, linux]
+    summary: Serves a signed fake update chain on 127.0.0.1, for the devmock launcher on macOS/Linux or, with -windows (always on Windows), for a portable qa typhon.exe (VERSION=x.y.z, extra flags after --)
+    platforms: [darwin, linux, windows]
     requires:
       vars: [VERSION]
     cmds:
-      - go run ./tools/devrelease -version {{.VERSION}} {{.CLI_ARGS}}
+      - cmd: go run ./tools/devrelease -version {{.VERSION}} {{.CLI_ARGS}}
+        platforms: [darwin, linux]
+      - cmd: go run ./tools/devrelease -windows -version {{.VERSION}} {{.CLI_ARGS}}
+        platforms: [windows]
 
   lint:baseline:
     summary: Compares the whole-module golangci-lint count with the per-OS baseline (add UPDATE=true to record)

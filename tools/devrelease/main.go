@@ -6,7 +6,8 @@
 //
 // With -windows it serves the same chain to a portable qa typhon.exe
 // instead: each version is a qa build zipped as the portable update, and the
-// launcher reads TYPHON_QA_MANIFEST_URL and TYPHON_QA_RELEASE_PUBKEY.
+// launcher reads TYPHON_QA_MANIFEST_URL and TYPHON_QA_RELEASE_PUBKEY. On a
+// Windows host, where devmock does not compile, -windows is the only mode.
 package main
 
 import (
@@ -23,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -43,7 +45,13 @@ var (
 	errNotRepoRoot    = errors.New("devrelease: go.mod not found in the current directory; run from the repository root, or pass -artifact")
 	errBadSeconds     = errors.New("devrelease: -seconds must not be negative")
 	errBadSeed        = errors.New("devrelease: -seed must be a base64-encoded 32-byte ed25519 seed")
+
+	errDevmockOnWindows = errors.New("devrelease: the devmock launcher does not compile on Windows; pass -windows to serve a chain of qa typhon.exe builds (wails3 task devrelease does)")
 )
+
+// hostOS is the OS the tool runs on, a variable so that a test on macOS can
+// see what a Windows host gets.
+var hostOS = runtime.GOOS
 
 type config struct {
 	version  string
@@ -69,7 +77,7 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.notes, "notes", "", "JSON array of {summary, changes:[{kind,text}]} release notes, entry i for version i (default: a built-in sample)")
 	fs.IntVar(&cfg.seconds, "seconds", 20, "about how long one whole artifact download takes, so progress, cancel and resume can be watched (0: full speed)")
 	fs.StringVar(&cfg.state, "state", "", "directory that keeps the signing key between runs and receives update.env for a wrapper to source (and update.ps1 with -windows)")
-	fs.BoolVar(&cfg.windows, "windows", false, "serve a windows/amd64 chain of qa typhon.exe builds as portable zips, for a qa launcher in portable mode")
+	fs.BoolVar(&cfg.windows, "windows", false, "serve a windows/amd64 chain of qa typhon.exe builds as portable zips, for a qa launcher in portable mode (required on a Windows host)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -153,6 +161,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	cfg, err := parseFlags(args, stderr)
 	if err != nil {
 		return err
+	}
+	if hostOS == "windows" && !cfg.windows {
+		return errDevmockOnWindows
 	}
 
 	versions, err := versionChain(cfg.version, cfg.count)
