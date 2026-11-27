@@ -154,6 +154,11 @@ export const ui = {
   'ui.updateHistoryTitle': 'История обновлений',
   'ui.updateHistoryFailed': 'Не удалось загрузить историю обновлений.',
   'ui.noUpdatesYet': 'Обновлений пока не было.',
+  'ui.updateHistoryStatusRunning': 'Идёт',
+  'ui.updateHistoryStatusCompleted': 'Завершено',
+  'ui.updateHistoryStatusFailed': 'Не удалось',
+  'ui.updateHistoryStatusRolledBack': 'Откачено к прежней версии',
+  'ui.updateHistoryStatusUnknown': 'Состояние неизвестно',
 
   'ui.desktopOnly': 'Доступно только в desktop-сборке',
   'ui.forward': 'Вперёд',

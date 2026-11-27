@@ -156,6 +156,11 @@ export const ui: Record<UiKey, Message> = {
   'ui.updateHistoryTitle': 'Update history',
   'ui.updateHistoryFailed': 'Could not load the update history.',
   'ui.noUpdatesYet': 'No updates yet.',
+  'ui.updateHistoryStatusRunning': 'In progress',
+  'ui.updateHistoryStatusCompleted': 'Completed',
+  'ui.updateHistoryStatusFailed': 'Failed',
+  'ui.updateHistoryStatusRolledBack': 'Rolled back to the previous version',
+  'ui.updateHistoryStatusUnknown': 'Status unknown',
 
   'ui.desktopOnly': 'Available only in the desktop build',
   'ui.forward': 'Forward',

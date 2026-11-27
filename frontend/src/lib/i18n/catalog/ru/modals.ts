@@ -54,6 +54,7 @@ export const modals = {
 
   // AddSourceModal.svelte
   'modals.addSourceAdded': 'Источник «{name}» добавлен',
+  'modals.addSourceAddedRefreshFailed': 'Источник «{name}» добавлен, но первое обновление не удалось: {reason}',
   'modals.addSourceTitle': 'Добавить источник',
   'modals.addSourceUrlLabel': 'URL источника',
   'modals.addSourceOr': 'или',
@@ -270,6 +271,14 @@ export const modals = {
   'modals.releaseMatchSize': 'Размер',
   'modals.releaseMatchUploaded': 'Загружено',
   'modals.releaseMatchFromCatalog': 'по данным каталога',
+  'modals.releaseMatchMethodExternalId': 'по ID игры в Steam, GOG или IGDB',
+  'modals.releaseMatchMethodOverride': 'по вашему прошлому выбору',
+  'modals.releaseMatchMethodExactTitle': 'по точному названию',
+  'modals.releaseMatchMethodAlias': 'по другому названию игры',
+  'modals.releaseMatchMethodFuzzy': 'по похожему названию',
+  'modals.releaseMatchMethodProvisional': 'по предварительным данным',
+  'modals.releaseMatchMethodServerTitle': 'по названию в каталоге',
+  'modals.releaseMatchMethodUnknown': 'возможное совпадение',
   'modals.releaseMatchNotInCatalog': 'Игры нет в локальном каталоге',
   'modals.releaseMatchCandidates': 'Кандидаты',
   'modals.releaseMatchSearchingCandidates': 'Поиск кандидатов…',
@@ -323,6 +332,7 @@ export const modals = {
   'modals.sourceDetailsNewBadge': 'Новое',
   'modals.sourceDetailsRange': '{from}–{to} из {total}',
   'modals.sourceDetailsLoadingDetails': 'Загрузка сведений об источнике…',
+  'modals.sourceDetailsRemoveHeldUpdating': 'Источник обновляется: удалить его можно, когда обновление закончится',
   'modals.sourceDetailsRemoveText':
     'Удалить источник «{name}»? Его раздачи пропадут из каталога, а обновления для игр, установленных из него, перестанут приходить. Сами игры останутся в библиотеке.',
 

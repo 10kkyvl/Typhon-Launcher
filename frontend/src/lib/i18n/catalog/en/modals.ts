@@ -57,6 +57,7 @@ export const modals: Record<ModalsKey, Message> = {
 
   // AddSourceModal.svelte
   'modals.addSourceAdded': 'Source "{name}" added',
+  'modals.addSourceAddedRefreshFailed': 'Source "{name}" was added, but its first refresh failed: {reason}',
   'modals.addSourceTitle': 'Add source',
   'modals.addSourceUrlLabel': 'Source URL',
   'modals.addSourceOr': 'or',
@@ -273,6 +274,14 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.releaseMatchSize': 'Size',
   'modals.releaseMatchUploaded': 'Uploaded',
   'modals.releaseMatchFromCatalog': 'from the catalog',
+  'modals.releaseMatchMethodExternalId': 'by the game’s Steam, GOG or IGDB ID',
+  'modals.releaseMatchMethodOverride': 'by your earlier choice',
+  'modals.releaseMatchMethodExactTitle': 'by the exact title',
+  'modals.releaseMatchMethodAlias': 'by another title of the game',
+  'modals.releaseMatchMethodFuzzy': 'by a similar title',
+  'modals.releaseMatchMethodProvisional': 'from provisional data',
+  'modals.releaseMatchMethodServerTitle': 'by the title in the catalog',
+  'modals.releaseMatchMethodUnknown': 'a possible match',
   'modals.releaseMatchNotInCatalog': 'The game is not in the local catalog',
   'modals.releaseMatchCandidates': 'Candidates',
   'modals.releaseMatchSearchingCandidates': 'Searching for candidates…',
@@ -326,6 +335,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsNewBadge': 'New',
   'modals.sourceDetailsRange': '{from}–{to} of {total}',
   'modals.sourceDetailsLoadingDetails': 'Loading the source details…',
+  'modals.sourceDetailsRemoveHeldUpdating': 'The source is refreshing: it can be removed once the refresh ends',
   'modals.sourceDetailsRemoveText':
     'Remove the source “{name}”? Its releases leave the catalog, and updates for the games installed from it stop coming. The games themselves stay in your library.',
 
