@@ -262,6 +262,33 @@ describe('CloudDisableModal on the settings page', () => {
     expect(cloudForget).toHaveBeenCalledTimes(1);
   });
 
+  it('says once that the cloud copies were deleted, in a polite toast, when the deletion ends', async () => {
+    saved();
+    const forget = deferred<void>();
+    vi.mocked(cloudForget).mockImplementation(() => forget.promise);
+    const { keys, toggle } = openSettings();
+    await keys.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+    await vi.waitFor(() => expect(cloudForget).toHaveBeenCalledTimes(1));
+    expect(get(toasts)).toEqual([]);
+
+    forget.resolve();
+
+    await vi.waitFor(() => expect(get(toasts).map(({ message, kind }) => [message, kind])).toEqual([[msg('cloudsaves.forgetDone'), 'success']]));
+  });
+
+  it('says nothing deleted after Keep', async () => {
+    saved();
+    const { keys, toggle } = openSettings();
+    await keys.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableKeep') }));
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-disabled')).toBeNull());
+
+    expect(get(toasts)).toEqual([]);
+  });
+
   it('holds the switch, saying the setting is being saved, while the write runs', async () => {
     const write = deferred<SettingsData>();
     vi.mocked(saveSettingsPatch).mockImplementation(() => write.promise);

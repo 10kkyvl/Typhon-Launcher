@@ -257,6 +257,7 @@ export function createSettingsPage() {
     cloudForgetFailed = false;
     try {
       await cloudForget();
+      toast(msg('cloudsaves.forgetDone'), 'success');
     } catch (err) {
       cloudForgetFailed = true;
       toast(cloudErrorText(err, msg('cloudsaves.forgetFailed')), 'danger');

@@ -377,6 +377,7 @@ describe('the downloads tab: cloud saves', () => {
     answer();
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('cloudsaves.retryForget') })).toBeNull());
     await vi.waitFor(() => expect(document.activeElement).toBe(cloud));
+    expect(get(toasts).filter(({ kind }) => kind === 'success').map(({ message }) => message)).toEqual([msg('cloudsaves.forgetDone')]);
   });
 });
 
