@@ -312,3 +312,63 @@ describe('MetadataMatchModal: opened for another game before the first answer', 
     expect(within(dialog).queryAllByText('Celeste').length).toBeGreaterThan(0);
   });
 });
+
+describe('MetadataMatchModal: a match applied for one game, answered after the dialog turned to another', () => {
+  async function applyThenTurn() {
+    const applied = held<MetadataView>();
+    const onapplied = vi.fn();
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'g1' ? [hades] : [celeste]));
+    vi.mocked(applyMetadataMatch).mockReturnValueOnce(applied.promise);
+    const { dialog, rerender } = openDialog({ onapplied });
+    const keys = user();
+    const row = await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ });
+    row.focus();
+    await keys.keyboard('{Enter}');
+    expect(applyMetadataMatch).toHaveBeenCalledExactlyOnceWith('g1', 'igdb:1');
+
+    await rerender({ open: true, gameId: 'g2', gameTitle: 'Celeste', onapplied });
+    const celesteRow = await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+    return { applied, onapplied, dialog, celesteRow };
+  }
+
+  it('for the game still on screen, a success closes the dialog, names the game and hands the view to the page', async () => {
+    const onapplied = vi.fn();
+    const view = { game: { id: 'g1', title: 'Hades' } } as MetadataView;
+    vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
+    vi.mocked(applyMetadataMatch).mockResolvedValueOnce(view);
+    const { dialog } = openDialog({ onapplied });
+
+    await user().click(await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ }));
+
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    expect(onapplied).toHaveBeenCalledExactlyOnceWith(view);
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.metadataMatchApplied', { title: 'Hades' }), 'success']]);
+  });
+
+  it('a success keeps the new game\'s dialog open and live, hands nothing to the page, and only names the game it was about', async () => {
+    const { applied, onapplied, dialog, celesteRow } = await applyThenTurn();
+
+    applied.resolve({ game: { id: 'g1', title: 'Hades' } } as MetadataView);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(dialog.isConnected).toBe(true);
+    expect(onapplied).not.toHaveBeenCalled();
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.metadataMatchApplied', { title: 'Hades' }), 'success']]);
+    expect(celesteRow.isConnected).toBe(true);
+    expect(celesteRow.closest('[role="radiogroup"]')?.getAttribute('aria-disabled')).not.toBe('true');
+    expect(within(dialog).getByRole('button', { name: msg('common.cancel') }).getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('a refusal says nothing in the new game\'s dialog and leaves it live', async () => {
+    const { applied, onapplied, dialog, celesteRow } = await applyThenTurn();
+
+    applied.reject(new Error('typhon:metadata.busy: already running'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(get(toasts)).toEqual([]);
+    expect(onapplied).not.toHaveBeenCalled();
+    expect(celesteRow.isConnected).toBe(true);
+    expect(celesteRow.closest('[role="radiogroup"]')?.getAttribute('aria-disabled')).not.toBe('true');
+  });
+});

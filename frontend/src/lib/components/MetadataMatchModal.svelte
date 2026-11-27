@@ -67,12 +67,16 @@
   let pending = $state<MetadataCandidate | null>(null);
   let searchToken = 0;
   let candidatesToken = 0;
+  // One per opening and game: an apply answered after the dialog closed or turned to another game is
+  // that game's, not the one on screen.
+  let opening = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
     const isOpen = open;
     const id = gameId;
     untrack(() => {
+      opening += 1;
       // A search typed or sent in an earlier opening, or for another game, is dropped with it.
       clearTimeout(searchTimer);
       searchToken += 1;
@@ -190,27 +194,35 @@
 
   // `hand`: taken at the press; a refusal brings the list back with the words of it, which take the
   // focus the press held.
+  // The match was made for the game it was pressed for even when the dialog has moved on: the toast
+  // names that game, and the dialog and the page now on screen are left as they are.
   async function apply(candidate: MetadataCandidate, hand: ReturnType<typeof focusHandOff>) {
     if (applying) return;
-    const token = candidatesToken;
+    const at = opening;
     applying = true;
     applyingId = candidate.providerId;
     failure = '';
+    let view: MetadataView;
     try {
-      const view = await applyMetadataMatch(gameId, candidate.providerId);
-      toast(msg('modals.metadataMatchApplied', { title: view.game.title }), 'success');
-      open = false;
-      onapplied?.(view);
+      view = await applyMetadataMatch(gameId, candidate.providerId);
     } catch (err) {
-      if (token === candidatesToken) failure = metadataErrorText(err);
-    } finally {
-      if (token === candidatesToken) {
-        applying = false;
-        applyingId = '';
-        pending = null;
-      }
+      if (at !== opening) return;
+      failure = metadataErrorText(err);
+      settle();
+      await hand(() => document.getElementById(failureId));
+      return;
     }
-    if (open && failure) await hand(() => document.getElementById(failureId));
+    toast(msg('modals.metadataMatchApplied', { title: view.game.title }), 'success');
+    if (at !== opening) return;
+    settle();
+    open = false;
+    onapplied?.(view);
+  }
+
+  function settle() {
+    applying = false;
+    applyingId = '';
+    pending = null;
   }
 
   function confidenceLabel(confidence: number) {

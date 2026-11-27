@@ -2,9 +2,11 @@ import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { allTags, type LibraryGame } from '../../lib/services/library';
-import { findMetadataCandidates } from '../../lib/services/metadata';
+import { applyMetadataMatch, findMetadataCandidates, type MetadataCandidate, type MetadataView } from '../../lib/services/metadata';
+import { toasts } from '../../lib/stores/toasts';
 import { resetBindings } from '../../lib/testing/fakeBinding';
-import { sentToGo } from '../../lib/testing/gameDialogsTesting';
+import { held, sentToGo } from '../../lib/testing/gameDialogsTesting';
+import type { GamePageData } from './gamePageData.svelte';
 import { user } from '../../lib/testing/dom';
 import GameDialogsHarness from '../../lib/testing/GameDialogsHarness.svelte';
 
@@ -36,6 +38,7 @@ beforeEach(() => {
 afterEach(() => {
   const sent = sentToGo();
   resetBindings();
+  toasts.set([]);
   vi.clearAllMocks();
   document.body.replaceChildren();
   expect(sent).toEqual([]);
@@ -122,5 +125,34 @@ describe('GameDialogs: which dialog opens for which request', () => {
     await user().click(screen.getByRole('button', { name: 'Open match' }));
 
     await vi.waitFor(() => expect(findMetadataCandidates).toHaveBeenCalledExactlyOnceWith('igdb:1'));
+  });
+});
+
+describe('GameDialogs: the page turned to another game while a match was applied', () => {
+  it('keeps the page\'s metadata and the open dialog of the game now shown', async () => {
+    const hadesMatch: MetadataCandidate = { providerId: 'igdb:10', title: 'Hades', releaseYear: 2020, thumb: '', confidence: 0.9 };
+    const celesteMatch: MetadataCandidate = { providerId: 'igdb:20', title: 'Celeste', releaseYear: 2018, thumb: '', confidence: 0.9 };
+    const applied = held<MetadataView>();
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'igdb:1' ? [hadesMatch] : [celesteMatch]));
+    vi.mocked(applyMetadataMatch).mockReturnValueOnce(applied.promise);
+    const data = { metaView: null } as unknown as GamePageData;
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades, data } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open match' }));
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.metadataMatchFindTitle') });
+    const row = await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ });
+    row.focus();
+    await keys.keyboard('{Enter}');
+    expect(applyMetadataMatch).toHaveBeenCalledExactlyOnceWith('igdb:1', 'igdb:10');
+
+    const celeste = { id: 'g2', title: 'Celeste', status: '', tags: [] } as unknown as LibraryGame;
+    await rerender({ game: celeste, data, canonicalId: 'igdb:2', title: 'Celeste' });
+    await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+    applied.resolve({ game: { id: 'igdb:1', title: 'Hades' } } as MetadataView);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(data.metaView).toBeNull();
+    expect(dialog.isConnected).toBe(true);
+    expect(openDialogs()).toEqual([msg('modals.metadataMatchFindTitle')]);
   });
 });

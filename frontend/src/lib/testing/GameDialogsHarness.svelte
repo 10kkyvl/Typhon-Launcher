@@ -5,7 +5,13 @@
 
   // The game page's dialogs with an opener for each request, as GameActions and the page's menu give
   // them. For GameDialogs.dom.test.ts.
-  let { game, matchMode = 'find' }: { game: LibraryGame | undefined; matchMode?: 'find' | 'change' } = $props();
+  let {
+    game,
+    matchMode = 'find',
+    canonicalId = 'igdb:1',
+    title = 'Hades',
+    data = { metaView: null } as unknown as GamePageData,
+  }: { game: LibraryGame | undefined; matchMode?: 'find' | 'change'; canonicalId?: string; title?: string; data?: GamePageData } = $props();
 
   let statusOpen = $state(false);
   let tagsOpen = $state(false);
@@ -17,8 +23,6 @@
   let matchOpen = $state(false);
   let downloadModalOpen = $state(false);
   let installModalOpen = $state(false);
-
-  const data = { metaView: null } as unknown as GamePageData;
 </script>
 
 <main>
@@ -33,8 +37,8 @@
   localGame={game}
   installed={false}
   emulated={false}
-  title="Hades"
-  canonicalId="igdb:1"
+  {title}
+  {canonicalId}
   shots={[]}
   downloadPool={[]}
   downloadRelease={() => {}}
