@@ -227,6 +227,8 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.appearanceImportTextPlaceholder': 'Paste the whole theme text here',
   'settings.appearanceImportTextNameLabel': 'Name',
   'settings.appearanceImportTextNameHint': 'Optional: when empty, the name from the text is used',
+  'settings.appearanceImportTextEmpty': 'Paste the theme text first',
+  'settings.appearanceImportTextBusy': 'Importing the theme, wait for the answer',
   'settings.appearanceSourceFailedToast': 'Theme “{name}” was not updated from its file: {reason}',
   'settings.appearanceEditingCardTitle': 'Editing: {name}',
   'settings.appearanceBuiltinHint': 'This is a built-in theme — changes will be saved as a new theme.',

@@ -226,6 +226,8 @@ export const settings = {
   'settings.appearanceImportTextPlaceholder': 'Вставьте сюда текст темы целиком',
   'settings.appearanceImportTextNameLabel': 'Название',
   'settings.appearanceImportTextNameHint': 'Необязательно: если оставить пустым, возьмём название из текста',
+  'settings.appearanceImportTextEmpty': 'Вставьте текст темы',
+  'settings.appearanceImportTextBusy': 'Тема импортируется, дождитесь ответа',
   'settings.appearanceSourceFailedToast': 'Тема «{name}» не обновилась из файла: {reason}',
   'settings.appearanceEditingCardTitle': 'Редактирование: {name}',
   'settings.appearanceBuiltinHint': 'Это встроенная тема — изменения сохранятся как новая тема.',
