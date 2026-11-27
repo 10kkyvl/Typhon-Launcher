@@ -10,6 +10,7 @@ import { confirmLeave, leaveRequest, navigate, resetHistory, route, stayHere } f
 import { toasts } from '../../lib/stores/toasts';
 import { authState, currentUser, savingProfile } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import Profile from './Profile.svelte';
 import { player, SNAPSHOT } from './profileFixtures';
@@ -34,6 +35,8 @@ const me: CurrentUser = player({ appearance: { parallax: false } as ProfileAppea
 const other: CurrentUser = player({ appearance: { parallax: false } as ProfileAppearance }, { id: 'u2', username: 'bob', displayName: 'Bob', email: 'bob@example.com' });
 const button = (name: string) => screen.getByRole('button', { name });
 const about = () => screen.getByRole('textbox', { name: msg('social.aboutTitle') }) as HTMLTextAreaElement;
+const aboutOrNull = () => screen.queryByRole('textbox', { name: msg('social.aboutTitle') });
+const headerSave = () => screen.getAllByRole('button', { name: msg('common.save') }).find((save) => !save.closest('.topbar')) as HTMLElement;
 const said = () => get(toasts).map((toast) => [toast.kind, toast.message]);
 
 async function headerEditor() {
@@ -289,5 +292,101 @@ describe('the page taken away while the player is still on it (Big Picture)', ()
     renderDom(Profile);
 
     expect(screen.queryByRole('textbox', { name: msg('social.aboutTitle') })).toBeNull();
+  });
+
+  it('keeps nothing the player cancelled', async () => {
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+    await user.click(button(msg('common.cancel')));
+
+    unmount();
+    renderDom(Profile);
+
+    expect(aboutOrNull()).toBeNull();
+  });
+
+  it('keeps nothing from an editor opened and left as it was', async () => {
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'x');
+    await user.type(about(), '{Backspace}');
+
+    unmount();
+    renderDom(Profile);
+
+    expect(aboutOrNull()).toBeNull();
+  });
+});
+
+// The kept text is taken where the editor opens, and only once: an opening of the page, offline too, or
+// a fresh More → Edit. Once taken it is nowhere else, so it never comes back over newer text.
+describe('the kept text taken by the next opening of the editor', () => {
+  async function keptHi() {
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+    unmount();
+  }
+
+  it('opens with it while offline, read-only and saying so, and Save is free once the connection is back', async () => {
+    await keptHi();
+    authState.set('offline');
+
+    renderDom(Profile);
+
+    expect(about().value).toBe('Hi');
+    expect(about().readOnly).toBe(true);
+    expect(screen.getByText(msg('profile.editOffline'))).toBeTruthy();
+    expect(description(headerSave())).toBe(msg('social.editRequiresConnection'));
+    authState.set('authenticated');
+    await waitFor(() => expect(headerSave().getAttribute('aria-disabled')).toBeNull());
+    expect(about().value).toBe('Hi');
+  });
+
+  it('is taken by a fresh More → Edit when the page opened under another account', async () => {
+    await keptHi();
+    currentUser.set(other);
+    const { user } = renderDom(Profile);
+    expect(aboutOrNull()).toBeNull();
+
+    currentUser.set(me);
+    await user.click(button(msg('social.moreLabel')));
+    await user.click(screen.getByRole('menuitem', { name: msg('social.editProfileLabel') }));
+
+    expect(about().value).toBe('Hi');
+  });
+
+  it('taken, then left through the question: the next opening does not bring it back', async () => {
+    await keptHi();
+    const second = renderDom(Profile);
+    expect(about().value).toBe('Hi');
+
+    navigate('catalog');
+    confirmLeave();
+    second.unmount();
+    navigate('profile');
+    renderDom(Profile);
+
+    expect(aboutOrNull()).toBeNull();
+  });
+
+  it('opened offline, then newer text saved: the next opening does not bring the older text back', async () => {
+    await keptHi();
+    authState.set('offline');
+    const second = renderDom(Profile);
+    expect(about().value).toBe('Hi');
+    authState.set('authenticated');
+    await waitFor(() => expect(about().readOnly).toBe(false));
+    vi.mocked(updateProfile).mockResolvedValue({ ...me, bio: 'Hello' });
+    await second.user.clear(about());
+    await second.user.type(about(), 'Hello');
+    await second.user.click(headerSave());
+    await waitFor(() => expect(aboutOrNull()).toBeNull());
+
+    navigate('catalog');
+    second.unmount();
+    navigate('profile');
+    renderDom(Profile);
+
+    expect(aboutOrNull()).toBeNull();
+    expect(get(currentUser)?.bio).toBe('Hello');
   });
 });

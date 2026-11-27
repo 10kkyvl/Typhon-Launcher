@@ -147,11 +147,7 @@
 
   onMount(() => {
     const kept = get(profileHeaderDraft);
-    if (!kept || kept.owner !== get(currentUser)?.id || get(isOffline)) return;
-    profileHeaderDraft.set(null);
-    editor = kept.owner;
-    draft = { displayName: kept.displayName, username: kept.username, bio: kept.bio };
-    editing = true;
+    if (kept && kept.owner === get(currentUser)?.id) open();
   });
 
   const menuItems = $derived<MenuItem[]>([
@@ -160,22 +156,40 @@
     { id: 'signout', label: busy ? msg('social.signingOut') : msg('social.signOutLabel'), danger: true, separator: true },
   ]);
 
+  // Opens the editor on the text kept for this account, which it takes, or else on the saved values.
+  // Kept text opens offline too: the open editor holds it read-only and says why. Answers whether the
+  // editor is open.
+  function open(): boolean {
+    const user = get(currentUser);
+    if (!user) return false;
+    const kept = get(profileHeaderDraft);
+    const taken = kept && kept.owner === user.id ? kept : null;
+    if (!taken && get(isOffline)) return false;
+    if (taken) profileHeaderDraft.set(null);
+    editor = user.id;
+    draft = taken
+      ? { displayName: taken.displayName, username: taken.username, bio: taken.bio }
+      : { displayName: user.displayName, username: user.username, bio: user.bio };
+    fieldErrors = {};
+    editing = true;
+    return true;
+  }
+
   // An inline form opened by a command takes focus in its first field; the menu has given focus back
   // to its trigger by now, and the fields leaving give it back there again. Opened again while it is
   // open, it keeps what was typed and only takes focus.
   async function startEditing() {
-    if (!editing) {
-      if (!$currentUser || $isOffline) return;
-      editor = $currentUser.id;
-      draft = { displayName: $currentUser.displayName, username: $currentUser.username, bio: $currentUser.bio };
-      fieldErrors = {};
-      editing = true;
+    if (!editing && !open()) {
+      if ($isOffline) toast(msg('social.editRequiresConnection'));
+      return;
     }
     await tick();
     displayNameField?.focus();
   }
 
+  // Saved or cancelled, the editor's text is settled: nothing kept earlier may come back over it.
   function close(handOff: ReturnType<typeof focusHandOff>) {
+    profileHeaderDraft.set(null);
     fieldErrors = {};
     editing = false;
     void handOff(opener);
@@ -227,8 +241,7 @@
 
   function onMenu(id: string) {
     if (id === 'edit') {
-      if ($isOffline && !editing) toast(msg('social.editRequiresConnection'));
-      else void startEditing();
+      void startEditing();
     } else if (id === 'settings') {
       onsettings();
     } else if (id === 'signout') {
