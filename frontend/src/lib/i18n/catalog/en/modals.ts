@@ -11,6 +11,10 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.gameCompletedAt': 'Completion date',
   'modals.actionRunning': 'Wait until the current action finishes',
   'modals.gameCompletedAtInvalid': 'Enter a date from 1 January 1980 to today',
+  'modals.gameStatusFailedFor': 'Failed to change the status of "{title}"',
+  'modals.gameStatusFailedForReason': 'Failed to change the status of "{title}": {reason}',
+  'modals.gameStatusDateFailedFor': 'The status of "{title}" is saved; the completion date is not',
+  'modals.gameStatusDateFailedForReason': 'The status of "{title}" is saved; the completion date is not: {reason}',
 
   // ReleaseNotesModal.svelte
   'modals.releaseNotesTitle': "What's new in version {version}",
@@ -234,6 +238,8 @@ export const modals: Record<ModalsKey, Message> = {
 
   // MetadataMatchModal.svelte
   'modals.metadataMatchApplied': '"{title}" matched with IGDB',
+  'modals.metadataMatchFailedFor': 'Failed to match "{title}" with IGDB',
+  'modals.metadataMatchFailedForReason': 'Failed to match "{title}" with IGDB: {reason}',
   'modals.metadataMatchConfidenceExact': 'exact match',
   'modals.metadataMatchConfidenceLikely': 'likely match',
   'modals.metadataMatchConfidencePossible': 'possible match',

@@ -8,6 +8,10 @@ export const modals = {
   'modals.gameCompletedAt': 'Дата прохождения',
   'modals.actionRunning': 'Дождитесь, пока закончится текущее действие',
   'modals.gameCompletedAtInvalid': 'Укажите дату с 1 января 1980 года по сегодняшний день',
+  'modals.gameStatusFailedFor': 'Не удалось изменить статус игры «{title}»',
+  'modals.gameStatusFailedForReason': 'Не удалось изменить статус игры «{title}»: {reason}',
+  'modals.gameStatusDateFailedFor': 'Статус игры «{title}» сохранён, а дата прохождения — нет',
+  'modals.gameStatusDateFailedForReason': 'Статус игры «{title}» сохранён, а дата прохождения — нет: {reason}',
 
   // ReleaseNotesModal.svelte
   'modals.releaseNotesTitle': 'Что нового в версии {version}',
@@ -231,6 +235,8 @@ export const modals = {
 
   // MetadataMatchModal.svelte
   'modals.metadataMatchApplied': '«{title}» сопоставлена с IGDB',
+  'modals.metadataMatchFailedFor': 'Не удалось сопоставить «{title}» с IGDB',
+  'modals.metadataMatchFailedForReason': 'Не удалось сопоставить «{title}» с IGDB: {reason}',
   'modals.metadataMatchConfidenceExact': 'точное совпадение',
   'modals.metadataMatchConfidenceLikely': 'вероятное совпадение',
   'modals.metadataMatchConfidencePossible': 'возможное совпадение',
