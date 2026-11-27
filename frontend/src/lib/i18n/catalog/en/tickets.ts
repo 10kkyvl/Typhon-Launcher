@@ -110,6 +110,8 @@ export const tickets = {
   'tickets.draftRestore': 'Restore it',
   'tickets.draftSwapNote': 'If you restore it, the text now in the form is not lost: you can restore it from here.',
   'tickets.requestNotSentOffered': 'The request “{subject}” was not sent. It is kept: you can restore it in the new request form.',
+  'tickets.requestNotSentSaved': 'The request “{subject}” was not sent. It is kept and will be in the new request form.',
+  'tickets.replyNotSentSaved': 'Your reply in “{subject}” was not sent. It is kept and will be in the reply box of this request.',
   'tickets.requestNotSentNotKept': 'The request “{subject}” was not sent and is not kept: the new request form has no free place for it. Copy its text so it is not lost.',
   'tickets.replyNotSentAfter': 'Your reply in “{subject}” was not sent. Its text will be back in the reply box once the reply being sent now is done.',
   'tickets.replyNotSentNotKept': 'Your reply in “{subject}” was not sent and is not kept: the reply box holds another text. Copy it so it is not lost.',
