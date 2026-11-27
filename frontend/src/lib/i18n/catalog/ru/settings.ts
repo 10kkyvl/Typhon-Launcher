@@ -1,5 +1,6 @@
 export const settings = {
   'settings.copyHexOf': 'Копировать HEX: {name}',
+  'settings.copyHexNone': 'Нет цвета для копирования',
   'settings.accentHue': 'Цветовой тон',
   'settings.accentShade': 'Насыщенность и яркость — выбирайте мышью или стрелками',
   'settings.accentShadeValue': 'Насыщенность {saturation}%, яркость {brightness}%',

@@ -3,6 +3,7 @@ import type { SettingsKey } from '../ru/settings';
 
 export const settings: Record<SettingsKey, Message> = {
   'settings.copyHexOf': 'Copy the HEX of {name}',
+  'settings.copyHexNone': 'No colour to copy',
   'settings.accentHue': 'Hue',
   'settings.accentShade': 'Saturation and brightness — use the pointer or arrow keys',
   'settings.accentShadeValue': 'Saturation {saturation}%, brightness {brightness}%',
