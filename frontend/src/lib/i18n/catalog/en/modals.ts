@@ -325,6 +325,9 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsUnavailable': 'Unavailable',
   'modals.sourceDetailsNewBadge': 'New',
   'modals.sourceDetailsRange': '{from}–{to} of {total}',
+  'modals.sourceDetailsLoadingDetails': 'Loading the source details…',
+  'modals.sourceDetailsRemoveText':
+    'Remove the source “{name}”? Its releases leave the catalog, and updates for the games installed from it stop coming. The games themselves stay in your library.',
 
   // InstallModal.svelte
   'modals.installModeMove': 'Move',

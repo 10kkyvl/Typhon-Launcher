@@ -322,6 +322,9 @@ export const modals = {
   'modals.sourceDetailsUnavailable': 'Недоступен',
   'modals.sourceDetailsNewBadge': 'Новое',
   'modals.sourceDetailsRange': '{from}–{to} из {total}',
+  'modals.sourceDetailsLoadingDetails': 'Загрузка сведений об источнике…',
+  'modals.sourceDetailsRemoveText':
+    'Удалить источник «{name}»? Его раздачи пропадут из каталога, а обновления для игр, установленных из него, перестанут приходить. Сами игры останутся в библиотеке.',
 
   // InstallModal.svelte
   'modals.installModeMove': 'Переместить',
