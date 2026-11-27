@@ -30,9 +30,9 @@ export function isPlainEnter(event: KeyboardEvent): boolean {
 }
 
 /**
- * The action of a toast about a text of the account `from` that is not in a form's fields (only
- * offered, or kept nowhere): it copies the text, so it is not lost with the toast or the offer. The
- * result is said. Under another account, or no one, it copies and says nothing.
+ * The action of a toast about a text of the account `from` that is not in the fields of a form on
+ * screen: it copies the text, so it is not lost with the toast or the offer, and says whether it did.
+ * Under another account, or with no one signed in, it copies nothing and says nothing.
  */
 export function copyAction(text: string, from: string | null): ToastAction {
   return {
