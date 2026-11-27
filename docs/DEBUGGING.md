@@ -49,7 +49,7 @@ qa build only (`-tags qa`, `wails3 task build:qa`; Windows only, never with `pro
 | Variable | Default | Effect |
 |---|---|---|
 | `TYPHON_QA_CDP_PORT` | `9333` | WebView2 DevTools port on 127.0.0.1 (`qa_on.go`) |
-| `TYPHON_QA_MANIFEST_URL`, `TYPHON_QA_RELEASE_PUBKEY` | — | point self-update at `tools/devrelease -windows` (§4.2). Both or neither; the URL is accepted only as `http://127.0.0.1:<port>` or `http://localhost:<port>`, the key as base64 of 32 bytes; anything else fails the selfupdate service at construction and the launcher exits at start with the reason in its log (no window), never falls back. The check is on the variable only: a local listener can redirect, and what it serves is trusted through the key and the signed hashes. A `slog.Warn` names the URL when the source is active (`internal/selfupdate/qa_source.go`, `url_qa.go`, `key_qa.go`) |
+| `TYPHON_QA_MANIFEST_URL`, `TYPHON_QA_RELEASE_PUBKEY` | — | point self-update at `tools/devrelease -windows` (§4.2). Both or neither; the URL is accepted only as `http://127.0.0.1:<port>` or `http://localhost:<port>`, the key as base64 of 32 bytes; anything else fails the selfupdate service at construction and the launcher exits at start with the reason in its log (no window), never falls back. The source is accepted only in portable mode (`TYPHON_PORTABLE_DIR` or `portable.txt`): there the launcher updates the portable way (zip, file swap); without it the start fails the same way, because the update record, cache and worker would sit in the `%APPDATA%\Typhon` of the installed launcher (`mode_qa.go`). The check is on the variable only: a local listener can redirect, and what it serves is trusted through the key and the signed hashes. A `slog.Warn` names the URL when the source is active (`internal/selfupdate/qa_source.go`, `url_qa.go`, `key_qa.go`, `mode_qa.go`). The `TYPHON_DEVMOCK_*` pair is never read by a qa build |
 
 Test gates (all skip by default): `TYPHON_WINE_LIVE=1` (+ `TYPHON_WINE_LIVE_INSTALLER`, `TYPHON_GUARD_FIXTURE_EXE`, `TYPHON_GUARD_X86_FIXTURE_EXE`, `TYPHON_INNO_COMPILER_INSTALLER`, `TYPHON_GUARD_REAL_INSTALLER`, `TYPHON_GUARD_FULL_INSTALL`, `TYPHON_GUARD_VISIBLE_INSTALL`), `TYPHON_KEYCHAIN_LIVE=1`, `TYPHON_PE_LIVE`, `TYPHON_LIVE_PICKER_DIR`/`_FILE`, `TYPHON_METADATA_API`/`TYPHON_METADATA_TOKEN` (`internal/metadata/live_test.go`), `TYPHON_STEAM_E2E_URL` (`typhonapi/steam_e2e_test.go`). See `TEST_MAP.md`.
 
@@ -69,7 +69,7 @@ wails3 task build:devmock
 wails3 task run:devmock
 wails3 task dev:devmock
 wails3 task test:devmock
-wails3 task devrelease VERSION=0.9.9      # mock self-update source on 127.0.0.1:8099 (§4.1); prints the two TYPHON_DEVMOCK_* vars
+wails3 task devrelease VERSION=0.9.9      # mock self-update source on 127.0.0.1:8099 (§4.1); prints the two TYPHON_DEVMOCK_* vars; on Windows it passes -windows (§4.2)
 
 # Go checks: select those relevant to the change; this is not a mandatory sequence.
 # Main/internal scope avoids unrelated generated build/ios packages.
@@ -162,6 +162,11 @@ This path has never been run by the people who wrote it: on macOS it is proven t
 (`GOOS=windows go vet -tags qa`, a real cross-build) and by the tests of `tools/devrelease` and
 `internal/selfupdate`, nothing more.
 
+This is the one mechanism for fake launcher updates on Windows: a qa build reads only
+`TYPHON_QA_MANIFEST_URL` and `TYPHON_QA_RELEASE_PUBKEY` (§2), loopback only, and only in portable mode;
+started without `TYPHON_PORTABLE_DIR` or `portable.txt` it refuses the source at start instead of
+writing test updates into the installed launcher's `%APPDATA%\Typhon`.
+
 `tools/devrelease -windows` serves the chain of §4.1 to a qa `typhon.exe` in portable mode. For each
 version it cross-builds `typhon.exe` with the flags of `build:qa` (`-tags qa`, windows/amd64), zips it
 as `typhon-<v>-portable.zip` with one top-level `typhon.exe` (checked with `selfupdate.CheckPortableZip`
@@ -171,7 +176,9 @@ launcher can walk the chain (zip, file swap, hand-over method `exe-zip`). The Wi
 DPI awareness) is generated with `wails3 generate syso` when `wails3` is on PATH and removed after the
 builds; without it the builds go without and the tool says so. `frontend/dist` must already be built.
 With `-state <dir>` it writes `update.ps1` next to `update.env`; `/control`, `-seconds` and `fail=` work
-as in §4.1.
+as in §4.1. It runs from macOS or from Windows; on a Windows host `-windows` is the only mode (without it
+the tool stops with a sentence, devmock does not compile there), and `wails3 task devrelease
+VERSION=x.y.z` adds it there.
 
 On the Windows machine, from the repository root, after the usual frontend install:
 
