@@ -76,6 +76,16 @@ describe('TagEditor', () => {
     expect(chips()).toEqual([]);
   });
 
+  it('while the editor is held, Add with an empty field is plainly disabled, without the "type a tag" reason', () => {
+    render(TagEditor, { target: app, props: { tags: ['coop'], placeholder: 'Tag', label: 'New tag', disabled: true } });
+    const add = screen.getByRole('button', { name: msg('modals.gameTagsAdd') });
+
+    expect(add).toHaveProperty('disabled', true);
+    expect(add.getAttribute('aria-disabled')).toBeNull();
+    expect(add.getAttribute('aria-describedby')).toBeNull();
+    expect(document.body.textContent).not.toContain(msg('modals.tagEditorAddEmpty'));
+  });
+
   it('adds from Add pressed by the keyboard and hands the focus back to the field for the next tag', async () => {
     render(TagEditor, { target: app, props: { tags: [], placeholder: 'Tag', label: 'New tag' } });
     const keys = user();

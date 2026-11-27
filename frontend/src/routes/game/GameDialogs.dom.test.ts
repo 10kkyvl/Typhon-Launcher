@@ -242,7 +242,7 @@ describe('GameDialogs: the dialogs of a page that lost its game come back for th
 });
 
 describe('GameDialogs: the page turned to another game while the tags dialog was open', () => {
-  it('shows the new game\'s tags and saves them to the new game; a late save for the game before closes nothing', async () => {
+  it('shows the new game\'s tags and saves them to the new game, though it has the same title; a late save for the game before closes nothing', async () => {
     const saved = held<LibraryGame>();
     vi.mocked(setTags).mockReturnValueOnce(saved.promise).mockResolvedValueOnce({} as LibraryGame);
     const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades } });
@@ -253,8 +253,9 @@ describe('GameDialogs: the page turned to another game while the tags dialog was
     await keys.click(within(dialog).getByRole('button', { name: msg('common.save') }));
     expect(setTags).toHaveBeenCalledExactlyOnceWith('g1', ['coop']);
 
-    const celeste = { id: 'g2', title: 'Celeste', status: '', tags: ['solo'] } as unknown as LibraryGame;
-    await rerender({ game: celeste, canonicalId: 'igdb:2', title: 'Celeste' });
+    // Another copy of the same game (a repack and a Steam copy): one title, two library ids.
+    const steamCopy = { id: 'g2', title: 'Hades', status: '', tags: ['solo'] } as unknown as LibraryGame;
+    await rerender({ game: steamCopy });
     dialog = await screen.findByRole('dialog', { name: msg('modals.gameTagsTitle') });
     await within(dialog).findByText('solo');
     expect(within(dialog).queryByText('coop')).toBeNull();
