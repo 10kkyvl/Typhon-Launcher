@@ -6,9 +6,11 @@ import { installRedist, installedRuntimes, officialLinks, scanRedist, type Redis
 import { libraryGames } from '../stores/library';
 import { closeRedist, openRedist } from '../stores/redist';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import RedistModal from './RedistModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/redist', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/redist')>()),
   scanRedist: vi.fn(),
@@ -44,6 +46,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeRedist();
   libraryGames.set([]);
   vi.mocked(scanRedist).mockReset();
@@ -51,6 +55,7 @@ afterEach(() => {
   vi.mocked(officialLinks).mockReset();
   vi.mocked(installRedist).mockReset();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 async function openDialog() {

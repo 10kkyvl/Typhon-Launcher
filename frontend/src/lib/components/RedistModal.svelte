@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
@@ -19,6 +19,7 @@
     type RedistRuntime,
   } from '../services/redist';
   import { closeRedist, redistTarget } from '../stores/redist';
+  import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
 
   interface Outcome {
@@ -38,12 +39,20 @@
   let systemError = $state('');
   let linksError = $state('');
   let unsupported = $state(false);
-  let installingPath = $state('');
+  // The installer Go is running. Go runs one at a time for the whole launcher and goes on with the
+  // dialog closed (its context is the app's), so this outlives an opening: a dialog opened again
+  // shows it running and holds every other Install. The component stays mounted (App).
+  let running = $state<{ gameId: string; path: string } | null>(null);
   let outcomes = $state<Record<string, Outcome>>({});
 
   let seq = 0;
-  // One per opening of the dialog: a retry that answers after its opening has passed says so.
+  // One per opening of the dialog: a retry or an installer that answers after its opening has
+  // passed paints nothing; an installer's answer is then said once in a toast naming the package.
   let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   const vcRuntimes = $derived(runtimes.filter((runtime) => runtime.name.includes('Visual C++')));
   const missing = $derived(systemLoading || systemError ? [] : missingVcArches(vcRuntimes));
@@ -74,7 +83,6 @@
     systemError = '';
     linksError = '';
     unsupported = false;
-    installingPath = '';
     outcomes = {};
   }
 
@@ -139,21 +147,30 @@
   }
 
   async function install(pkg: RedistPackage) {
-    if (!target || installingPath) return;
-    const id = seq;
-    installingPath = pkg.path;
+    if (!target || running) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    running = { gameId: target.gameId, path: pkg.path };
     try {
       const result = await installRedist(target.gameId, pkg.path);
-      if (id !== seq) return;
+      if (!heard()) {
+        toast(resultText(result, pkg.name), 'success');
+        return;
+      }
       outcomes = { ...outcomes, [pkg.path]: { text: resultText(result, pkg.name), failed: false } };
-      await refreshRuntimes(id);
+      await refreshRuntimes(seq);
     } catch (err) {
-      if (id !== seq) return;
+      if (!heard()) {
+        toast(msg('redist.lateFailed', { name: pkg.name, reason: redistErrorText(err) }), 'danger');
+        return;
+      }
       outcomes = { ...outcomes, [pkg.path]: { text: redistErrorText(err), failed: true } };
     } finally {
-      if (id === seq) installingPath = '';
+      running = null;
     }
   }
+
+  const runs = (pkg: RedistPackage) => running !== null && running.gameId === target?.gameId && running.path === pkg.path;
 
   let scanRetrying = $state(false);
   let bundled = $state<HTMLElement>();
@@ -212,11 +229,12 @@
                   </div>
                   <Button
                     size="sm"
-                    disabled={installingPath !== '' && installingPath !== pkg.path}
-                    busy={installingPath === pkg.path}
+                    disabled={running !== null && !runs(pkg)}
+                    reason={running !== null && !runs(pkg) ? msg('redist.busy') : ''}
+                    busy={runs(pkg)}
                     onclick={() => install(pkg)}
                   >
-                    {installingPath === pkg.path ? msg('redist.installing') : msg('redist.install')}
+                    {runs(pkg) ? msg('redist.installing') : msg('redist.install')}
                   </Button>
                 </li>
               {/each}

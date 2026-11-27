@@ -20,9 +20,9 @@ export function isUnsupported(err: unknown): boolean {
   return errorCode(err) === 'redist.unsupported';
 }
 
+/** A kind Go has no word for here is said as "other", never by its raw value. */
 export function kindLabel(kind: PackageKind): string {
-  const key = KIND_KEYS[kind];
-  return key ? msg(key) : kind;
+  return msg(KIND_KEYS[kind] ?? KIND_KEYS.other);
 }
 
 export function resultText(result: RedistResult, name: string): string {
