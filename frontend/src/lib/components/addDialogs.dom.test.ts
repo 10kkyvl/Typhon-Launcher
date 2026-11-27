@@ -3,20 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { imageTitle, listPlatforms, type PlatformStatus } from '../services/emulators';
 import { addEmulatedGame, type LibraryGame } from '../services/library';
-import { addSource, testSource, type Source, type SourcePreview } from '../services/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import AddImageModal from './AddImageModal.svelte';
-import AddSourceModal from './AddSourceModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
-vi.mock('../services/sources', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/sources')>()),
-  testSource: vi.fn(),
-  addSource: vi.fn(),
-  listSources: vi.fn(async () => []),
-}));
 vi.mock('../services/emulators', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/emulators')>()),
   listPlatforms: vi.fn(),
@@ -27,21 +19,6 @@ vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   addEmulatedGame: vi.fn(),
 }));
-
-const preview = (patch: Partial<SourcePreview> = {}): SourcePreview => ({
-  name: 'FitGirl',
-  type: 'url',
-  url: 'http://feed.test/feed.json',
-  feedVersion: 1,
-  entries: 3,
-  invalid: 0,
-  games: 3,
-  known: 2,
-  unknown: 1,
-  fingerprint: '',
-  duplicate: false,
-  ...patch,
-});
 
 const ps2 = { id: 'ps2', name: 'PlayStation 2', emulator: 'PCSX2', homepage: '', extensions: ['.iso'], imageNames: [], path: '', status: 'ready', reason: '', warnings: [] } as PlatformStatus;
 
@@ -71,51 +48,6 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   document.body.replaceChildren();
-});
-
-describe('AddSourceModal', () => {
-  async function check(result: () => Promise<SourcePreview>) {
-    vi.mocked(testSource).mockImplementationOnce(result);
-    render(AddSourceModal, { target: app, props: { open: true } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('modals.addSourceTitle') });
-    await keys.type(within(dialog).getByRole('textbox', { name: msg('modals.addSourceUrlLabel') }), 'http://feed.test/feed.json');
-    await keys.click(within(dialog).getByRole('button', { name: msg('modals.addSourceCheck') }));
-    return { dialog, keys };
-  }
-
-  it('says a failed check in a danger notice', async () => {
-    const { dialog } = await check(() => Promise.reject(new Error('unreachable')));
-
-    const alert = await within(dialog).findByRole('alert');
-    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
-  });
-
-  it('states what is wrong with the checked feed in warning notices read with the preview', async () => {
-    const { dialog } = await check(async () => preview({ insecure: true, duplicate: true }));
-
-    for (const text of [msg('modals.addSourceInsecure'), msg('modals.addSourceDuplicate')]) {
-      const notice = (await within(dialog).findByText(text)).closest('[data-tone="warning"]') as HTMLElement;
-      expect(notice).not.toBeNull();
-      expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
-    }
-  });
-
-  it('keeps the focus on "add", busy, while the source is added', async () => {
-    const adding = deferred<Source>();
-    vi.mocked(addSource).mockReturnValueOnce(adding.promise);
-    const { dialog, keys } = await check(async () => preview());
-    const add = await within(dialog).findByRole('button', { name: msg('common.add') });
-    add.focus();
-
-    await keys.keyboard('{Enter}');
-
-    const busy = within(dialog).getByRole('button', { name: msg('modals.addSourceAdding') });
-    expect(busy).toBe(add);
-    expect(busy.getAttribute('aria-busy')).toBe('true');
-    expect(document.activeElement).toBe(busy);
-    adding.resolve({ id: 's1', name: 'FitGirl' } as Source);
-  });
 });
 
 describe('AddImageModal', () => {

@@ -1,26 +1,42 @@
 <script lang="ts">
   import { sourceWarningText } from '../sources/sourceWarnings';
   import { untrack } from 'svelte';
-  import { FileUp } from '@lucide/svelte';
   import { add as addSource, addFile as addSourceFile, errorMark, sourceErrorText, toastUnannounced } from '../stores/sources';
   import { selectFeedFile, testSource, testSourceFile, type SourcePreview } from '../services/sources';
   import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import PathField from './PathField.svelte';
   import Spinner from './Spinner.svelte';
+  import TextField from './TextField.svelte';
   import { msg } from '../i18n';
 
+  /**
+   * A feed by URL or from a file: nothing is read until Check, which shows what the feed holds, and
+   * nothing is added until Add. A failure is said at the field it is about, in the launcher's words for
+   * its code, and the typed URL stays. The focus follows the step: the field of a failure, Add once the
+   * preview is in.
+   */
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
-  let step = $state<'input' | 'checking' | 'preview'>('input');
+  const uid = $props.id();
+  const addId = `${uid}-add`;
+
+  let step = $state<'input' | 'preview'>('input');
   let mode = $state<'url' | 'file'>('url');
   let url = $state('');
   let path = $state('');
   let preview = $state<SourcePreview | null>(null);
   let error = $state('');
+  // Which field the failure is about: the URL typed or the file picked.
+  let errorAt = $state<'url' | 'file'>('url');
+  let checking = $state(false);
   let adding = $state(false);
   let run = 0;
+  let urlInput = $state<HTMLInputElement>();
+  let fileBlock = $state<HTMLElement>();
 
   function reset() {
     run++;
@@ -30,6 +46,8 @@
     path = '';
     preview = null;
     error = '';
+    errorAt = 'url';
+    checking = false;
     adding = false;
   }
 
@@ -40,12 +58,26 @@
     });
   });
 
+  // The control that says a failure about the URL or the file: the URL field, or the file's Browse.
+  const fieldOf = (at: 'url' | 'file') => (at === 'url' ? urlInput : fileBlock?.querySelector<HTMLElement>('button'));
+
+  // The focus the press holds goes on with the step; a press that held none moves nothing.
+  function pressHand() {
+    const pressed = document.activeElement;
+    return focusHandOff(() => pressed);
+  }
+
+  function fail(at: 'url' | 'file', text: string) {
+    errorAt = at;
+    error = text;
+  }
+
   async function pickFile() {
     let selected = '';
     try {
       selected = await selectFeedFile();
     } catch (err) {
-      error = sourceErrorText(err);
+      fail('file', sourceErrorText(err, msg('modals.addSourcePickFailed')));
       return;
     }
     if (!selected) return;
@@ -58,17 +90,22 @@
     const value = mode === 'file' ? path : url.trim();
     if (!value) return;
     const token = run;
-    step = 'checking';
+    const at = mode;
+    const hand = pressHand();
+    checking = true;
     error = '';
     try {
       const result = mode === 'file' ? await testSourceFile(value) : await testSource(value);
       if (token !== run) return;
       preview = result;
       step = 'preview';
+      checking = false;
+      await hand(() => document.getElementById(addId));
     } catch (err) {
       if (token !== run) return;
-      error = sourceErrorText(err);
-      step = 'input';
+      checking = false;
+      fail(at, sourceErrorText(err, msg('modals.addSourceCheckFailed')));
+      await hand(() => fieldOf(at));
     }
   }
 
@@ -76,6 +113,8 @@
     const value = mode === 'file' ? path : url.trim();
     if (!value) return;
     const token = run;
+    const at = mode;
+    const hand = pressHand();
     const mark = errorMark();
     adding = true;
     try {
@@ -84,8 +123,11 @@
       if (token === run) open = false;
     } catch (err) {
       if (token === run && open) {
-        error = sourceErrorText(err);
+        error = sourceErrorText(err, msg('modals.addSourceAddFailed'));
+        errorAt = at;
         step = 'input';
+        adding = false;
+        await hand(() => fieldOf(at));
       } else {
         toastUnannounced(err, mark);
       }
@@ -95,46 +137,53 @@
   }
 
   function back() {
+    const hand = pressHand();
     preview = null;
     step = 'input';
+    void hand(() => fieldOf(mode));
   }
+
+  const location = $derived(preview ? (preview.type === 'file' ? preview.path : preview.url) : '');
+  const heldReason = $derived(checking ? msg('modals.actionRunning') : undefined);
 </script>
 
 <!-- dismissible while adding: the add goes on in the background (the footer offers Minimize) and the sources store reports how it ended. -->
-<Modal bind:open title={msg('modals.addSourceTitle')}>
+<Modal bind:open busy={checking} title={msg('modals.addSourceTitle')}>
   {#if step === 'input'}
     <div class="form">
-      <label class="field">
-        <span class="field-label">{msg('modals.addSourceUrlLabel')}</span>
-        <input
-          class="input"
-          type="text"
-          placeholder="https://example.com/feed.json"
-          bind:value={url}
-          oninput={() => (mode = 'url')}
-        />
-      </label>
-      <div class="or">
+      <TextField
+        label={msg('modals.addSourceUrlLabel')}
+        type="url"
+        placeholder="https://example.com/feed.json"
+        bind:value={url}
+        bind:input={urlInput}
+        readonly={checking}
+        error={errorAt === 'url' ? error : ''}
+        oninput={() => (mode = 'url')}
+      />
+      <div class="or" aria-hidden="true">
         <span class="line"></span>
         <span class="or-text">{msg('modals.addSourceOr')}</span>
         <span class="line"></span>
       </div>
-      <Button onclick={pickFile}>
-        <FileUp size="1.6rem" strokeWidth={1.8} />
-        {msg('modals.addSourcePickFile')}
-      </Button>
-      {#if path}
-        <span class="picked" title={path}>{path}</span>
+      <div bind:this={fileBlock}>
+        <PathField
+          label={msg('modals.addSourceFileLabel')}
+          value={path}
+          placeholder={msg('modals.addSourceNoFile')}
+          browseLabel={msg('modals.addSourcePickFile')}
+          onbrowse={pickFile}
+          disabledReason={heldReason}
+          error={errorAt === 'file' ? error : ''}
+        />
+      </div>
+      {#if checking}
+        <div class="checking" role="status">
+          <Spinner size="sm" />
+          <span class="checking-text">{msg('modals.addSourceChecking')}</span>
+          <span class="checking-note">{msg('modals.addSourceCheckingNote')}</span>
+        </div>
       {/if}
-      {#if error}
-        <Notice tone="danger" compact>{error}</Notice>
-      {/if}
-    </div>
-  {:else if step === 'checking'}
-    <div class="loading" role="status">
-      <Spinner size="lg" />
-      <span class="loading-text">{msg('modals.addSourceChecking')}</span>
-      <span class="loading-note">{msg('modals.addSourceCheckingNote')}</span>
     </div>
   {:else if preview}
     <div class="preview">
@@ -144,9 +193,7 @@
       </div>
       <div class="preview-row">
         <span class="key">{preview.type === 'file' ? msg('modals.addSourceFileLabel') : 'URL'}</span>
-        <span class="value location" title={preview.type === 'file' ? preview.path : preview.url}>
-          {preview.type === 'file' ? preview.path : preview.url}
-        </span>
+        <span class="value location">{location}</span>
       </div>
       <div class="preview-row">
         <span class="key">{msg('modals.addSourceFeedVersion')}</span>
@@ -194,14 +241,16 @@
   {#snippet footer()}
     {#if step === 'input'}
       <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={!url.trim() && !path} onclick={check}>{msg('modals.addSourceCheck')}</Button>
+      <Button variant="primary" disabled={!url.trim() && !path} reason={msg('modals.addSourceNeedInput')} busy={checking} onclick={check}>
+        {msg('modals.addSourceCheck')}
+      </Button>
     {:else if step === 'preview'}
       {#if adding}
         <Button onclick={() => (open = false)}>{msg('modals.addSourceMinimize')}</Button>
       {:else}
         <Button onclick={back}>{msg('common.back')}</Button>
       {/if}
-      <Button variant="primary" busy={adding} onclick={submit}>{adding ? msg('modals.addSourceAdding') : msg('common.add')}</Button>
+      <Button variant="primary" id={addId} busy={adding} onclick={submit}>{adding ? msg('modals.addSourceAdding') : msg('common.add')}</Button>
     {/if}
   {/snippet}
 </Modal>
@@ -211,18 +260,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-  }
-
-  .field-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
   }
 
   .or {
@@ -242,35 +279,20 @@
     color: var(--text-3);
   }
 
-  .picked {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .location {
-    max-width: 28rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .loading {
+  .checking {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 1.2rem;
-    padding: 3.2rem 0;
+    gap: var(--space-2) var(--space-3);
   }
 
-  .loading-text {
-    font-size: var(--font-md);
+  .checking-text {
+    font-size: var(--font-sm);
     font-weight: 500;
   }
 
-  .loading-note {
+  .checking-note {
+    flex-basis: 100%;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -286,7 +308,7 @@
 
   .preview-row {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: var(--space-4);
     padding: 0.9rem 0;
@@ -298,12 +320,20 @@
   }
 
   .key {
+    flex-shrink: 0;
     color: var(--text-3);
   }
 
   .value {
+    min-width: 0;
     color: var(--text);
+    text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* A long URL or path wraps: the whole of it is on screen, not behind a hover. */
+  .location {
+    overflow-wrap: anywhere;
   }
 
   .background-note {

@@ -60,9 +60,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  // What is wrong with a checked feed is read with its preview; a failed check just happened.
+  // What is wrong with a checked feed is read with its preview; a failed check is said at its field.
   'lib/components/AddSourceModal.svelte': [
-    ['danger', true],
     ['warning', false],
     ['warning', false],
     ['warning', false],

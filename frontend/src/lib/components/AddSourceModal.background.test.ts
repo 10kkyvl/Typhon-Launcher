@@ -19,7 +19,7 @@ describe('AddSourceModal background add', () => {
   });
 
   it('shows the error in the window only while it is still open for this add', () => {
-    expect(source).toMatch(/if \(token === run && open\) \{\s*error = sourceErrorText\(err\);\s*step = 'input';/);
+    expect(source).toMatch(/if \(token === run && open\) \{\s*error = sourceErrorText\(err, msg\('modals\.addSourceAddFailed'\)\);\s*errorAt = at;\s*step = 'input';/);
   });
 
   it('hands a background failure to the store, which knows whether source:error already showed it', () => {
