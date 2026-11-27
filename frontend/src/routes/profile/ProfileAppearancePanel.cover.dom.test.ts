@@ -233,6 +233,40 @@ describe('"Adjust crop" pressed by a click that takes no focus (WebKit)', () => 
   });
 });
 
+describe('a cropped cover whose upload fails', () => {
+  const failedCrop = async (user: Awaited<ReturnType<typeof editor>>['user'], input: HTMLInputElement, name: string) => {
+    vi.mocked(uploadProfileCover).mockRejectedValueOnce(new AccountError('network'));
+    await user.click(uploadButton());
+    chosen(input, new File([name], `${name}.png`, { type: 'image/png' }));
+    await user.click(within(await cropReady()).getByRole('button', { name: msg('profile.applyCrop') }));
+    await screen.findByText(accountErrorText(new AccountError('network'), msg('profile.coverError')));
+  };
+
+  it('offers no "Adjust crop" beside a cover that was not cropped here', async () => {
+    const { user, input } = await editor(still({ coverUrl: 'https://cdn.example/old.jpg' }));
+
+    await failedCrop(user, input, 'new');
+
+    expect(button(msg('profile.removeCover'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: msg('profile.editCrop') })).toBeNull();
+  });
+
+  it('keeps "Adjust crop" on the picture of the cover that stays', async () => {
+    vi.mocked(uploadProfileCover).mockResolvedValueOnce('https://cdn.example/one.webp');
+    const { user, input } = await editor();
+    await user.click(uploadButton());
+    chosen(input, new File(['first'], 'first.png', { type: 'image/png' }));
+    await user.click(within(await cropReady()).getByRole('button', { name: msg('profile.applyCrop') }));
+    await screen.findByRole('button', { name: msg('profile.editCrop') });
+
+    await failedCrop(user, input, 'second');
+    await user.click(button(msg('profile.editCrop')));
+
+    const dialog = await screen.findByRole('dialog', { name: msg('profile.cropTitle') });
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe(`data:image/png;base64,${btoa('first')}`);
+  });
+});
+
 describe('while a second cover uploads', () => {
   // A Remove confirmed meanwhile would be undone by the upload's answer, and a second crop would be a
   // second upload: both are held until the answer.

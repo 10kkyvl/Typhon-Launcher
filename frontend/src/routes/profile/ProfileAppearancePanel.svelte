@@ -207,9 +207,8 @@
       });
       if (!alive || seq !== sequence) return;
       if (file.type === 'image/gif') {
-        originalSource = '';
         reading = false;
-        await upload(url, seq);
+        await upload(url, seq, '');
         return;
       }
       cropSource = url;
@@ -218,19 +217,21 @@
       if (alive && seq === sequence) error = msg('profile.coverDecode');
     } finally { if (alive && seq === sequence) reading = false; }
   }
-  async function upload(url: string, seq = ++sequence) {
+  // `original`: the uncropped picture "Adjust crop" reopens, taken with the cover only once it is
+  // uploaded; a failed upload leaves the cover and its original as they were.
+  async function upload(url: string, seq: number, original: string) {
     uploading = true; error = '';
     try {
       const coverUrl = await uploadProfileCover(url.slice(url.indexOf(',') + 1));
       if (!alive || seq !== sequence) return;
+      originalSource = original;
       patch({ coverUrl, coverPosition: 50 });
     } catch (err) {
       if (alive && seq === sequence) error = accountErrorText(err, msg('profile.coverError'));
     } finally { if (alive && seq === sequence) uploading = false; }
   }
   function applyCrop(url: string) {
-    originalSource = cropSource;
-    void upload(url);
+    void upload(url, ++sequence, cropSource);
   }
   function removeCover() { originalSource = ''; patch({ coverUrl: '' }); error = ''; }
   function reset() { originalSource = ''; draft.appearance = { ...DEFAULT_APPEARANCE }; error = ''; }
