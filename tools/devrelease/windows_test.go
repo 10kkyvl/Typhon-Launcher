@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -381,6 +382,47 @@ func TestWindowsResourceGeneratedForTheBuildsAndRemovedAfter(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, sysoName)); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("stat %s after the builds = %v, want it removed", sysoName, err)
+	}
+}
+
+// The resource wails3 generates is there for every build of the chain and
+// gone after the last one, whether the builds succeeded or one failed.
+func TestWindowsBuildsRemoveTheGeneratedResourceAfterwards(t *testing.T) {
+	errBroken := errors.New("broken build")
+	for _, fail := range []bool{false, true} {
+		t.Run(map[bool]string{false: "builds succeed", true: "a build fails"}[fail], func(t *testing.T) {
+			dir := repoLikeDir(t)
+			if err := os.Mkdir(filepath.Join(dir, "build"), 0o755); err != nil {
+				t.Fatalf("create build dir: %v", err)
+			}
+			fakeWails3(t)
+			var built []string
+			build := func(_ context.Context, version, out string) error {
+				if _, err := os.Stat(filepath.Join(dir, sysoName)); err != nil {
+					return fmt.Errorf("build of %s without the resource: %w", version, err)
+				}
+				if fail && version == "1.4.3" {
+					return errBroken
+				}
+				built = append(built, version)
+				return os.WriteFile(out, []byte("qa launcher "+version), 0o755)
+			}
+
+			paths, cleanup, err := buildLaunchers(t.Context(), config{windows: true}, []string{"1.4.2", "1.4.3"}, build, &bytes.Buffer{}, &bytes.Buffer{})
+			if cleanup != nil {
+				t.Cleanup(cleanup)
+			}
+			if fail {
+				if !errors.Is(err, errBroken) {
+					t.Fatalf("buildLaunchers() = %v, want the build's error", err)
+				}
+			} else if err != nil || len(paths) != 2 || len(built) != 2 {
+				t.Fatalf("buildLaunchers() = %v, %v; built %v; want both versions", paths, err, built)
+			}
+			if _, err := os.Stat(filepath.Join(dir, sysoName)); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("stat %s after the builds = %v, want it removed", sysoName, err)
+			}
+		})
 	}
 }
 
