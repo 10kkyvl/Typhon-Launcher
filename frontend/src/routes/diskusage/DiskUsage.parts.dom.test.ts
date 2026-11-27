@@ -159,7 +159,7 @@ describe('DiskUsage: the games section', () => {
     const dialog = await screen.findByRole('dialog');
     expect(inspectRemoval).toHaveBeenCalledWith('g-celeste');
     const chosen = within(dialog).getAllByRole('radio').filter((radio) => radio.getAttribute('aria-checked') === 'true');
-    expect(chosen.map((radio) => radio.querySelector('.mode-label')?.textContent)).toEqual([msg('modals.removeGameModeDiskLabel')]);
+    expect(chosen.map((radio) => document.getElementById(radio.getAttribute('aria-labelledby') ?? '')?.textContent)).toEqual([msg('modals.removeGameModeDiskLabel')]);
     const buttons = within(dialog).getAllByRole('button');
     await vi.waitFor(() => expect(buttons[buttons.length - 1].matches(':disabled')).toBe(false));
     await user.click(buttons[buttons.length - 1]);

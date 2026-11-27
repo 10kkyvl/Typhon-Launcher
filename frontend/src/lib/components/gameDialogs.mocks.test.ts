@@ -58,6 +58,9 @@ const DIALOGS = [
   'BiosNeededModal',
   'EmulatorBusyModal',
   'AddImageModal',
+  // The dialogs of download, install and storage: they start real downloads and installers, delete
+  // game files and move game folders between disks.
+  'RemoveGameModal',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -182,6 +185,7 @@ describe('tests that mount a game or library dialog', () => {
         './EmulatorBusyModal.dom.test.ts',
         './AddImageModal.dom.test.ts',
         './addDialogs.dom.test.ts',
+        './RemoveGameModal.dom.test.ts',
         ...HELD,
       ]),
     );

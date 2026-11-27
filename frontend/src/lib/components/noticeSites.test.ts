@@ -185,8 +185,10 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
+  // The game running or busy is a state of the game when the dialog opens; a failed read and a failed
+  // removal just happened.
   'lib/components/RemoveGameModal.svelte': [
+    ['danger', true],
     ['warning', false],
     ['warning', false],
     ['danger', true],

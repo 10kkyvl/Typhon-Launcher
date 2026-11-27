@@ -1,18 +1,28 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import OptionList from './OptionList.svelte';
   import Spinner from './Spinner.svelte';
   import Toggle from './Toggle.svelte';
+  import type { OptionItem } from './optionList';
   import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
-  import { installErrorText } from '../install/installErrors';
+  import { REASONS, installErrorText } from '../install/installErrors';
+  import { currentRouteKey } from '../stores/router';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
-  import { msg } from '../i18n';
-  import { nextIndex } from '../utils/roving';
+  import { focusHandOff } from '../utils/focusHandOff';
+  import { errorCode, msg } from '../i18n';
 
   type Mode = 'disk' | 'library';
 
+  /**
+   * Where the game goes: off the disk with its card kept, or out of the library. Both modes delete, so
+   * the arrows only walk them and a press, Space or Enter chooses; the dialog opens on Cancel. What a
+   * mode sends is exactly what the dialog shows (install.Service.RemoveGame). While the removal runs
+   * nothing else can be pressed and the dialog stays.
+   */
   let {
     open = $bindable(false),
     gameId,
@@ -35,77 +45,115 @@
   } = $props();
 
   const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
   let info = $state<RemovalInfo | null>(null);
   let loading = $state(false);
+  let readFailure = $state('');
+  let readRetrying = $state(false);
   let working = $state(false);
   let failure = $state('');
   let deleteFiles = $state(false);
   let deleteDownload = $state(false);
-  let loadedFor = $state('');
-  let modeGroup = $state<HTMLElement>();
 
   const blocked = $derived(!!info && (info.running || info.busy));
   const manualImage = $derived(emulated && !info?.owned);
   const canDeleteFiles = $derived(!external && !manualImage && !!info && info.owned && !info.dirMissing);
   const canUninstall = $derived(!external && !manualImage && !!info && (info.method === 'installer' || canDeleteFiles));
 
+  // One per opening and game. The game page unmounts the dialog when the card it was opened for leaves
+  // the library, which Go does before the removal answers: a destroyed dialog, or one turned to
+  // another game, closes nothing and says the answer once, naming its game. It calls back only when
+  // destroyed while the player is still on the page the removal was pressed on.
+  let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
   $effect(() => {
-    if (!open) {
-      loadedFor = '';
-      return;
-    }
-    if (loadedFor === gameId) return;
-    loadedFor = gameId;
-    void load();
+    const isOpen = open;
+    const id = gameId;
+    untrack(() => {
+      opening += 1;
+      info = null;
+      loading = false;
+      readFailure = '';
+      working = false;
+      failure = '';
+      deleteFiles = false;
+      deleteDownload = false;
+      if (isOpen && id) void load();
+    });
   });
 
   $effect(() => {
     if (info && !canUninstall) mode = 'library';
   });
 
-  async function load() {
+  async function load(): Promise<boolean | undefined> {
+    const at = opening;
+    // A failed read stays on screen through its Retry (Notice's `retrying`) until the answer replaces it.
     loading = true;
-    failure = '';
-    info = null;
     try {
       const loaded = await inspectRemoval(gameId);
+      if (at !== opening) return undefined;
+      readFailure = '';
       info = loaded;
       deleteFiles = loaded.owned && !loaded.dirMissing;
       deleteDownload = false;
+      return true;
     } catch (err) {
-      failure = message(err, msg('modals.removeGameInspectFailed'));
+      if (at !== opening) return undefined;
+      readFailure = installErrorText(err, msg('modals.removeGameInspectFailed'));
+      return false;
     } finally {
-      loading = false;
+      if (at === opening) loading = false;
     }
   }
 
-  function message(err: unknown, fallback: string) {
-    return installErrorText(err, fallback);
+  function refusedFor(name: string, err: unknown): string {
+    const key = REASONS[errorCode(err)];
+    return key ? msg('modals.removeGameFailedForReason', { title: name, reason: msg(key) }) : msg('modals.removeGameFailedFor', { title: name });
   }
 
   async function confirm() {
-    if (!info || working) return;
-    const keepInLibrary = mode === 'disk';
+    if (!info || working || blocked) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    const id = gameId;
+    const name = title;
+    const chosen = mode;
+    const keepInLibrary = chosen === 'disk';
+    const options = {
+      deleteFiles: keepInLibrary ? canDeleteFiles : deleteFiles && canDeleteFiles,
+      deleteDownload,
+      keepInLibrary,
+    };
+    const page = currentRouteKey();
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     working = true;
     failure = '';
     try {
-      await removeGame(gameId, {
-        deleteFiles: keepInLibrary ? canDeleteFiles : deleteFiles && canDeleteFiles,
-        deleteDownload,
-        keepInLibrary,
-      });
-      open = false;
-      toast(
-        keepInLibrary
-          ? msg('modals.removeGameRemovedFromDisk', { title })
-          : msg('modals.removeGameRemovedFromLibrary', { title }),
-      );
-      onremoved?.(mode);
-    } catch (err) {
-      failure = message(err, msg('modals.removeGameDeleteFailed'));
-    } finally {
+      await removeGame(id, options);
+      toast(keepInLibrary ? msg('modals.removeGameRemovedFromDisk', { title: name }) : msg('modals.removeGameRemovedFromLibrary', { title: name }));
+      if (!heard()) {
+        // The game page unmounts the dialog when the card leaves first: while the player is still on
+        // the page the removal was pressed on, the page's own flow (where it leaves to) finishes.
+        if (!alive && page === currentRouteKey()) onremoved?.(chosen);
+        return;
+      }
       working = false;
+      open = false;
+      onremoved?.(chosen);
+    } catch (err) {
+      if (!heard()) {
+        toast(refusedFor(name, err), 'danger');
+        return;
+      }
+      working = false;
+      failure = installErrorText(err, msg('modals.removeGameDeleteFailed'));
+      await hand(() => document.getElementById(failureId));
     }
   }
 
@@ -129,19 +177,19 @@
     return msg('modals.removeGameMethodNotOwned');
   });
 
-  const MODES: Mode[] = ['disk', 'library'];
-  const modeOff = (index: number) => MODES[index] === 'disk' && !canUninstall;
-
-  // A radio group: the arrows move the choice and the focus together, skipping a tile that is off.
-  function moveMode(event: KeyboardEvent) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const radios = [...(modeGroup?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
-    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), MODES.length, event.key, { orientation: 'both', isDisabled: modeOff });
-    if (next === null) return;
-    event.preventDefault();
-    mode = MODES[next];
-    radios[next]?.focus();
-  }
+  const modes = $derived.by<OptionItem[]>(() => {
+    const diskSub = canUninstall
+      ? msg('modals.removeGameDiskSubCanUninstall')
+      : info?.dirMissing
+        ? msg('modals.removeGameDiskSubDirMissing')
+        : msg('modals.removeGameDiskSubNotOwned');
+    return [
+      canUninstall
+        ? { id: 'disk', title: msg('modals.removeGameModeDiskLabel'), note: diskSub }
+        : { id: 'disk', title: msg('modals.removeGameModeDiskLabel'), disabledReason: diskSub },
+      { id: 'library', title: msg('modals.removeGameModeLibraryLabel'), note: msg('modals.removeGameLibrarySub') },
+    ];
+  });
 
   const freedText = $derived.by(() => {
     if (!info) return '';
@@ -149,49 +197,34 @@
     if (info.sizeBytes > 0) return msg('modals.removeGameFreedSize', { size: bytesSize(info.sizeBytes) });
     return msg('modals.removeGameFreedByUninstaller');
   });
+
+  // Why the removal cannot be pressed now: the same words the dialog shows for it.
+  const confirmReason = $derived.by(() => {
+    if (working) return '';
+    if (readFailure) return msg('modals.removeGameInspectFailed');
+    if (loading || !info) return msg('modals.removeGameLoading', { title });
+    if (info.running) return msg('modals.removeGameRunningWarning');
+    if (info.busy) return msg('modals.removeGameBusyWarning');
+    return '';
+  });
 </script>
 
 <Modal dismissible={!working} bind:open title={msg('modals.removeGameTitle')} {returnFocus}>
-  {#if loading}
+  {#if readFailure}
+    <div class="notice">
+      <Notice tone="danger" compact bind:retrying={readRetrying} retry={{ label: msg('common.retry'), run: load }}>{readFailure}</Notice>
+    </div>
+  {:else if loading}
     <div class="loading"><Spinner size="sm" label={msg('modals.removeGameLoading', { title })} /></div>
   {:else if info}
-    <div class="modes" role="radiogroup" aria-label={msg('modals.removeGameTitle')} bind:this={modeGroup}>
-      <button
-        type="button"
-        class="mode"
-        role="radio"
-        aria-checked={mode === 'disk'}
-        aria-disabled={!canUninstall || undefined}
-        tabindex={mode === 'disk' && canUninstall ? 0 : -1}
-        onclick={() => {
-          if (canUninstall) mode = 'disk';
-        }}
-        onkeydown={moveMode}
-      >
-        <span class="mode-label">{msg('modals.removeGameModeDiskLabel')}</span>
-        <span class="mode-sub">
-          {#if canUninstall}
-            {msg('modals.removeGameDiskSubCanUninstall')}
-          {:else if info.dirMissing}
-            {msg('modals.removeGameDiskSubDirMissing')}
-          {:else}
-            {msg('modals.removeGameDiskSubNotOwned')}
-          {/if}
-        </span>
-      </button>
-      <button
-        type="button"
-        class="mode"
-        role="radio"
-        aria-checked={mode === 'library'}
-        tabindex={mode === 'library' || !canUninstall ? 0 : -1}
-        onclick={() => (mode = 'library')}
-        onkeydown={moveMode}
-      >
-        <span class="mode-label">{msg('modals.removeGameModeLibraryLabel')}</span>
-        <span class="mode-sub">{msg('modals.removeGameLibrarySub')}</span>
-      </button>
-    </div>
+    <OptionList
+      options={modes}
+      value={mode}
+      onchange={(id) => (mode = id as Mode)}
+      label={msg('modals.removeGameTitle')}
+      activation="manual"
+      disabled={working}
+    />
 
     {#if manualImage}
       <p class="text">{msg('emul.removeNote')}</p>
@@ -242,7 +275,12 @@
               {/if}
             </span>
           </div>
-          <Toggle bind:checked={deleteFiles} labelledby="{uid}-delete-files-label" describedby="{uid}-delete-files-sub" disabled={!canDeleteFiles} />
+          <Toggle
+            bind:checked={deleteFiles}
+            labelledby="{uid}-delete-files-label"
+            describedby="{uid}-delete-files-sub"
+            disabled={!canDeleteFiles || working}
+          />
         </div>
       {/if}
 
@@ -258,19 +296,26 @@
               {/if}
             </span>
           </div>
-          <Toggle bind:checked={deleteDownload} labelledby="{uid}-remove-game-delete-download-label" describedby="{uid}-remove-game-delete-download-sub" />
+          <Toggle
+            bind:checked={deleteDownload}
+            labelledby="{uid}-remove-game-delete-download-label"
+            describedby="{uid}-remove-game-delete-download-sub"
+            disabled={working}
+          />
         </div>
       {/if}
     </div>
   {/if}
 
   {#if failure}
-    <div class="notice"><Notice tone="danger" compact>{failure}</Notice></div>
+    <div class="notice"><Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice></div>
   {/if}
 
   {#snippet footer()}
-    <Button disabled={working} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="danger" onclick={confirm} disabled={!info || blocked} busy={working}>
+    <Button data-autofocus disabled={working} reason={working ? msg('modals.actionRunning') : ''} onclick={() => (open = false)}>
+      {msg('common.cancel')}
+    </Button>
+    <Button variant="danger" onclick={confirm} disabled={!info || blocked} reason={confirmReason} busy={working}>
       {#if working}
         {msg('modals.removeGameWorking')}
       {:else if mode === 'disk'}
@@ -303,50 +348,6 @@
 
   .notice {
     margin: var(--space-4) 0 0;
-  }
-
-  .modes {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-  }
-
-  .mode {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-1);
-    padding: var(--space-4);
-    text-align: left;
-    background: var(--surface-2);
-    border: 1px solid transparent;
-    border-radius: var(--radius-md);
-    transition:
-      background var(--dur) var(--ease),
-      border-color var(--dur) var(--ease);
-  }
-
-  .mode:hover:not([aria-disabled='true']) {
-    background: var(--surface-3);
-  }
-
-  .mode[aria-checked='true'] {
-    border-color: var(--accent-bright);
-  }
-
-  .mode[aria-disabled='true'] {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  .mode-label {
-    font-weight: 500;
-  }
-
-  .mode-sub {
-    font-size: 1.3rem;
-    line-height: 1.4;
-    color: var(--text-3);
   }
 
   .options {

@@ -105,7 +105,7 @@ describe('Installed: removing a game from a row’s menu', () => {
     const dialog = await screen.findByRole('dialog');
     expect(inspectRemoval).toHaveBeenCalledWith('g-celeste');
     const chosen = within(dialog).getAllByRole('radio').filter((radio) => radio.getAttribute('aria-checked') === 'true');
-    expect(chosen.map((radio) => radio.querySelector('.mode-label')?.textContent)).toEqual([msg(mode)]);
+    expect(chosen.map((radio) => document.getElementById(radio.getAttribute('aria-labelledby') ?? '')?.textContent)).toEqual([msg(mode)]);
   });
 });
 

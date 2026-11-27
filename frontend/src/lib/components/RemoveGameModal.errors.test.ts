@@ -5,15 +5,12 @@ describe('RemoveGameModal error text', () => {
   it('never shows the raw backend error message to the user', () => {
     expect(source).not.toMatch(/err\.message/);
     expect(source).not.toMatch(/instanceof Error/);
+    expect(source).not.toMatch(/String\(err\)|errorMessage\(/);
   });
 
-  it('resolves errors through installErrorText, which never returns raw text', () => {
-    expect(source).toContain("import { installErrorText } from '../install/installErrors';");
-    expect(source).toMatch(/function message\(err: unknown, fallback: string\) \{\s*return installErrorText\(err, fallback\);\s*\}/);
-  });
-
-  it('keeps the load() and confirm() fallbacks distinct and translated', () => {
-    expect(source).toContain("failure = message(err, msg('modals.removeGameInspectFailed'));");
-    expect(source).toContain("failure = message(err, msg('modals.removeGameDeleteFailed'));");
+  it('words the read and the removal through the install table, each with its own fallback', () => {
+    expect(source).toContain("import { REASONS, installErrorText } from '../install/installErrors';");
+    expect(source).toContain("readFailure = installErrorText(err, msg('modals.removeGameInspectFailed'));");
+    expect(source).toContain("failure = installErrorText(err, msg('modals.removeGameDeleteFailed'));");
   });
 });
