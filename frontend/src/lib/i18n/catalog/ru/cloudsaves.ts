@@ -84,6 +84,8 @@ export const cloudsaves = {
   'cloudsaves.conflictKeepMine': 'Оставить мои',
   'cloudsaves.conflictTakeRemote': 'Взять из облака',
   'cloudsaves.conflictLater': 'Позже',
+  'cloudsaves.conflictBusy': 'Дождитесь, пока закончится текущее действие',
+  'cloudsaves.conflictWaitDetails': 'Копию можно выбрать, когда загрузятся подробности конфликта',
   'cloudsaves.conflictOffline': '{reason}. Выбрать копию можно только с подключением: пока его нет, сохранения не тронет ни одна сторона.',
   'cloudsaves.conflictPlayHere': 'Играть с сохранениями на этом компьютере',
   'cloudsaves.conflictPlayHereNote': 'Конфликт останется: лаунчер спросит снова при следующем запуске.',
