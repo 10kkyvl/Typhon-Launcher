@@ -219,6 +219,8 @@ export const modals = {
   'modals.removeGameSeedingWillStop': 'Раздача этих файлов будет остановлена',
   'modals.removeGameDownloadInFolder': '{size} в папке загрузок',
   'modals.removeGameWorking': 'Удаляем...',
+  'modals.removeGameFailedFor': 'Не удалось удалить «{title}»',
+  'modals.removeGameFailedForReason': 'Не удалось удалить «{title}»: {reason}',
 
   // MoveGameModal.svelte
   'modals.moveGameDesktopOnly': 'Выбор папки доступен только в desktop-сборке',

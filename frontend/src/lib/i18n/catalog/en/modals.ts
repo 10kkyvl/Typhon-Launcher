@@ -222,6 +222,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.removeGameSeedingWillStop': 'Seeding of these files will be stopped',
   'modals.removeGameDownloadInFolder': '{size} in the downloads folder',
   'modals.removeGameWorking': 'Removing...',
+  'modals.removeGameFailedFor': 'Could not remove "{title}"',
+  'modals.removeGameFailedForReason': 'Could not remove "{title}": {reason}',
 
   // MoveGameModal.svelte
   'modals.moveGameDesktopOnly': 'Folder selection is only available in the desktop build',
