@@ -194,3 +194,117 @@ describe('GameStatusModal: the completion date', () => {
     expect(setCompletedAt).not.toHaveBeenCalled();
   });
 });
+
+describe('GameStatusModal: opened again, or turned to another game while it stays mounted (the game page)', () => {
+  const celeste = { id: 'g2', title: 'Celeste', status: 'backlog' } as LibraryGame;
+
+  function mounted(of: LibraryGame = game) {
+    const result = render(GameStatusModal, { target: app, props: { open: true, game: of } });
+    return { ...result, dialog: screen.getByRole('dialog', { name: msg('modals.gameStatusTitle') }) };
+  }
+
+  const pressed = (dialog: HTMLElement) =>
+    within(dialog)
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-pressed') === 'true')
+      .map((button) => button.textContent?.trim());
+
+  it('offers the new game\'s own status, not the one pressed for the game before', async () => {
+    const { dialog, rerender } = mounted();
+    await user().click(within(dialog).getByRole('button', { name: msg('games.statusCompleted') }));
+
+    await rerender({ open: true, game: celeste });
+
+    expect(pressed(dialog)).toEqual([msg('games.statusBacklog')]);
+    expect(within(dialog).queryByLabelText(msg('modals.gameCompletedAt'))).toBeNull();
+  });
+
+  it('says nothing in the new game\'s dialog of a refusal for the game before, and leaves it live', async () => {
+    const saved = held<LibraryGame>();
+    vi.mocked(setStatus).mockReturnValueOnce(saved.promise);
+    const { dialog, rerender } = mounted();
+    const keys = user();
+    const playing = within(dialog).getByRole('button', { name: msg('games.statusPlaying') });
+    playing.focus();
+    await keys.keyboard('{Enter}');
+
+    await rerender({ open: true, game: celeste });
+    expect(pressed(dialog)).toEqual([msg('games.statusBacklog')]);
+    saved.reject(new Error('typhon:library.not_found: no game'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(get(toasts)).toEqual([]);
+    expect(within(dialog).getAllByRole('button').filter((button) => button.getAttribute('aria-disabled') === 'true' || button.getAttribute('aria-busy') === 'true')).toEqual([]);
+  });
+
+  it('a save for the game before, answered after the turn, leaves the new game\'s dialog open and sends its date to the game it was pressed for', async () => {
+    const saved = held<LibraryGame>();
+    vi.mocked(setStatus).mockReturnValueOnce(saved.promise);
+    vi.mocked(setCompletedAt).mockResolvedValue(undefined);
+    const { dialog, rerender } = mounted();
+    const keys = user();
+    await keys.click(within(dialog).getByRole('button', { name: msg('games.statusCompleted') }));
+    const save = within(dialog).getByRole('button', { name: msg('common.save') });
+    save.focus();
+    await keys.keyboard('{Enter}');
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith('g1', 'completed');
+
+    await rerender({ open: true, game: celeste });
+    expect(pressed(dialog)).toEqual([msg('games.statusBacklog')]);
+    saved.resolve({ ...game, status: 'completed' } as LibraryGame);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(dialog.isConnected).toBe(true);
+    expect(setCompletedAt).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(setCompletedAt).mock.calls[0][0]).toBe('g1');
+    expect(pressed(dialog)).toEqual([msg('games.statusBacklog')]);
+  });
+
+  it('opened again after a refused status, says nothing of the refusal', async () => {
+    vi.mocked(setStatus).mockRejectedValueOnce(new Error('typhon:library.something_new: запись не удалась'));
+    const { dialog, rerender } = mounted();
+    await user().click(within(dialog).getByRole('button', { name: msg('games.statusPlaying') }));
+    await within(dialog).findByRole('alert');
+
+    await rerender({ open: false, game });
+    await rerender({ open: true, game });
+
+    const again = screen.getByRole('dialog', { name: msg('modals.gameStatusTitle') });
+    expect(within(again).queryByRole('alert')).toBeNull();
+  });
+
+  it('opened again after a refused date, shows the date field without the refusal', async () => {
+    vi.mocked(setStatus).mockResolvedValue({ ...game, status: 'completed' } as LibraryGame);
+    vi.mocked(setCompletedAt).mockRejectedValueOnce(new Error('typhon:library.something_new: запись не удалась'));
+    const { dialog, rerender } = mounted();
+    const keys = user();
+    await keys.click(within(dialog).getByRole('button', { name: msg('games.statusCompleted') }));
+    await keys.click(within(dialog).getByRole('button', { name: msg('common.save') }));
+    await within(dialog).findByRole('alert');
+
+    await rerender({ open: false, game });
+    await rerender({ open: true, game });
+    const again = screen.getByRole('dialog', { name: msg('modals.gameStatusTitle') });
+    await keys.click(within(again).getByRole('button', { name: msg('games.statusCompleted') }));
+
+    const field = within(again).getByLabelText(msg('modals.gameCompletedAt'));
+    expect(within(again).queryByRole('alert')).toBeNull();
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+  });
+
+  it('keeps the pressed status and a refused date when the library sends the same game again', async () => {
+    vi.mocked(setStatus).mockResolvedValue({ ...game, status: 'completed' } as LibraryGame);
+    vi.mocked(setCompletedAt).mockRejectedValueOnce(new Error('typhon:library.something_new: запись не удалась'));
+    const { dialog, rerender } = mounted();
+    const keys = user();
+    await keys.click(within(dialog).getByRole('button', { name: msg('games.statusCompleted') }));
+    await keys.click(within(dialog).getByRole('button', { name: msg('common.save') }));
+    await within(dialog).findByRole('alert');
+
+    await rerender({ open: true, game: { ...game, status: 'completed' } as LibraryGame });
+
+    expect(within(dialog).getByRole('alert').textContent?.trim()).toBe(msg('games.blocks.statusDateFailed'));
+    expect(pressed(dialog)).toEqual([msg('games.statusCompleted')]);
+  });
+});

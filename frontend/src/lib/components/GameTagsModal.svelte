@@ -66,7 +66,8 @@
     saving = true;
     try {
       await setTags(game.id, tags);
-      open = false;
+      // A dialog unmounted meanwhile (the page turned to another game) closes nothing of the one now open.
+      if (alive) open = false;
     } catch (err) {
       if (alive) failure = libraryErrorText(err, msg('modals.gameTagsSaveFailed'));
     } finally {

@@ -85,9 +85,13 @@
 {#if localGame}
   <GameStatusModal bind:open={statusOpen} game={localGame} />
 
-  {#if tagsOpen}
-    <GameTagsModal bind:open={tagsOpen} game={localGame} />
-  {/if}
+  <!-- The page is not keyed on its game: a dialog open while it turns to another game starts again
+       for that game. -->
+  {#key localGame.id}
+    {#if tagsOpen}
+      <GameTagsModal bind:open={tagsOpen} game={localGame} />
+    {/if}
+  {/key}
 {/if}
 
 {#if removing}

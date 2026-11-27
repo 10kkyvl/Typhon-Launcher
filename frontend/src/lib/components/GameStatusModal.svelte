@@ -55,18 +55,35 @@
   const invalid = $derived(dated && completionDateIssue(day, new Date()));
   const dateError = $derived(invalid ? msg('modals.gameCompletedAtInvalid') : dateFailure);
 
+  // The game page keeps the dialog mounted and turns it to another game without closing it: each
+  // opening, and each game, starts from that game's own status, and an answer for an earlier one is
+  // dropped.
+  // Keyed on the id, not the object: the library sends a new copy of the same game after each write.
+  const gameId = $derived(game.id);
+  let opening = 0;
   $effect(() => {
-    if (open) {
+    const isOpen = open;
+    void gameId;
+    untrack(() => {
+      opening += 1;
       picked = null;
       saved = null;
+      saving = false;
+      sent = null;
       failure = '';
       dateFailure = '';
-      day = untrack(() => dateInputValue(game.completedAt, new Date()));
-    }
+      if (isOpen) day = dateInputValue(game.completedAt, new Date());
+    });
   });
 
+  // What was pressed is written to the game it was pressed for, date included, even when the dialog
+  // has moved on; only the opening it was pressed in hears the answer.
   async function apply(status: GameStatus, from: GameStatus | 'save' = status) {
     if (saving) return;
+    const at = opening;
+    const id = game.id;
+    const changes = status !== current;
+    const date = isFinished(status) ? dateFromInput(day) : null;
     // The focus the pressed button holds goes to the words of a refusal: the date field for a date.
     const pressed = document.activeElement;
     const hand = focusHandOff(() => pressed);
@@ -76,23 +93,24 @@
     dateFailure = '';
     let statusDone = false;
     try {
-      if (status !== current) {
-        await setStatus(game.id, status);
-        saved = status;
+      if (changes) {
+        await setStatus(id, status);
+        if (at === opening) saved = status;
       }
       statusDone = true;
-      if (isFinished(status)) {
-        const date = dateFromInput(day);
-        if (date) await setCompletedAt(game.id, date);
-      }
-      open = false;
+      if (date) await setCompletedAt(id, date);
+      if (at === opening) open = false;
     } catch (err) {
+      if (at !== opening) return;
       if (statusDone) dateFailure = dateFailureText(err);
       else failure = libraryErrorText(err, msg('modals.gameStatusUpdateFailed'));
     } finally {
-      saving = false;
-      sent = null;
+      if (at === opening) {
+        saving = false;
+        sent = null;
+      }
     }
+    if (at !== opening) return;
     if (dateFailure) await hand(() => document.getElementById(dateId));
     else if (failure) await hand(() => document.getElementById(failureId));
   }

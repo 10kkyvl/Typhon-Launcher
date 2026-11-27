@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { allTags, type LibraryGame } from '../../lib/services/library';
+import { allTags, setTags, type LibraryGame } from '../../lib/services/library';
 import { applyMetadataMatch, findMetadataCandidates, type MetadataCandidate, type MetadataView } from '../../lib/services/metadata';
 import { toasts } from '../../lib/stores/toasts';
 import { resetBindings } from '../../lib/testing/fakeBinding';
@@ -154,5 +154,47 @@ describe('GameDialogs: the page turned to another game while a match was applied
     expect(data.metaView).toBeNull();
     expect(dialog.isConnected).toBe(true);
     expect(openDialogs()).toEqual([msg('modals.metadataMatchFindTitle')]);
+  });
+});
+
+describe('GameDialogs: the page turned to another game while the tags dialog was open', () => {
+  it('shows the new game\'s tags and saves them to the new game; a late save for the game before closes nothing', async () => {
+    const saved = held<LibraryGame>();
+    vi.mocked(setTags).mockReturnValueOnce(saved.promise).mockResolvedValueOnce({} as LibraryGame);
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open tags' }));
+    let dialog = await screen.findByRole('dialog', { name: msg('modals.gameTagsTitle') });
+    await within(dialog).findByText('coop');
+    await keys.click(within(dialog).getByRole('button', { name: msg('common.save') }));
+    expect(setTags).toHaveBeenCalledExactlyOnceWith('g1', ['coop']);
+
+    const celeste = { id: 'g2', title: 'Celeste', status: '', tags: ['solo'] } as unknown as LibraryGame;
+    await rerender({ game: celeste, canonicalId: 'igdb:2', title: 'Celeste' });
+    dialog = await screen.findByRole('dialog', { name: msg('modals.gameTagsTitle') });
+    await within(dialog).findByText('solo');
+    expect(within(dialog).queryByText('coop')).toBeNull();
+    saved.resolve({} as LibraryGame);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(openDialogs()).toEqual([msg('modals.gameTagsTitle')]);
+    expect(dialog.isConnected).toBe(true);
+    await keys.click(within(dialog).getByRole('button', { name: msg('common.save') }));
+    expect(setTags).toHaveBeenLastCalledWith('g2', ['solo']);
+  });
+
+  it('keeps the open tags dialog, and what was typed in it, when the library sends the same game again', async () => {
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open tags' }));
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.gameTagsTitle') });
+    const field = within(dialog).getByPlaceholderText(msg('modals.gameTagsPlaceholder'));
+    await keys.type(field, 'ind');
+
+    await rerender({ game: { ...hades, tags: ['coop'] } as unknown as LibraryGame });
+
+    expect(dialog.isConnected).toBe(true);
+    expect(field.isConnected).toBe(true);
+    expect((field as HTMLInputElement).value).toBe('ind');
   });
 });
