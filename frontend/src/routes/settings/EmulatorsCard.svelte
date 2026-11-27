@@ -36,6 +36,10 @@
   let foundOpen = $state(false);
   let picked = $state<Record<string, boolean>>({});
   let applying = $state(false);
+  // The ticked paths the last Apply could not save, in the launcher's words.
+  let applyFailures = $state<string[]>([]);
+  const foundUid = $props.id();
+  const applyFailureId = `${foundUid}-apply-failure`;
 
   async function fetchRows() {
     try {
@@ -158,6 +162,7 @@
       }
       found = result;
       picked = Object.fromEntries(result.found.map((item) => [item.platform, true]));
+      applyFailures = [];
       foundOpen = true;
     } catch (err) {
       toast(libraryErrorText(err, msg('emul.detectFailed')), 'danger');
@@ -166,34 +171,43 @@
     }
   }
 
+  // Saves each ticked path once. A path that is saved leaves the list; one that is not stays ticked
+  // and is said in the dialog, which stays open for another Apply.
   async function applyFound() {
-    if (!found || applying) return;
+    if (!found || applying || !anyPicked) return;
     applying = true;
-    let failed = false;
+    applyFailures = [];
+    const failures: string[] = [];
+    const saved = new Set<string>();
     try {
       for (const item of found.found) {
         if (!picked[item.platform]) continue;
         try {
           replace(await setEmulatorPath(item.platform, item.path));
+          saved.add(item.platform);
         } catch (err) {
-          failed = true;
-          toast(
+          failures.push(
             msg('emul.detectApplyFailed', {
               emulator: nameOf(item.platform),
               reason: libraryErrorText(err, msg('emul.saveFailed')),
             }),
-            'danger',
           );
         }
       }
     } finally {
       applying = false;
     }
-    if (!failed) toast(msg('emul.detectApplied'), 'success');
-    foundOpen = false;
+    if (failures.length === 0) {
+      toast(msg('emul.detectApplied'), 'success');
+      foundOpen = false;
+      return;
+    }
+    found = { ...found, found: found.found.filter((item) => !saved.has(item.platform)) };
+    applyFailures = failures;
   }
 
   const anyPicked = $derived(Object.values(picked).some(Boolean));
+  const heldReason = $derived(applying ? msg('emul.detectApplying') : '');
 </script>
 
 <Card title={msg('emul.cardTitle')}>
@@ -241,23 +255,35 @@
   {/if}
 </Card>
 
-<Modal dismissible={!applying} bind:open={foundOpen} title={msg('emul.detectTitle')}>
+<Modal dismissible={!applying} busy={applying} bind:open={foundOpen} title={msg('emul.detectTitle')}>
   {#if found}
     <p class="hint">{msg('emul.detectIntro')}</p>
     <div class="found">
       {#each found.found as item (item.platform)}
         <div class="found-row">
-          <Checkbox bind:checked={picked[item.platform]} label={nameOf(item.platform)} description={item.path} />
+          <Checkbox bind:checked={picked[item.platform]} label={nameOf(item.platform)} description={item.path} disabled={applying} reason={heldReason} />
         </div>
       {/each}
     </div>
     {#if found.unreadable > 0}
       <p class="hint">{msg('emul.detectPartial')}</p>
     {/if}
+    {#if applyFailures.length > 0}
+      <Notice tone="danger" compact id={applyFailureId} title={msg('emul.detectApplyPartly')}>
+        {#each applyFailures as failure (failure)}<p class="failure">{failure}</p>{/each}
+      </Notice>
+    {/if}
   {/if}
   {#snippet footer()}
-    <Button disabled={applying} onclick={() => (foundOpen = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!anyPicked || applying} onclick={applyFound}>
+    <Button disabled={applying} reason={heldReason} onclick={() => (foundOpen = false)}>{msg('common.cancel')}</Button>
+    <Button
+      variant="primary"
+      disabled={!applying && !anyPicked}
+      reason={!applying && !anyPicked ? msg('emul.detectPickOne') : ''}
+      busy={applying}
+      aria-describedby={applyFailures.length > 0 ? applyFailureId : undefined}
+      onclick={applyFound}
+    >
       {msg('emul.detectApply')}
     </Button>
   {/snippet}
@@ -282,5 +308,9 @@
 
   .found-row + .found-row {
     border-top: 1px solid var(--border);
+  }
+
+  .failure {
+    margin: 0;
   }
 </style>

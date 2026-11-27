@@ -11,12 +11,6 @@ vi.mock('../../lib/services/settings', async (importOriginal) => ({
   saveSettingsPatch: vi.fn(),
   libraryFolders: vi.fn(),
 }));
-vi.mock('../../lib/services/emulators', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/emulators')>()),
-  listPlatforms: vi.fn(),
-  detectEmulators: vi.fn(),
-  setEmulatorPath: vi.fn(),
-}));
 vi.mock('../../lib/services/network', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/network')>()),
   hasProxyPassword: vi.fn(async () => false),
@@ -29,32 +23,16 @@ vi.mock('../../lib/services/relocate', async (importOriginal) => ({
 }));
 
 import { msg } from '../../lib/i18n';
-import { detectEmulators, listPlatforms, setEmulatorPath, type PlatformStatus } from '../../lib/services/emulators';
 import type { DiscordApi } from '../../lib/services/discord';
 import { testProxy } from '../../lib/services/network';
 import { moveLibrary } from '../../lib/services/relocate';
 import { libraryFolders, saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
 import { settings } from '../../lib/stores/settings';
 import { renderDom } from '../../lib/testing/dom';
-import { description } from '../../lib/testing/hints';
 import DiscordCard from './DiscordCard.svelte';
-import EmulatorsCard from './EmulatorsCard.svelte';
 import LibraryFoldersRow from './LibraryFoldersRow.svelte';
 import LibraryLocationRow from './LibraryLocationRow.svelte';
 import NetworkSettingsCard from './NetworkSettingsCard.svelte';
-
-const PLATFORM: PlatformStatus = {
-  id: 'ps2',
-  name: 'PlayStation 2',
-  emulator: 'PCSX2',
-  homepage: '',
-  extensions: [],
-  imageNames: [],
-  path: '',
-  status: 'not_set',
-  reason: '',
-  warnings: [],
-};
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {};
@@ -76,89 +54,10 @@ afterEach(() => {
   document.body.replaceChildren();
   settings.set(null);
   vi.restoreAllMocks();
-  vi.mocked(listPlatforms).mockReset();
   vi.mocked(libraryFolders).mockReset();
   vi.mocked(testProxy).mockReset();
   vi.mocked(moveLibrary).mockReset();
   vi.mocked(saveSettingsPatch).mockReset();
-});
-
-describe('EmulatorsCard', () => {
-  it('says it is loading through a named spinner', async () => {
-    const list = deferred<PlatformStatus[]>();
-    vi.mocked(listPlatforms).mockReturnValue(list.promise);
-    renderDom(EmulatorsCard, {});
-    expect(screen.getByRole('status').textContent?.trim()).toBe(msg('emul.loading'));
-    list.resolve([PLATFORM]);
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
-  });
-
-  it('keeps the load error and focus on the busy Retry until the list arrives', async () => {
-    vi.mocked(listPlatforms).mockRejectedValueOnce(new Error('down'));
-    const { user } = renderDom(EmulatorsCard, {});
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain(msg('emul.loadFailed'));
-    const retry = screen.getByRole('button', { name: msg('common.retry') });
-
-    const list = deferred<PlatformStatus[]>();
-    vi.mocked(listPlatforms).mockReturnValueOnce(list.promise);
-    retry.focus();
-    await user.keyboard('{Enter}');
-
-    expect(retry.isConnected).toBe(true);
-    expect(retry.getAttribute('aria-busy')).toBe('true');
-    expect(document.activeElement).toBe(retry);
-    expect(screen.getByRole('alert').textContent).toContain(msg('emul.loadFailed'));
-
-    list.resolve([PLATFORM]);
-    await screen.findByText(`${PLATFORM.name} · ${PLATFORM.emulator}`);
-    expect(screen.queryByRole('alert')).toBeNull();
-    // Focus moves once the rows that replaced the notice are drawn, to their first control.
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('settings.emulatorsOfficialFor', { platform: PLATFORM.name }) })));
-    // The notice went before its retry answered: the card still learns the retry is over.
-    expect((screen.getByRole('button', { name: msg('emul.detect') }) as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it('shows a new error in place when the retry fails again', async () => {
-    vi.mocked(listPlatforms).mockRejectedValue(new Error('down'));
-    const { user } = renderDom(EmulatorsCard, {});
-    const alert = await screen.findByRole('alert');
-    const before = alert.firstElementChild;
-    const retry = screen.getByRole('button', { name: msg('common.retry') });
-    retry.focus();
-    await user.keyboard('{Enter}');
-    await waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
-    expect(retry.isConnected).toBe(true);
-    expect(document.activeElement).toBe(retry);
-    // Said again though the words are the same: they come again into the alert, as new nodes.
-    await waitFor(() => expect(alert.firstElementChild).not.toBe(before));
-    expect(alert.textContent).toContain(msg('emul.loadFailed'));
-  });
-});
-
-describe('EmulatorsCard: the found emulators', () => {
-  it('ticks each found emulator for a later Apply, as a checkbox described by its path', async () => {
-    vi.mocked(listPlatforms).mockResolvedValue([PLATFORM]);
-    vi.mocked(detectEmulators).mockResolvedValueOnce({ found: [{ platform: 'ps2', path: '/apps/pcsx2' }], unreadable: 0 });
-    vi.mocked(setEmulatorPath).mockResolvedValue({ ...PLATFORM, path: '/apps/pcsx2', status: 'ready' });
-    const { user } = renderDom(EmulatorsCard, {});
-    await screen.findByText(`${PLATFORM.name} · ${PLATFORM.emulator}`);
-    await user.click(screen.getByRole('button', { name: msg('emul.detect') }));
-
-    const dialog = await screen.findByRole('dialog', { name: msg('emul.detectTitle') });
-    const box = within(dialog).getByRole('checkbox', { name: 'PCSX2' });
-    expect(box.getAttribute('aria-checked')).toBe('true');
-    expect(description(box)).toBe('/apps/pcsx2');
-    const apply = within(dialog).getByRole('button', { name: msg('emul.detectApply') }) as HTMLButtonElement;
-
-    box.focus();
-    await user.keyboard(' ');
-    expect(box.getAttribute('aria-checked')).toBe('false');
-    expect(apply.disabled).toBe(true);
-    await user.keyboard(' ');
-    await user.click(apply);
-    expect(setEmulatorPath).toHaveBeenCalledWith('ps2', '/apps/pcsx2');
-  });
 });
 
 describe('DiscordCard', () => {

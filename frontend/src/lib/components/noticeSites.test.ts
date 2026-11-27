@@ -364,6 +364,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     // A known hang of one emulator on this platform, shown with its row.
     ['warning', false],
+    // Found paths the last Apply could not save: it has just happened.
+    ['danger', true],
   ],
   'routes/settings/GeneralTab.svelte': [
     // A failed overlay inside the row's status region, which says the change itself.
