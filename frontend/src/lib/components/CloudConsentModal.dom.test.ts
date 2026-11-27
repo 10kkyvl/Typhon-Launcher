@@ -242,6 +242,8 @@ describe('CloudConsentModal on the settings page', () => {
     expect(dialog.isConnected).toBe(true);
     expect(saveSettingsPatch).toHaveBeenCalledTimes(1);
     expect(get(settings)?.cloudSaves).toBe(false);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(get(toasts)).toEqual([]);
   });
 
   it('closes on Cancel with nothing written, the focus back on the switch', async () => {

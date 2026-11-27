@@ -26,7 +26,7 @@ import {
   type WineStatus,
 } from '../../lib/services/system';
 import { refreshCloudStatus } from '../../lib/stores/cloudsaves';
-import { settings, updateSettingsReporting, updateSettingsResult } from '../../lib/stores/settings';
+import { settings, updateSettingsReporting } from '../../lib/stores/settings';
 import { toast } from '../../lib/stores/toasts';
 
 export type SettingsPage = ReturnType<typeof createSettingsPage>;
@@ -229,6 +229,10 @@ export function createSettingsPage() {
   let cloudWork = $state<'' | 'saving' | 'deleting'>('');
   let cloudForgetFailed = $state(false);
 
+  // A failed cloud saves write is said by the dialog that stays open, not by a toast behind it; the
+  // store has logged the error.
+  const saidByDialog = () => {};
+
   function changeCloudSaves(on: boolean) {
     if (cloudWork) return;
     if (on) cloudConsentOpen = true;
@@ -239,7 +243,7 @@ export function createSettingsPage() {
     if (cloudWork) return;
     cloudWork = 'saving';
     try {
-      if (await updateSettingsResult({ cloudSaves: true })) {
+      if (await updateSettingsReporting({ cloudSaves: true }, saidByDialog)) {
         cloudConsentOpen = false;
         cloudForgetFailed = false;
         await refreshCloudStatus();
@@ -264,7 +268,7 @@ export function createSettingsPage() {
     if (cloudWork) return;
     cloudWork = 'saving';
     try {
-      if (!(await updateSettingsResult({ cloudSaves: false }))) return;
+      if (!(await updateSettingsReporting({ cloudSaves: false }, saidByDialog))) return;
       cloudDisableOpen = false;
       if (forget) {
         cloudWork = 'deleting';

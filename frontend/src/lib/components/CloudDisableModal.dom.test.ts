@@ -230,6 +230,8 @@ describe('CloudDisableModal on the settings page', () => {
     expect(saveSettingsPatch).toHaveBeenCalledTimes(1);
     expect(cloudForget).not.toHaveBeenCalled();
     expect(get(settings)?.cloudSaves).toBe(true);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(get(toasts)).toEqual([]);
   });
 
   it('holds the switch, saying the copies are being deleted, while they are: it keeps the focus and opens no dialog', async () => {
