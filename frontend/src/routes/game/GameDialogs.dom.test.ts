@@ -157,6 +157,31 @@ describe('GameDialogs: the page turned to another game while a match was applied
     expect(dialog.isConnected).toBe(true);
     expect(openDialogs()).toEqual([msg('modals.metadataMatchFindTitle')]);
   });
+  it('turned back to the game the match was pressed for, its success closes the dialog and gives the page that game\'s view', async () => {
+    const applied = held<MetadataView>();
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'igdb:1' ? [hadesMatch] : [celesteMatch]));
+    vi.mocked(applyMetadataMatch).mockReturnValueOnce(applied.promise);
+    const data = { metaView: null } as unknown as GamePageData;
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades, data } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open match' }));
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.metadataMatchFindTitle') });
+    const row = await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ });
+    row.focus();
+    await keys.keyboard('{Enter}');
+
+    const celeste = { id: 'g2', title: 'Celeste', status: '', tags: [] } as unknown as LibraryGame;
+    await rerender({ game: celeste, data, canonicalId: 'igdb:2', title: 'Celeste' });
+    await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+    await rerender({ game: hades, data, canonicalId: 'igdb:1', title: 'Hades' });
+    await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ });
+    const view = { game: { id: 'igdb:1', title: 'Hades' } } as MetadataView;
+    applied.resolve(view);
+
+    await vi.waitFor(() => expect(openDialogs()).toEqual([]));
+    expect(data.metaView).toBe(view);
+    expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([[msg('modals.metadataMatchApplied', { title: 'Hades' }), 'success']]);
+  });
 });
 
 describe('GameDialogs: the dialogs of a page that lost its game come back for the next one', () => {

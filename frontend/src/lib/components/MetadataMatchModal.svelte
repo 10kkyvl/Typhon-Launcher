@@ -205,13 +205,14 @@
     if (applying) return;
     const at = opening;
     const heard = () => alive && at === opening;
+    const id = gameId;
     const title = gameTitle;
     applying = true;
     applyingId = candidate.providerId;
     failure = '';
     let view: MetadataView;
     try {
-      view = await applyMetadataMatch(gameId, candidate.providerId);
+      view = await applyMetadataMatch(id, candidate.providerId);
     } catch (err) {
       if (!heard()) {
         toast(refusedFor(title, err), 'danger');
@@ -223,7 +224,8 @@
       return;
     }
     toast(msg('modals.metadataMatchApplied', { title: view.game.title }), 'success');
-    if (!heard()) return;
+    // Turned away and back (A → B → A), the dialog open on that game again ends as an ordinary success.
+    if (!heard() && !(alive && open && gameId === id)) return;
     settle();
     open = false;
     onapplied?.(view);

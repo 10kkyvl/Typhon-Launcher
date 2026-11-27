@@ -328,7 +328,7 @@ describe('MetadataMatchModal: a match applied for one game, answered after the d
 
     await rerender({ open: true, gameId: 'g2', gameTitle: 'Celeste', onapplied });
     const celesteRow = await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
-    return { applied, onapplied, dialog, celesteRow };
+    return { applied, onapplied, dialog, celesteRow, rerender };
   }
 
   it('for the game still on screen, a success closes the dialog, names the game and hands the view to the page', async () => {
@@ -357,6 +357,33 @@ describe('MetadataMatchModal: a match applied for one game, answered after the d
     expect(celesteRow.isConnected).toBe(true);
     expect(celesteRow.closest('[role="radiogroup"]')?.getAttribute('aria-disabled')).not.toBe('true');
     expect(within(dialog).getByRole('button', { name: msg('common.cancel') }).getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('turned back to the game it was pressed for, a success closes the dialog as an ordinary one, hands the view on once and names the game once', async () => {
+    const { applied, onapplied, dialog, rerender } = await applyThenTurn();
+    await rerender({ open: true, gameId: 'g1', gameTitle: 'Hades', onapplied });
+    await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ });
+    const view = { game: { id: 'g1', title: 'Hades' } } as MetadataView;
+
+    applied.resolve(view);
+
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    expect(onapplied).toHaveBeenCalledExactlyOnceWith(view);
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.metadataMatchApplied', { title: 'Hades' }), 'success']]);
+  });
+
+  it('turned back to the game it was pressed for after the dialog was closed, a success only names the game', async () => {
+    const { applied, onapplied, dialog, rerender } = await applyThenTurn();
+    await user().click(within(dialog).getByRole('button', { name: msg('common.cancel') }));
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    await rerender({ open: false, gameId: 'g1', gameTitle: 'Hades', onapplied });
+
+    applied.resolve({ game: { id: 'g1', title: 'Hades' } } as MetadataView);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(onapplied).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.metadataMatchApplied', { title: 'Hades' }), 'success']]);
   });
 
   it('a refusal is said once, in a toast naming the game it was about with the reason, nothing in the new game\'s dialog, which stays live', async () => {
