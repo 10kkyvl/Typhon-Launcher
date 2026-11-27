@@ -30,6 +30,8 @@
   const uid = $props.id();
   const mineId = `${uid}-mine`;
   const noteId = `${uid}-note`;
+  const localId = `${uid}-local`;
+  const remoteId = `${uid}-remote`;
 
   let busy = $state(false);
   // The choice being applied: its button stays focused and busy, the other waits.
@@ -149,6 +151,10 @@
     return true;
   }
 
+  // Why a button cannot be pressed now: another action runs, or the copies are not known yet.
+  const heldReason = $derived(busy ? msg('cloudsaves.conflictBusy') : '');
+  const choiceReason = $derived(busy ? heldReason : !conflict ? msg('cloudsaves.conflictWaitDetails') : '');
+
   async function playHere() {
     const current = target;
     if (!current || busy) return;
@@ -177,13 +183,13 @@
     <p class="intro">{msg('cloudsaves.conflictIntro', { title: target.title })}</p>
     {#if conflict}
       <div class="columns">
-        <div class="column">
-          <span class="column-title">{msg('cloudsaves.conflictLocal')}</span>
+        <div class="column" id={localId} role="group" aria-labelledby="{localId}-title">
+          <span class="column-title" id="{localId}-title">{msg('cloudsaves.conflictLocal')}</span>
           <span class="line">{msg('cloudsaves.conflictUpdated')}: {when(conflict.localUpdatedAt)}</span>
           <span class="line">{msg('cloudsaves.conflictSize')}: {bytesSize(conflict.localSize)}</span>
         </div>
-        <div class="column">
-          <span class="column-title">{msg('cloudsaves.conflictRemote')}</span>
+        <div class="column" id={remoteId} role="group" aria-labelledby="{remoteId}-title">
+          <span class="column-title" id="{remoteId}-title">{msg('cloudsaves.conflictRemote')}</span>
           <span class="line">{msg('cloudsaves.conflictUpdated')}: {when(conflict.remoteUpdatedAt)}</span>
           <span class="line">{msg('cloudsaves.conflictSize')}: {bytesSize(conflict.remoteSize)}</span>
           {#if conflict.remoteDevice}
@@ -231,18 +237,32 @@
   {/if}
 
   {#snippet footer()}
-    <Button disabled={busy} onclick={closeCloudConflict}>{msg('cloudsaves.conflictLater')}</Button>
+    <Button disabled={busy} reason={heldReason} onclick={closeCloudConflict}>{msg('cloudsaves.conflictLater')}</Button>
     {#if offline}
       {#if launch}
-        <Button variant="primary" disabled={busy && !allowing} busy={allowing} aria-describedby={noteId} onclick={playHere}>
+        <Button variant="primary" disabled={busy && !allowing} reason={allowing ? '' : heldReason} busy={allowing} aria-describedby={noteId} onclick={playHere}>
           {msg('cloudsaves.conflictPlayHere')}
         </Button>
       {/if}
     {:else}
-      <Button id={mineId} disabled={(busy && kept !== 'mine') || !conflict} busy={kept === 'mine'} onclick={() => choose(true)}>
+      <Button
+        id={mineId}
+        disabled={(busy && kept !== 'mine') || !conflict}
+        reason={kept === 'mine' ? '' : choiceReason}
+        busy={kept === 'mine'}
+        aria-describedby={conflict ? localId : undefined}
+        onclick={() => choose(true)}
+      >
         {msg('cloudsaves.conflictKeepMine')}
       </Button>
-      <Button variant="primary" disabled={(busy && kept !== 'remote') || !conflict} busy={kept === 'remote'} onclick={() => choose(false)}>
+      <Button
+        variant="primary"
+        disabled={(busy && kept !== 'remote') || !conflict}
+        reason={kept === 'remote' ? '' : choiceReason}
+        busy={kept === 'remote'}
+        aria-describedby={conflict ? remoteId : undefined}
+        onclick={() => choose(false)}
+      >
         {msg('cloudsaves.conflictTakeRemote')}
       </Button>
     {/if}

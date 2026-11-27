@@ -9,16 +9,13 @@ import { askToResolveConflict, closeCloudConflict, cloudConflictTarget, cloudSta
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { calls, resetBindings } from '../testing/fakeBinding';
 import CloudConflictModal from './CloudConflictModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
-vi.mock('../services/cloudsaves', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/cloudsaves')>()),
-  cloudAllowLaunchOnce: vi.fn(),
-  cloudResolveConflict: vi.fn(),
-  loadCloudStatus: vi.fn(),
-}));
+vi.mock('../services/cloudsaves', async (original) => (await import('../testing/settingsDialogsTesting')).cloudsavesService(await original()));
+vi.mock('../../../bindings/typhon/internal/cloudsaves', async (original) => (await import('../testing/settingsDialogsTesting')).fakeService(await original(), 'cloudsaves'));
 
 const conflict = { localUpdatedAt: '2026-11-01T10:00:00Z', remoteUpdatedAt: '2026-11-02T10:00:00Z', localSize: 10, remoteSize: 20, remoteDevice: 'Deck' } as CloudConflict;
 
@@ -50,6 +47,8 @@ afterEach(() => {
   vi.mocked(cloudResolveConflict).mockReset();
   vi.mocked(loadCloudStatus).mockReset();
   document.body.replaceChildren();
+  expect(calls).toEqual([]);
+  resetBindings();
 });
 
 function statusWith(games: CloudStatus['games']): CloudStatus {
@@ -85,6 +84,13 @@ function sayingAgain(notice: Element): () => string {
 
 const deviceLine = `${msg('cloudsaves.conflictDevice')}: Deck`;
 
+const describedBy = (el: Element) =>
+  (el.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent?.replace(/\s+/g, ' ').trim())
+    .join(' ');
+
 function showConflict(withDetails = true) {
   cloudStatus.set({
     enabled: true,
@@ -110,9 +116,33 @@ describe('CloudConflictModal', () => {
     expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 
-  it('says it is loading the copies with a labelled spinner', () => {
+  it('says it is loading the copies with a labelled spinner, the choices held with the reason', () => {
     const dialog = showConflict(false);
     expect(within(dialog).getByRole('status').textContent?.trim()).toBe(msg('cloudsaves.conflictLoading'));
+    for (const name of [msg('cloudsaves.conflictKeepMine'), msg('cloudsaves.conflictTakeRemote')]) {
+      const choice = within(dialog).getByRole('button', { name });
+      expect(choice.getAttribute('aria-disabled')).toBe('true');
+      expect(choice).toHaveProperty('disabled', false);
+      expect(describedBy(choice)).toBe(msg('cloudsaves.conflictWaitDetails'));
+    }
+  });
+
+  it('asks with the focus on "Later", the choice that changes nothing', () => {
+    showConflict();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('cloudsaves.conflictLater') }));
+  });
+
+  it('shows each copy as a group named by its side, its facts whole, and each choice is described by the copy it keeps', () => {
+    const dialog = showConflict();
+    const local = within(dialog).getByRole('group', { name: msg('cloudsaves.conflictLocal') });
+    const remote = within(dialog).getByRole('group', { name: msg('cloudsaves.conflictRemote') });
+    expect(within(remote).getByText(deviceLine)).toBeTruthy();
+    expect(within(local).queryByText(deviceLine)).toBeNull();
+    const mine = within(dialog).getByRole('button', { name: msg('cloudsaves.conflictKeepMine') });
+    const theirs = within(dialog).getByRole('button', { name: msg('cloudsaves.conflictTakeRemote') });
+    expect(describedBy(mine)).toBe(local.textContent?.replace(/\s+/g, ' ').trim());
+    expect(describedBy(theirs)).toBe(remote.textContent?.replace(/\s+/g, ' ').trim());
+    expect(describedBy(theirs)).toContain(deviceLine);
   });
 
   it('keeps the focus on the pressed choice, busy, and says a failure in a danger notice', async () => {
@@ -128,7 +158,14 @@ describe('CloudConflictModal', () => {
 
     expect(mine.getAttribute('aria-busy')).toBe('true');
     expect(document.activeElement).toBe(mine);
-    expect(remote).toHaveProperty('disabled', true);
+    for (const other of [remote, within(dialog).getByRole('button', { name: msg('cloudsaves.conflictLater') })]) {
+      expect(other.getAttribute('aria-disabled')).toBe('true');
+      expect(other).toHaveProperty('disabled', false);
+      expect(describedBy(other).endsWith(msg('cloudsaves.conflictBusy'))).toBe(true);
+    }
+    await keys.keyboard('{Enter}');
+    await keys.click(mine);
+    expect(cloudResolveConflict).toHaveBeenCalledExactlyOnceWith('g1', true);
 
     const failure = new Error('typhon:cloudsaves.quota_exceeded: full');
     resolving.reject(failure);
@@ -499,7 +536,8 @@ describe('CloudConflictModal without the cloud', () => {
 
     expect(play.getAttribute('aria-busy')).toBe('true');
     expect(document.activeElement).toBe(play);
-    expect(buttonsOf(dialog).later()).toHaveProperty('disabled', true);
+    expect(buttonsOf(dialog).later().getAttribute('aria-disabled')).toBe('true');
+    expect(describedBy(buttonsOf(dialog).later())).toBe(msg('cloudsaves.conflictBusy'));
     await keys.keyboard('{Escape}');
     expect(dialog.isConnected).toBe(true);
     await keys.keyboard('{Enter}');
