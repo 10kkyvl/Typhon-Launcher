@@ -5,7 +5,6 @@ import { proposeLibraryPath, selectFolder, type Settings } from '../services/set
 import { createLibrary } from '../stores/settings';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
-import AvatarCropModal from './AvatarCropModal.svelte';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -85,29 +84,5 @@ describe('LibrarySetupModal: the note it opens with', () => {
     const notice = within(dialog).getByText('Games stay where they are.').closest('[data-tone="info"]') as HTMLElement;
     expect(notice).not.toBeNull();
     expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
-  });
-});
-
-describe('the crop dialogs', () => {
-  it('AvatarCropModal says an image that cannot be read in a danger notice, and keeps "save" focused and busy while it saves', async () => {
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
-    const { rerender } = render(AvatarCropModal, { target: app, props: { open: true, src: 'blob:broken', onsave: vi.fn() } });
-    const dialog = screen.getByRole('dialog', { name: msg('modals.avatarCropTitle') });
-    (dialog.querySelector('img') as HTMLImageElement).dispatchEvent(new Event('error'));
-
-    const text = await within(dialog).findByText(msg('modals.avatarCropLoadFailed'));
-    expect(text.closest('[data-tone="danger"]')).not.toBeNull();
-
-    const save = within(dialog).getByRole('button', { name: msg('common.save') });
-    save.focus();
-    await rerender({ saving: true });
-    expect(save.getAttribute('aria-busy')).toBe('true');
   });
 });

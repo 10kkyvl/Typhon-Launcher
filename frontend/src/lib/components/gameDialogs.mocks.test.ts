@@ -47,6 +47,7 @@ const DIALOGS = [
   // The dialogs of the account: one deletes the account for good, one uploads the avatar, and the
   // sync consent is a legal act that lets the library leave the device.
   'DeleteAccountModal',
+  'AvatarCropModal',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -154,6 +155,7 @@ describe('tests that mount a game or library dialog', () => {
         './UpdateCard.dom.test.ts',
         './UpdateCard.test.ts',
         './DeleteAccountModal.dom.test.ts',
+        './AvatarCropModal.dom.test.ts',
         ...HELD,
       ]),
     );
