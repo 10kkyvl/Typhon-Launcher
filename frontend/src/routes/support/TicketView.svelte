@@ -11,6 +11,7 @@
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { msg } from '../../lib/i18n';
+  import { focusQuietly } from '../../lib/layers/focus';
   import { accountErrorField } from '../../lib/services/accountMessages';
   import { onLogUploadStatus, type LogUploadStatus } from '../../lib/services/logsUpload';
   import {
@@ -190,6 +191,11 @@
     }
     // Focus in the reply form at the press (the box or Reply) goes to the cleared box once it is sent.
     const fromForm = Boolean(replyBox?.contains(document.activeElement));
+    // The logs switch is held while the reply is on its way. Focus on it (a click on Reply in the macOS
+    // WebKit view takes none) would drop to the page as it turns disabled: Reply keeps it.
+    const focused = document.activeElement;
+    const send = document.getElementById(`${uid}-send`);
+    if (focused instanceof HTMLButtonElement && focused !== send && replyBox?.contains(focused) && send) focusQuietly(send);
     const mine = ++sendRun;
     const asked = account();
     sending = true;
@@ -377,7 +383,7 @@
       {/if}
 
       <div class="actions">
-        <Button variant="primary" busy={sending} onclick={submitReply}>
+        <Button id="{uid}-send" variant="primary" busy={sending} onclick={submitReply}>
           {sending ? msg('tickets.replySending') : msg('tickets.reply')}
         </Button>
       </div>

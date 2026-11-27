@@ -250,6 +250,26 @@ describe('TicketView: the reply is the base multi-line field', () => {
     await vi.waitFor(() => expect(replyBox().value).toBe(''));
   });
 
+  it('hands focus on to the busy Reply when it was on the logs switch, held now, and the click on Reply took none', async () => {
+    const answer = held<ReturnType<typeof message>>();
+    vi.mocked(replyTicket).mockReturnValueOnce(answer.promise);
+    const { user } = await opened();
+    await user.type(replyBox(), 'Still closes.');
+    const logs = screen.getByRole('switch', { name: msg('tickets.attachLogs') });
+    await user.click(logs);
+    await user.click(logs);
+    expect(document.activeElement).toBe(logs);
+    // A click in the macOS WebKit view does not focus the button it presses.
+    await fireEvent.click(replyButton());
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(1));
+    expect({ held: (logs as HTMLButtonElement).disabled, focus: document.activeElement?.textContent?.trim() }).toEqual({
+      held: true,
+      focus: msg('tickets.replySending'),
+    });
+    answer.resolve(message(4, 'user', 'Still closes.', '2026-11-02T09:00:00Z'));
+    await vi.waitFor(() => expect(replyBox().value).toBe(''));
+  });
+
   it('keeps a plain Enter a new line', async () => {
     const { user } = await opened();
     await user.type(replyBox(), 'one{Enter}two');
