@@ -74,6 +74,7 @@
   let total = $state(0);
   let loadingReleases = $state(false);
   let refreshing = $state(false);
+  let toggling = $state(false);
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   // One per opening of the dialog: a retry that answers after its opening has passed says so.
   let opening = 0;
@@ -100,6 +101,9 @@
       opening += 1;
       detailsRetrying = false;
       releasesRetrying = false;
+      // An action of the opening before answers to it, not to this one.
+      refreshing = false;
+      toggling = false;
       if (isOpen && id) {
         filterStatus = 'all';
         search = '';
@@ -228,24 +232,34 @@
     await hand(next);
   }
 
+  // Refresh and enable each send one request per press: the pressed button is busy, the other actions
+  // wait with a reason. The store says how a refresh or a switch ended (a toast by code); an answer for
+  // an opening the dialog has left changes nothing here.
   async function doRefresh() {
     if (!sourceId) return;
+    const mine = opening;
     refreshing = true;
     await refreshSource(sourceId);
+    if (mine !== opening) return;
     refreshing = false;
     reloadAll();
   }
 
   async function doToggle() {
     if (!source) return;
+    const mine = opening;
+    toggling = true;
     await toggleSource(source.id, !source.enabled);
+    if (mine === opening) toggling = false;
   }
 
+  // The question says what goes with the source (its releases, and updates for the games installed
+  // from it) and what stays (the games).
   function doRemove() {
     const current = source;
     if (!current) return;
     pending = {
-      prompt: removeSourcePrompt(current.name),
+      prompt: { ...removeSourcePrompt(current.name), text: msg('modals.sourceDetailsRemoveText', { name: current.name }) },
       run: async () => {
         await removeSource(current.id);
         open = false;
@@ -264,6 +278,8 @@
     return { kind: 'neutral' as const, label: msg('modals.sourceDetailsStatusUnmatched') };
   }
 
+  const acting = $derived(refreshing || toggling);
+  const heldReason = $derived(acting ? msg('modals.actionRunning') : '');
   const from = $derived(total === 0 ? 0 : (page - 1) * pageSize + 1);
   const to = $derived(Math.min(page * pageSize, total));
 </script>
@@ -273,7 +289,7 @@
     <div class="sections">
       <section class="head">
         <div class="head-meta">
-          <span class="url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
+          <span class="url">{sourceLocation(source)}</span>
           <div class="head-badges">
             <StatusBadge kind={statusBadgeInfo(source.status)?.kind ?? 'neutral'} label={statusBadgeInfo(source.status)?.label ?? source.status} />
             <span class="updated">{msg('modals.sourceDetailsUpdatedAt', { date: relativeDate(source.lastUpdatedAt) })}</span>
@@ -283,11 +299,13 @@
           {/if}
         </div>
         <div class="head-actions">
-          <Button size="sm" busy={refreshing || source.status === 'updating'} onclick={doRefresh}>
+          <Button size="sm" busy={refreshing || source.status === 'updating'} disabled={toggling} reason={heldReason} onclick={doRefresh}>
             {source.status === 'updating' ? msg('modals.sourceDetailsRefreshing') : msg('common.refresh')}
           </Button>
-          <Button size="sm" onclick={doToggle}>{source.enabled ? msg('modals.sourceDetailsDisable') : msg('modals.sourceDetailsEnable')}</Button>
-          <Button size="sm" variant="danger" onclick={doRemove}>{msg('common.delete')}</Button>
+          <Button size="sm" busy={toggling} disabled={refreshing} reason={heldReason} onclick={doToggle}>
+            {source.enabled ? msg('modals.sourceDetailsDisable') : msg('modals.sourceDetailsEnable')}
+          </Button>
+          <Button size="sm" variant="danger" disabled={acting} reason={heldReason} onclick={doRemove}>{msg('common.delete')}</Button>
         </div>
       </section>
 
@@ -303,6 +321,8 @@
           <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterNew')}</span><span class="counter-value">{details.new}</span></div>
           <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterIgnored')}</span><span class="counter-value">{details.ignored}</span></div>
         </section>
+      {:else}
+        <div class="counters-loading"><Spinner size="sm" label={msg('modals.sourceDetailsLoadingDetails')} /></div>
       {/if}
 
       <section class="filters" bind:this={filtersEl}>
@@ -335,7 +355,7 @@
           {#each releases as view (view.release.id)}
             {@const badge = matchLabel(view)}
             <button type="button" class="row clickable" onclick={() => openMatch(view)}>
-              <span class="cell title" title={view.release.rawTitle}>{view.release.rawTitle}</span>
+              <span class="cell title">{view.release.rawTitle}</span>
               <span class="cell">{view.gameTitle || '—'}</span>
               <span class="cell">{view.release.edition || view.release.version || '—'}</span>
               <span class="cell nums">{bytesSize(view.release.size)}</span>
@@ -402,12 +422,11 @@
     min-width: 0;
   }
 
+  /* A long URL or path wraps: the whole of it is on screen, not behind a hover. */
   .url {
     font-size: var(--font-sm);
     color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .head-badges {
@@ -445,8 +464,12 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .counters-loading {
+    display: flex;
+  }
+
   .counter-label {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -483,14 +506,15 @@
   }
 
   .th {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     font-weight: 500;
     color: var(--text-3);
   }
 
   .row {
     width: 100%;
-    height: 4.6rem;
+    min-height: 4.6rem;
+    padding-block: 0.8rem;
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
   }
@@ -516,12 +540,12 @@
     cursor: default;
   }
 
+  /* A long release or game title wraps in its column: the row grows, nothing is cut. */
   .cell {
+    min-width: 0;
     font-size: var(--font-sm);
     color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .cell.title {
