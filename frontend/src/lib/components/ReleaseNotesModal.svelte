@@ -24,7 +24,12 @@
   {#if notes.length > 1}
     <p class="lead">{msg('modals.releaseNotesMultiple')}</p>
   {/if}
-  <ReleaseNotesList notes={notes} currentVersion={$releaseNotes.currentVersion} />
+  <!-- A stop in the Tab order, and the first one, so the keys scroll the notes from the opening; the
+       versions' headings come under the dialog's title. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <div class="notes" role="document" aria-label={title} tabindex="0">
+    <ReleaseNotesList notes={notes} currentVersion={$releaseNotes.currentVersion} />
+  </div>
   {#snippet footer()}
     {#if $rollbackInfo.available}
       <span class="rollback"><RollbackAction compact /></span>
@@ -36,6 +41,10 @@
 <style>
   .rollback {
     margin-right: auto;
+  }
+
+  .notes {
+    border-radius: var(--radius-xs);
   }
 
   .lead {
