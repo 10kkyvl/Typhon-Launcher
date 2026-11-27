@@ -216,7 +216,7 @@
     color-scheme: dark light;
   }
 
-  .date .input.invalid {
+  .input.invalid {
     border-color: var(--danger);
   }
 
