@@ -208,6 +208,30 @@ describe('SourceDetailsModal: an action answering after the dialog was opened fo
     expect(screen.getByRole('dialog', { name: 'DODI' })).toBe(next);
   });
 
+  it('a switch answering for the source before leaves the new source’s switch busy, and a second press sends nothing', async () => {
+    const first = held<void>();
+    const second = held<void>();
+    vi.mocked(setSourceEnabled).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { dialog, keys, rerender } = await openDialog();
+    await keys.click(button(dialog, msg('modals.sourceDetailsDisable')));
+    await rerender({ open: false, sourceId: 's1' });
+    await rerender({ open: true, sourceId: 's2' });
+    const next = await screen.findByRole('dialog', { name: 'DODI' });
+    const toggle = button(next, msg('modals.sourceDetailsDisable'));
+    await keys.click(toggle);
+
+    first.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(toggle.getAttribute('aria-busy')).toBe('true');
+    await keys.click(toggle);
+    expect(vi.mocked(setSourceEnabled).mock.calls).toEqual([
+      ['s1', false],
+      ['s2', false],
+    ]);
+    second.resolve();
+  });
+
   it('leaves the new source’s Refresh ready and reads nothing for it again', async () => {
     const refreshing = held<RefreshSummary>();
     vi.mocked(refreshSource).mockReturnValueOnce(refreshing.promise);

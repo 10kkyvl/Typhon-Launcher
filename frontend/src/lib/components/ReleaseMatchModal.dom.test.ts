@@ -227,6 +227,27 @@ describe('ReleaseMatchModal: the manual search', () => {
     expect(notice.isConnected).toBe(false);
   });
 
+  it('paints only the newest search: an older answer arriving after it changes nothing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const older = held<CatalogGame[]>();
+    vi.mocked(getMatchCandidates).mockResolvedValue([]);
+    vi.mocked(searchGames).mockReturnValueOnce(older.promise).mockResolvedValueOnce([game('g2', 'Hades II')]);
+    const { dialog } = openDialog();
+    const keys = user();
+    const field = within(dialog).getByRole('textbox', { name: msg('modals.releaseMatchManualSearch') });
+    await keys.type(field, 'had');
+    await vi.advanceTimersByTimeAsync(300);
+    await keys.type(field, 'es');
+    await vi.advanceTimersByTimeAsync(300);
+    const group = await within(dialog).findByRole('radiogroup', { name: msg('modals.releaseMatchManualSearch') });
+
+    older.resolve([game('g1', 'Hadal')]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(vi.mocked(searchGames).mock.calls).toEqual([['had'], ['hades']]);
+    expect(within(group).getAllByRole('radio').map((radio) => radio.textContent?.trim())).toEqual(['Hades II']);
+  });
+
   async function failedSearch() {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.mocked(getMatchCandidates).mockResolvedValue([]);

@@ -339,6 +339,22 @@ describe('AddSourceModal: a feed file', () => {
     expect(dialog.querySelectorAll('[title]').length).toBe(0);
   });
 
+  it('adds the picked file, not a URL typed before it', async () => {
+    vi.mocked(selectFeedFile).mockResolvedValueOnce('/Users/me/feeds/feed.json');
+    vi.mocked(testSourceFile).mockResolvedValueOnce(preview({ type: 'file', url: '', path: '/Users/me/feeds/feed.json' }));
+    vi.mocked(addSourceFile).mockResolvedValueOnce({ id: 'f', name: 'feed.json' } as Source);
+    const { dialog, keys, field } = openDialog();
+    await keys.type(field, FEED);
+
+    await keys.click(within(dialog).getByRole('button', { name: msg('modals.addSourcePickFile') }));
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.add') }));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(testSource)).not.toHaveBeenCalled();
+    expect(vi.mocked(addSourceFile).mock.calls).toEqual([['/Users/me/feeds/feed.json']]);
+    expect(vi.mocked(addSource)).not.toHaveBeenCalled();
+  });
+
   it('says a picker that could not open at the file field, by code', async () => {
     vi.mocked(selectFeedFile).mockRejectedValueOnce(goError('sources.dialog_unavailable'));
     const { dialog, keys } = openDialog();
