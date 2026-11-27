@@ -5,6 +5,7 @@
   import { selectFeedFile, testSource, testSourceFile, type SourcePreview } from '../services/sources';
   import { toast } from '../stores/toasts';
   import { focusHandOff } from '../utils/focusHandOff';
+  import { composing } from '../utils/shortcut';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
@@ -81,7 +82,10 @@
       return;
     }
     if (!selected) return;
+    // One of the two is checked and added: the file chosen takes the URL's place, and a URL typed
+    // after takes the file's.
     path = selected;
+    url = '';
     mode = 'file';
     await check();
   }
@@ -138,6 +142,18 @@
     }
   }
 
+  function typed() {
+    mode = 'url';
+    path = '';
+  }
+
+  // Enter in the URL field is Check's press while Check is live; an input method's Enter is its own.
+  function onUrlKey(event: KeyboardEvent) {
+    if (event.key !== 'Enter' || composing(event) || checking || !url.trim()) return;
+    event.preventDefault();
+    void check();
+  }
+
   function back() {
     const hand = pressHand();
     preview = null;
@@ -161,7 +177,8 @@
         bind:input={urlInput}
         readonly={checking}
         error={errorAt === 'url' ? error : ''}
-        oninput={() => (mode = 'url')}
+        oninput={typed}
+        onkeydown={onUrlKey}
       />
       <div class="or" aria-hidden="true">
         <span class="line"></span>

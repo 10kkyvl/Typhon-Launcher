@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
@@ -120,6 +120,35 @@ describe('AddSourceModal: opening and typing', () => {
 
     await keys.type(field, FEED);
     expect(check.getAttribute('aria-disabled')).toBeNull();
+  });
+});
+
+describe('AddSourceModal: Enter in the URL field', () => {
+  it('checks the typed URL once, as Check does, and adds nothing', async () => {
+    const reading = held<SourcePreview>();
+    vi.mocked(testSource).mockReturnValueOnce(reading.promise);
+    const { dialog, keys, field } = openDialog();
+    await keys.type(field, FEED);
+
+    await keys.keyboard('{Enter}');
+    await keys.keyboard('{Enter}');
+
+    expect(vi.mocked(testSource).mock.calls).toEqual([[FEED]]);
+    expect(checkButton(dialog).getAttribute('aria-busy')).toBe('true');
+    reading.resolve(preview());
+    expect(await within(dialog).findByText('FitGirl')).toBeTruthy();
+    expect(vi.mocked(addSource)).not.toHaveBeenCalled();
+  });
+
+  it('does nothing while the field is empty or an input method composes', async () => {
+    const { keys, field } = openDialog();
+
+    await keys.keyboard('{Enter}');
+    await keys.type(field, FEED);
+    await fireEvent.keyDown(field, { key: 'Enter', keyCode: 229 });
+    await fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+
+    expect(vi.mocked(testSource)).not.toHaveBeenCalled();
   });
 });
 
@@ -353,6 +382,29 @@ describe('AddSourceModal: a feed file', () => {
     expect(vi.mocked(testSource)).not.toHaveBeenCalled();
     expect(vi.mocked(addSourceFile).mock.calls).toEqual([['/Users/me/feeds/feed.json']]);
     expect(vi.mocked(addSource)).not.toHaveBeenCalled();
+  });
+
+  it('keeps one of the two: a picked file clears the typed URL, and a URL typed after clears the file', async () => {
+    vi.mocked(selectFeedFile).mockResolvedValueOnce('/Users/me/feeds/feed.json');
+    vi.mocked(testSourceFile).mockResolvedValueOnce(preview({ type: 'file', url: '', path: '/Users/me/feeds/feed.json' }));
+    vi.mocked(testSource).mockResolvedValueOnce(preview());
+    const { dialog, keys, field } = openDialog();
+    await keys.type(field, FEED);
+
+    await keys.click(within(dialog).getByRole('button', { name: msg('modals.addSourcePickFile') }));
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.back') }));
+
+    const url = within(dialog).getByRole('textbox', { name: msg('modals.addSourceUrlLabel') }) as HTMLInputElement;
+    const browse = within(dialog).getByRole('button', { name: msg('modals.addSourcePickFile') });
+    expect(url.value).toBe('');
+    expect(describedBy(browse)).toContain('/Users/me/feeds/feed.json');
+
+    await keys.type(url, FEED);
+
+    expect(describedBy(browse)).toContain(msg('modals.addSourceNoFile'));
+    await keys.click(checkButton(dialog));
+    expect(vi.mocked(testSource).mock.calls).toEqual([[FEED]]);
+    expect(vi.mocked(testSourceFile).mock.calls).toEqual([['/Users/me/feeds/feed.json']]);
   });
 
   it('says a picker that could not open at the file field, by code', async () => {
