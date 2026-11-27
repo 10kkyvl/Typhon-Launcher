@@ -1,4 +1,5 @@
 export const COMPLETED_MIN = '1980-01-01';
+const GO_MIN = Date.UTC(1980, 0, 1);
 
 function pad(value: number): string {
   return String(value).padStart(2, '0');
@@ -24,7 +25,10 @@ export function dateFromInput(value: string): Date | null {
   const day = Number(match[3]);
   const date = new Date(year, month - 1, day, 12);
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-  return date;
+  // Local noon, which every reader of the date shows as that day. Go's minimum, 1980-01-01 00:00 UTC,
+  // falls after local noon of that day from UTC+13 on: there the minimum itself is sent, still the
+  // afternoon of 1 January locally.
+  return new Date(Math.max(date.getTime(), GO_MIN));
 }
 
 export function completionDateIssue(value: string, now: Date): boolean {

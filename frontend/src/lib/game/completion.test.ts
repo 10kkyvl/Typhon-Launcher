@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { completionDateIssue, dateFromInput, dateInputValue, dayValue } from './completion';
 
 const now = new Date(2026, 9, 23, 9, 30);
@@ -38,5 +38,28 @@ describe('completionDateIssue', () => {
     expect(completionDateIssue('2026-10-24', now)).toBe(true);
     expect(completionDateIssue('1979-12-31', now)).toBe(true);
     expect(completionDateIssue('', now)).toBe(true);
+  });
+});
+
+// Go refuses a completion before 1980-01-01 00:00 UTC (internal/library/completion.go). Node reads TZ
+// again when it changes, so each case runs in its own offset.
+describe('a completion day in a far time zone', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each(['Etc/GMT-12', 'Etc/GMT-13', 'Etc/GMT-14'])('1 January 1980 in %s is sent no earlier than Go\'s minimum and reads back as that day', (tz) => {
+    vi.stubEnv('TZ', tz);
+    const date = dateFromInput('1980-01-01') as Date;
+
+    expect(date.getTime()).toBeGreaterThanOrEqual(Date.UTC(1980, 0, 1));
+    expect(dateInputValue(date.toISOString(), now)).toBe('1980-01-01');
+  });
+
+  it.each(['Etc/GMT+12', 'Etc/GMT+5', 'UTC', 'Etc/GMT-3', 'Etc/GMT-14'])('any other day in %s reads back as that day', (tz) => {
+    vi.stubEnv('TZ', tz);
+    for (const day of ['1980-01-02', '2000-02-29', '2026-10-12']) {
+      expect(dateInputValue((dateFromInput(day) as Date).toISOString(), now)).toBe(day);
+    }
   });
 });
