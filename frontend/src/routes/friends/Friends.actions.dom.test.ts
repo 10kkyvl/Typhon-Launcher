@@ -181,7 +181,7 @@ describe('Friends: the add dialog says both of its failures in itself', () => {
     await keys.click(await within(dialog).findByRole('button', { name: msg('social.friendsSendRequest') }));
 
     const alert = await within(dialog).findByRole('alert');
-    expect(alert.textContent?.trim()).toBe(msg('social.friendsSendRequestFailed'));
+    expect(alert.textContent?.trim()).toBe(msg('social.friendsSendRequestFailedTo', { name: 'Lena' }));
     expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
     expect(dialog.isConnected).toBe(true);
     expect(toast).not.toHaveBeenCalled();

@@ -7,7 +7,8 @@
   import Modal from '../../lib/components/Modal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
-  import { accountErrorText } from '../../lib/services/accountMessages';
+  import { AccountError } from '../../lib/services/account';
+  import { accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { profile, profileByCode, sendRequest, type PublicProfile } from '../../lib/services/social';
   import { commonLine, isFriendCode, relationHint } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
@@ -20,8 +21,9 @@
   let query = $state('');
   let found = $state<PublicProfile | null>(null);
   let error = $state('');
-  // A failed send, with the player it was sent to: said only while that player is the one shown.
-  let sendError = $state<{ username: string; text: string } | null>(null);
+  // A failed send, in words that name the player it was sent to: the player may have looked someone
+  // else up meanwhile. It stays until dismissed, a new send or the dialog closing; a lookup keeps it.
+  let sendError = $state('');
   let searching = $state(false);
   let sending = $state(false);
 
@@ -37,7 +39,7 @@
     query = '';
     found = null;
     error = '';
-    sendError = null;
+    sendError = '';
     searching = false;
     attempt += 1;
     clearTimeout(timer);
@@ -55,7 +57,6 @@
     }
     searching = true;
     lookingFor = term;
-    sendError = null;
     try {
       const result = isFriendCode(term)
         ? await profileByCode(term)
@@ -85,7 +86,11 @@
     lookup(query);
   }
 
-  onDestroy(() => clearTimeout(timer));
+  let destroyed = false;
+  onDestroy(() => {
+    destroyed = true;
+    clearTimeout(timer);
+  });
 
   function openProfile() {
     if (!found) return;
@@ -95,11 +100,18 @@
     navigate('user', { username });
   }
 
+  function sendFailed(player: PublicProfile, err: unknown): string {
+    const what = msg('social.friendsSendRequestFailedTo', { name: player.displayName || player.username });
+    const why = err instanceof AccountError ? accountMessage(err.code, '') : '';
+    return why ? msg('social.friendsFailedWhy', { what, why }) : what;
+  }
+
   async function send() {
     if (!found || !canSend || sending) return;
     sending = true;
-    sendError = null;
-    const username = found.username;
+    sendError = '';
+    const player = found;
+    const username = player.username;
     try {
       const result = await sendRequest(username);
       toast(result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing'), 'success');
@@ -107,7 +119,10 @@
       reset();
       onsent?.();
     } catch (err) {
-      sendError = { username, text: accountErrorText(err, msg('social.friendsSendRequestFailed')) };
+      const text = sendFailed(player, err);
+      // A dialog gone before the answer leaves the failure to a toast.
+      if (destroyed || !open) toast(text, 'danger');
+      else sendError = text;
     } finally {
       sending = false;
     }
@@ -143,13 +158,13 @@
       {#if hint}
         <p class="hint">{hint}</p>
       {/if}
-      {#if sendError?.username === found.username}
-        <Notice tone="danger" compact>{sendError.text}</Notice>
-      {/if}
     {:else if error}
       <Notice tone="danger" compact>{error}</Notice>
     {:else if !query.trim()}
       <p class="hint">{msg('social.friendsSearchHint')}</p>
+    {/if}
+    {#if sendError}
+      <Notice tone="danger" compact onclose={() => (sendError = '')}>{sendError}</Notice>
     {/if}
   </div>
 
