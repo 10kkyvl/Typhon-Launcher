@@ -197,7 +197,7 @@ describe('a request whose send fails beside a form that does not show it', () =>
       after: { store: { draft: X, spare: 'Old matter' }, toast: after.toast, toasts: 1, copied: [X_TEXT] },
     });
     expect(after.toast.copy).toBe(true);
-    expect(after.toast.sentence).not.toMatch(/NOT named|other/);
+    expect(after.toast.sentence).toBe('offered, named');
   });
 
   it('kept as the draft beside a form that sends its own, the spare taken: "you can restore it" only if the notice names it, and Copy', async () => {
@@ -217,7 +217,7 @@ describe('a request whose send fails beside a form that does not show it', () =>
     await settled();
     const toast = judged(said()[0], offered());
     expect({ store: store(), copy: toast.copy, toasts: said().length }).toEqual({ store: { draft: X, spare: 'Other spare' }, copy: true, toasts: 1 });
-    expect(toast.sentence).not.toMatch(/NOT named|other/);
+    expect(toast.sentence).toBe('offered, named');
     t.reject(new AccountError('network_error'));
     await settled();
   });

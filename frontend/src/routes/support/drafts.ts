@@ -215,7 +215,7 @@ export function openPlain(by: Writer): RequestDraft | null {
 
 /**
  * A way in with a prefill opens with the prefill: the draft kept then is offered as the spare when the
- * spare is free (else it stays the draft, offered once the spare is restored).
+ * spare is free (else it stays the draft, offered beside the spare).
  */
 export function openPrefilled(by: Writer): void {
   const from = mine();
@@ -225,35 +225,50 @@ export function openPrefilled(by: Writer): void {
   changed();
 }
 
-/**
- * What the form `by` offers with "Restore it": the spare, or else a draft another form wrote (one that
- * came back while `by` sent its own). Its `id` tells one offer from the next.
- */
-export function offeredRequest(by: Writer): { id: number; draft: RequestDraft } | null {
-  const from = mine();
-  const offer = from?.spare ?? (from?.request && from.request.by !== by ? from.request : null);
-  return offer ? { id: offer.id, draft: copy(offer.draft) } : null;
+/** A kept request a form offers with a "Restore it" of its own; `spare` tells the spare from the draft. */
+export interface Offer {
+  id: number;
+  draft: RequestDraft;
+  spare: boolean;
 }
 
 /**
- * "Restore it" in the form `by`, which shows `shown`: the offer becomes the draft, and what the form
- * held typed becomes the spare in its place, the swap the notice promises. Answers the restored request
- * and a text that found no place left, if any.
+ * What the form `by` offers, each on a line with its own "Restore it": a draft another form wrote (one a
+ * prefilled way in left in place, or one that came back while `by` sent its own), then the spare. Every
+ * kept request the form does not show is named. Each `id` tells one offer from the next.
  */
-export function restoreRequest(by: Writer, shown: RequestDraft | null): { draft: RequestDraft; dropped: RequestDraft | null } | null {
+export function offeredRequests(by: Writer): Offer[] {
+  const from = mine();
+  if (!from) return [];
+  const offers: Offer[] = [];
+  if (from.request && from.request.by !== by) offers.push({ id: from.request.id, draft: copy(from.request.draft), spare: false });
+  if (from.spare) offers.push({ id: from.spare.id, draft: copy(from.spare.draft), spare: true });
+  return offers;
+}
+
+/**
+ * "Restore it" on the offer `id` in the form `by`, which shows `shown`: the offer becomes the draft `by`
+ * writes, and what the form held typed takes the place the offer leaves, the swap the notice promises
+ * (a draft another form wrote, when the spare is restored, then has no place left). Answers the restored
+ * request and a text that found no place left, if any.
+ */
+export function restoreRequest(by: Writer, shown: RequestDraft | null, id: number): { draft: RequestDraft; dropped: RequestDraft | null } | null {
   const from = mine();
   if (!from) return null;
   const other = from.request && from.request.by !== by ? from.request : null;
-  const offer = from.spare ?? other;
-  if (!offer) return null;
   const out = shown && typed(shown) ? slot(shown) : null;
   let dropped: RequestDraft | null = null;
-  if (from.spare) {
-    if (out && other) dropped = copy(other.draft);
-    from.spare = out ?? (other ? { draft: other.draft, id: other.id } : null);
-  } else {
-    from.spare = out;
+  if (other && other.id === id) {
+    if (out && from.spare) dropped = copy(out.draft);
+    else if (out) from.spare = out;
+    from.request = { draft: other.draft, id: other.id, by };
+    changed();
+    return { draft: copy(other.draft), dropped };
   }
+  const offer = from.spare;
+  if (!offer || offer.id !== id) return null;
+  if (out && other) dropped = copy(other.draft);
+  from.spare = out ?? (other ? { draft: other.draft, id: other.id } : null);
   from.request = { draft: offer.draft, id: offer.id, by };
   changed();
   return { draft: copy(offer.draft), dropped };
@@ -342,7 +357,7 @@ export function returnRequest(draft: RequestDraft, by: Writer, from: string | nu
     return 'none';
   }
   changed();
-  const named = open.some((form) => form.shown() && offeredRequest(form.by)?.id === placed.id);
+  const named = open.some((form) => form.shown() && offeredRequests(form.by).some((offer) => offer.id === placed.id));
   return named ? 'offered' : 'kept';
 }
 

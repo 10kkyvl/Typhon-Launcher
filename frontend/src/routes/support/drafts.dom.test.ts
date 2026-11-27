@@ -18,9 +18,10 @@ import {
   keepRequest,
   keptReply,
   keptRequest,
-  offeredRequest,
+  offeredRequests,
   onReplyBack,
   onRequestBack,
+  restoreRequest,
   returnReply,
   returnRequest,
   spareRequest,
@@ -334,7 +335,7 @@ describe('the kept drafts themselves', () => {
       state.free = false;
       state.sending = true;
       expect([returnRequest(DRAFT, form, me), keptRequest(), spareRequest()]).toEqual(['offered', DRAFT, null]);
-      expect(offeredRequest(open.by)?.draft).toEqual(DRAFT);
+      expect(offeredRequests(open.by).map((offer) => offer.draft)).toEqual([DRAFT]);
       forgetRequest(form);
       state.sending = false;
       expect([returnRequest(DRAFT, form, me), keptRequest(), spareRequest()]).toEqual(['offered', null, DRAFT]);
@@ -342,6 +343,24 @@ describe('the kept drafts themselves', () => {
     } finally {
       off();
     }
+  });
+
+  it('restore a draft another form wrote into a form that shows typed text: that text takes the free spare, or is answered when the spare is taken', () => {
+    const other = {};
+    const typedText = { ...DRAFT, subject: 'Typed here' };
+    keepRequest(DRAFT, other);
+    const offer = offeredRequests(form).find((item) => !item.spare);
+    if (!offer) throw new Error('the draft of the other form is not offered');
+    expect(restoreRequest(form, typedText, offer.id)).toEqual({ draft: DRAFT, dropped: null });
+    expect([keptRequest(), spareRequest(), offeredRequests(form).map((item) => item.draft.subject)]).toEqual([DRAFT, typedText, ['Typed here']]);
+
+    forgetRequest(form);
+    const second = { ...DRAFT, subject: 'Second' };
+    keepRequest(second, other);
+    const again = offeredRequests(form).find((item) => !item.spare);
+    if (!again) throw new Error('the draft of the other form is not offered');
+    expect(restoreRequest(form, { ...typedText, subject: 'Typed again' }, again.id)).toEqual({ draft: second, dropped: { ...typedText, subject: 'Typed again' } });
+    expect([keptRequest(), spareRequest()]).toEqual([second, typedText]);
   });
 
   it('take a failed reply back only while nothing newer is kept in its request', () => {

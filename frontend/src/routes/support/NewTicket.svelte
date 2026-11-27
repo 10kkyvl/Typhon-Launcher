@@ -35,7 +35,7 @@
     accountToast,
     forgetRequest,
     keepRequest,
-    offeredRequest,
+    offeredRequests,
     onRequestBack,
     openPlain,
     openPrefilled,
@@ -43,6 +43,7 @@
     restoreRequest,
     returnRequest,
     returnShown,
+    type Offer,
     type Placed,
     type RequestDraft,
     type Writer,
@@ -59,20 +60,20 @@
   const me: Writer = {};
 
   // What the player left unsent (the session gone, another screen opened): a plain way in gives it back
-  // whole; a way in with a prefill opens with the prefill and offers it. Another unsent request is
-  // offered beside it, from what is kept, so the offer outlives the form.
+  // whole; a way in with a prefill opens with the prefill and offers it. Every other unsent request is
+  // offered beside it, each on its own line, from what is kept, so the offers outlive the form.
   const prefill = untrack(() => ({ topic: initialTopic, subject: initialSubject }));
   const prefilled = prefill.topic !== undefined || prefill.subject !== undefined;
   const startTopic = prefill.topic ?? parseTopic(undefined);
   const draft = prefilled ? null : openPlain(me);
   if (prefilled) openPrefilled(me);
-  const offer = $derived.by(() => {
+  const offers = $derived.by(() => {
     void $requestsChanged;
-    return offeredRequest(me);
+    return offeredRequests(me);
   });
-  // The offer the form opened with, or the one Restore left, is a standing fact of the page; one that
+  // The offers the form opened with, or the ones Restore left, are standing facts of the page; one that
   // came later (a failed send handed it in) is said once, politely.
-  let quietOffer = $state(offeredRequest(me)?.id ?? null);
+  let quietOffers = $state(offeredRequests(me).map((offer) => offer.id));
   let topic = $state<string>(draft?.topic ?? startTopic);
   let attachLogs = $state(draft?.attachLogs ?? attachLogsByDefault(startTopic));
   let logsTouched = draft?.logsTouched ?? false;
@@ -203,17 +204,23 @@
   }
 
   // What the player typed is not lost to a restore: it is offered in turn, from what is kept.
-  async function restore() {
-    if (!offer || sending) return;
-    const back = restoreRequest(me, holdsTyped ? current() : null);
+  async function restore(id: number) {
+    if (sending) return;
+    const back = restoreRequest(me, holdsTyped ? current() : null, id);
     if (!back) return;
     fill(back.draft);
     owns = true;
-    quietOffer = offeredRequest(me)?.id ?? null;
+    quietOffers = offeredRequests(me).map((offer) => offer.id);
     if (back.dropped) sayDropped(back.dropped);
     // The notice's button may leave: focus goes on to the subject, never to the page.
     await tick();
     subjectField?.focus();
+  }
+
+  // The swap sentence is true where Restore keeps the typed text: it takes the spare's place, or the free
+  // spare when the draft another form wrote is restored.
+  function swaps(offer: Offer): boolean {
+    return holdsTyped && (offer.spare || !offers.some((other) => other.spare));
   }
 
   function cancel() {
@@ -332,16 +339,17 @@
   <Spinner label={msg('tickets.loading')} />
 {:else}
   <div class="form" bind:this={form}>
-    {#if offer}
-      {#key offer.id}
-        <Notice tone="info" announce={offer.id !== quietOffer} action={restoreDraft}>
-          <span id="{uid}-offer">
-            {offer.draft.subject.trim() ? msg('tickets.draftKept', { subject: offer.draft.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
-            {#if holdsTyped}{msg('tickets.draftSwapNote')}{/if}
-          </span>
-        </Notice>
-      {/key}
-    {/if}
+    {#each offers as offer (offer.id)}
+      {#snippet restoreOffer()}
+        <Button size="sm" aria-describedby="{uid}-offer-{offer.id}" disabled={sending} onclick={() => restore(offer.id)}>{msg('tickets.draftRestore')}</Button>
+      {/snippet}
+      <Notice tone="info" announce={!quietOffers.includes(offer.id)} action={restoreOffer}>
+        <span id="{uid}-offer-{offer.id}">
+          {offer.draft.subject.trim() ? msg('tickets.draftKept', { subject: offer.draft.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
+          {#if swaps(offer)}{msg('tickets.draftSwapNote')}{/if}
+        </span>
+      </Notice>
+    {/each}
 
     <div class="field">
       <span class="label" id="{uid}-topic-label">{msg('tickets.topicLabel')}</span>
@@ -435,10 +443,6 @@
 {/if}
 
 <LogsConfirm bind:this={confirm} />
-
-{#snippet restoreDraft()}
-  <Button size="sm" aria-describedby="{uid}-offer" disabled={sending} onclick={restore}>{msg('tickets.draftRestore')}</Button>
-{/snippet}
 
 {#snippet signIn()}
   <Button size="sm" onclick={handleSessionLost}>{msg('tickets.signInAgain')}</Button>

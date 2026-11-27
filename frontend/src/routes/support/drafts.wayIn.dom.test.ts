@@ -350,6 +350,80 @@ describe('a failed send and the ways in', () => {
   });
 });
 
+describe('a prefilled way in while a draft another form wrote and the spare are both kept', () => {
+  const restoreButtons = () => screen.queryAllByRole('button', { name: msg('tickets.draftRestore') });
+  const lines = () => restoreButtons().map((button) => words(button.closest('.notice') as HTMLElement));
+  const line = (subject: string) => `${msg('tickets.draftKept', { subject })} ${msg('tickets.draftRestore')}`;
+  const swapLine = (subject: string) => `${msg('tickets.draftKept', { subject })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`;
+
+  /** "Old matter" kept as the draft of the plain form, "Spare matter" as the spare; Beta then restores the spare and is left. */
+  async function restoredInBeta() {
+    await oldDraft();
+    returnRequest({ topic: 'account', game: null, subject: 'Spare matter', body: 'Spare body.', attachLogs: false, logsTouched: false }, {}, get(currentUser)?.id ?? null);
+    const beta = await open(BETA);
+    const spare = restoreButtons().at(-1);
+    if (!spare) throw new Error('the Beta form offers nothing');
+    await beta.user.click(spare);
+    cleanup();
+  }
+
+  it('names both, each with its own "Restore it" described by its own line, the draft first', async () => {
+    await restoredInBeta();
+    await open(MOVE);
+    const described = restoreButtons().map((button) => document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent?.trim());
+    expect({ subject: subjectField().value, lines: lines(), described }).toEqual({
+      subject: '',
+      lines: [line('Spare matter'), line('Old matter')],
+      described: [msg('tickets.draftKept', { subject: 'Spare matter' }), msg('tickets.draftKept', { subject: 'Old matter' })],
+    });
+  });
+
+  it('"Restore it" on the draft fills the form with it; the spare stays named, now as a swap', async () => {
+    await restoredInBeta();
+    const { user } = await open(MOVE);
+    await user.click(restoreButtons()[0]);
+    expect({ subject: subjectField().value, body: bodyField().value, lines: lines(), focus: document.activeElement === subjectField() }).toEqual({
+      subject: 'Spare matter',
+      body: 'Spare body.',
+      lines: [swapLine('Old matter')],
+      focus: true,
+    });
+    cleanup();
+    await open(PLAIN);
+    expect([subjectField().value, lines()]).toEqual(['Spare matter', [swapLine('Old matter')]]);
+  });
+
+  it('"Restore it" on the spare fills the form with it; the draft the other form wrote is named in its place', async () => {
+    await restoredInBeta();
+    const { user } = await open(MOVE);
+    await user.click(restoreButtons()[1]);
+    expect({ subject: subjectField().value, lines: lines(), store: [keptRequest()?.subject, spareRequest()?.subject] }).toEqual({
+      subject: 'Old matter',
+      lines: [swapLine('Spare matter')],
+      store: ['Old matter', 'Spare matter'],
+    });
+  });
+
+  it('names a request that failed with no form open, kept as the draft beside a taken spare, in the next prefilled form', async () => {
+    const first = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(first.promise);
+    const sent = await open(PLAIN);
+    await sent.user.type(subjectField(), 'Cannot sign in');
+    await sent.user.type(bodyField(), 'The code never arrives.');
+    await sent.user.click(logsSwitch());
+    await sent.user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    await oldDraft('Spare matter');
+    await open(BETA);
+    cleanup();
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await open(BETA);
+    expect({ subject: subjectField().value, lines: lines() }).toEqual({ subject: 'Beta 2.0: ', lines: [line('Cannot sign in'), line('Spare matter')] });
+  });
+});
+
 describe('the writer rule, pinned', () => {
   async function pickGame(user: ReturnType<typeof renderDom>['user']) {
     await user.click(screen.getByRole('button', { name: msg('tickets.gameChoose') }));
