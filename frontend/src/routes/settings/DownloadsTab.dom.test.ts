@@ -4,10 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
-vi.mock('../../lib/services/settings', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/settings')>()),
-  saveSettingsPatch: vi.fn(),
-}));
+// The page's dialogs reach services that act (cloudForget deletes the remote saves): each is mocked
+// whole and its binding faked (lib/components/settingsDialogs.mocks.test.ts).
+vi.mock('../../lib/services/settings', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).settingsService(await original()));
+vi.mock('../../lib/services/cloudsaves', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).cloudsavesService(await original()));
+vi.mock('../../lib/services/emulators', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).emulatorsService(await original()));
+vi.mock('../../lib/services/legal', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).legalService(await original()));
+vi.mock('../../lib/services/telemetryLog', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).telemetryLogService(await original()));
+vi.mock('../../lib/services/theme', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).themeService(await original()));
+vi.mock('../../../bindings/typhon/internal/settings', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'settings'));
+vi.mock('../../../bindings/typhon/internal/cloudsaves', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'cloudsaves'));
+vi.mock('../../../bindings/typhon/internal/emulators', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'emulators'));
+vi.mock('../../../bindings/typhon/internal/legal', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'legal'));
+vi.mock('../../../bindings/typhon/internal/telemetrylog', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'telemetrylog'));
+vi.mock('../../../bindings/typhon/internal/theme', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'theme'));
 // A Windows build: the row that asks for admin rights ahead of time is shown there.
 vi.mock('../../lib/services/system', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/system')>()),
@@ -21,13 +31,11 @@ vi.mock('../../lib/services/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/selfupdate')>()),
   checkForUpdate: vi.fn(),
 }));
-vi.mock('../../lib/services/cloudsaves', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/cloudsaves')>()),
-  cloudForget: vi.fn(),
-}));
 
 import { msg, type MessageKey } from '../../lib/i18n';
 import { cloudForget } from '../../lib/services/cloudsaves';
+import { listPlatforms } from '../../lib/services/emulators';
+import { listLegalDocuments } from '../../lib/services/legal';
 import { checkForUpdate } from '../../lib/services/selfupdate';
 import { updateReason } from '../../lib/services/selfupdateMessages';
 import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
@@ -40,6 +48,7 @@ import { toasts } from '../../lib/stores/toasts';
 import { authState, currentUser } from '../../lib/stores/user';
 import type { CurrentUser } from '../../lib/services/account';
 import { user } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { description } from '../../lib/testing/hints';
 import Settings from './Settings.svelte';
 
@@ -91,6 +100,9 @@ beforeEach(() => {
   document.body.append(app);
   settings.set({ ...SAVED });
   vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...get(settings), ...patch }) as SettingsData);
+  // What the services answer outside the app: nothing listed.
+  vi.mocked(listPlatforms).mockResolvedValue([]);
+  vi.mocked(listLegalDocuments).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -105,9 +117,13 @@ afterEach(() => {
   vi.mocked(saveSettingsPatch).mockReset();
   vi.mocked(requestCheck).mockReset();
   vi.mocked(cloudForget).mockReset();
+  vi.mocked(listPlatforms).mockReset();
+  vi.mocked(listLegalDocuments).mockReset();
   vi.mocked(checkForUpdate).mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  expect(calls).toEqual([]);
+  resetBindings();
 });
 
 function open() {
@@ -457,7 +473,7 @@ describe('the downloads tab: beta versions', () => {
     const failure = new Error('typhon:selfupdate.stalled: read tcp');
     vi.mocked(checkForUpdate).mockRejectedValue(failure);
     const real = await vi.importActual<typeof import('../../lib/stores/selfupdate')>('../../lib/stores/selfupdate');
-    vi.mocked(requestCheck).mockImplementation(real.requestCheck);
+    vi.mocked(requestCheck).mockImplementation(async () => await real.requestCheck());
     const keys = open();
     const beta = screen.getByRole('switch', { name: msg('settings.downloadsBetaLabel') });
 

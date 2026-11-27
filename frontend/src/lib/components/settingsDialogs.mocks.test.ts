@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CALL_IN_PLACE, NO_REAL_MODULE, PLAIN_RUNTIME, gaps, importOf, wrappers } from '../testing/mounts';
 
 /**
  * The dialogs of settings, themes, cloud saves and legal texts reach services that act: cloudForget
@@ -12,8 +13,17 @@ import { describe, expect, it } from 'vitest';
  * any spelling of its path and any quotes), a function laid over the factory's answer, the real module
  * taken by vi.importActual, or a mock handed a function by reference would put a real call back, so
  * each is refused. A source tripwire; what a mock answers is each test's to get right.
+ *
+ * A test of a component that mounts one of these dialogs at any depth (the settings page and its tabs,
+ * the app, Big Picture's shell) runs the dialog's code too. One that presses a control of a dialog that
+ * acts or sends (`HELD`) is held to the same rule, for every service the dialogs its components reach
+ * call. The rest run on lib/testing/dom.ts's runtime, mocked once by a factory that takes no original
+ * module and with no real module behind any mock: a binding that slips past their mocks has no `Call`
+ * to send through (one given in place is a `vi.fn`), and a `Browser` or `Clipboard` they add cannot be
+ * the real one.
  */
 const tests = import.meta.glob<string>(['../../**/*.test.ts', '!../../**/node_modules/**'], { query: '?raw', import: 'default', eager: true });
+const components = import.meta.glob<string>(['../../**/*.svelte', '!../../**/node_modules/**'], { query: '?raw', import: 'default', eager: true });
 
 type Service = 'cloudsaves' | 'settings' | 'theme' | 'telemetryLog' | 'legal' | 'emulators';
 
@@ -61,9 +71,31 @@ function mounted(source: string): string[] {
   return [...new Set([...source.matchAll(MOUNTS)].map((match) => match[2]))];
 }
 
-function missing(path: string, source: string): string[] {
+/** The components that mount a dialog, at any depth, by file name, and the sources of each. */
+const WRAPPERS = wrappers(Object.keys(DIALOGS), components);
+const WRAPS = importOf(WRAPPERS);
+const sourcesOf = (name: string) => Object.entries(components).filter(([path]) => path.endsWith(`/${name}.svelte`)).map(([, source]) => source);
+
+/** The dialogs a source mounts itself or through the components it imports, at any depth. */
+function reached(source: string): string[] {
+  const dialogs = new Set<string>();
+  const seen = new Set<string>();
+  const queue = [source];
+  while (queue.length > 0) {
+    const next = queue.pop() ?? '';
+    for (const dialog of Object.keys(DIALOGS)) if (importOf([dialog]).test(next)) dialogs.add(dialog);
+    for (const name of WRAPPERS) {
+      if (seen.has(name) || !importOf([name]).test(next)) continue;
+      seen.add(name);
+      queue.push(...sourcesOf(name));
+    }
+  }
+  return [...dialogs].sort();
+}
+
+function missing(path: string, source: string, dialogs = mounted(source)): string[] {
   const at = fileUrl(path);
-  const needed = [...new Set(mounted(source).flatMap((dialog) => DIALOGS[dialog]))];
+  const needed = [...new Set(dialogs.flatMap((dialog) => DIALOGS[dialog]))];
   const found = [...source.matchAll(MODULE_CALL)].map((match) => (match[3] === undefined ? null : moduleOf(match[3], at)));
   const whole = [...source.matchAll(WHOLE)].map((match) => ({
     module: moduleOf(match[2], at),
@@ -105,6 +137,40 @@ const ELSEWHERE = [
   '/src/lib/components/RandomGameModal.launch.dom.test.ts',
   '/src/lib/components/busyDialogs.dom.test.ts',
 ];
+
+/**
+ * Tests of a component that mounts a dialog and press a control of one that acts or sends: Delete in
+ * the cloud saves dialog of the settings page.
+ */
+const HELD = ['/src/routes/settings/DownloadsTab.dom.test.ts'];
+/**
+ * The words of the controls that act or send. A test of a component that names one presses it, or
+ * looks for it to press: it is in HELD, or in PRESSED_ELSEWHERE with the reason it is not.
+ */
+const PRESSES = [
+  'cloudsaves.consentEnable',
+  'cloudsaves.disableDelete',
+  'cloudsaves.disableKeep',
+  'cloudsaves.conflictKeepMine',
+  'cloudsaves.conflictTakeRemote',
+  'cloudsaves.conflictPlayHere',
+  'emul.detectApply',
+  'settings.appearanceImportText',
+];
+/**
+ * Big Picture's own flow of a launch held by a conflict: its test replaces the cloud saves binding by a
+ * Service of three vi.fn written in place, so a choice reaches nothing; the file is Big Picture's.
+ */
+const PRESSED_ELSEWHERE = ['/src/lib/components/BigPictureShell.conflict.dom.test.ts'];
+
+// The runtime's factory takes no original module: with no importActual either, the real runtime cannot
+// come back through a Browser or Clipboard the test adds.
+const FACTORY_TAKES_NOTHING = ['the runtime mocked by a factory that takes nothing', (source: string) => /\bvi\.mock\(\s*(['"`])@wailsio\/runtime\1\s*,\s*async\s*\(\s*\)\s*=>/.test(source)] as const;
+const NEEDED_WEAK = [PLAIN_RUNTIME, FACTORY_TAKES_NOTHING, CALL_IN_PLACE, NO_REAL_MODULE];
+
+const wrapping = files.filter(([path, source]) => path !== SELF && mounted(source).length === 0 && WRAPS.test(source));
+const held = wrapping.filter(([path]) => HELD.includes(path));
+const weak = wrapping.filter(([path]) => !HELD.includes(path));
 
 const SOUND_PATH = '/src/lib/components/ThemeTextImportModal.dom.test.ts';
 const THEME_LINE = "vi.mock('../services/theme', async (original) => (await import('../testing/settingsDialogsTesting')).themeService(await original()));";
@@ -202,5 +268,56 @@ describe('tests that mount a settings, theme, cloud or legal dialog', () => {
     ].join('\n');
     expect(missing('/src/routes/settings/EmulatorsCard.dom.test.ts', card)).toEqual([]);
     expect(missing('/src/routes/settings/parts/EmulatorsCard.dom.test.ts', card)).toContain('the whole emulators service');
+  });
+});
+
+describe('tests of a component that mounts a settings, theme, cloud or legal dialog', () => {
+  it('know the components that mount one, at any depth, and the dialogs each reaches', () => {
+    expect(WRAPPERS).toEqual(expect.arrayContaining(['App', 'DownloadsTab', 'Settings']));
+    expect(reached("import Settings from './Settings.svelte';")).toEqual(
+      expect.arrayContaining(['CloudConsentModal', 'CloudDisableModal', 'EmulatorsCard', 'LegalDocumentModal', 'SentDataModal']),
+    );
+    expect(reached("import Card from './Card.svelte';")).toEqual([]);
+  });
+
+  it('are found', () => {
+    expect(wrapping.map(([path]) => path)).toEqual(
+      expect.arrayContaining([
+        '/src/routes/settings/DownloadsTab.dom.test.ts',
+        '/src/routes/settings/AboutTab.rows.dom.test.ts',
+        '/src/routes/settings/GeneralTab.rows.dom.test.ts',
+        '/src/routes/settings/Settings.about.dom.test.ts',
+        '/src/routes/settings/Settings.switch.dom.test.ts',
+        '/src/routes/settings/appearance.dom.test.ts',
+        '/src/App.startup.dom.test.ts',
+        '/src/App.handoff.dom.test.ts',
+      ]),
+    );
+    expect(held.map(([path]) => path)).toEqual(HELD);
+  });
+
+  it('that press a control which acts or sends are held to the whole mocks', () => {
+    const pressing = weak.filter(([, source]) => PRESSES.some((key) => source.includes(`'${key}`)));
+    expect(pressing.map(([path]) => path).sort()).toEqual(PRESSED_ELSEWHERE);
+  });
+
+  it('mock each service the dialogs they reach call whole, fake its binding and see no call reach one', () => {
+    expect(held.map(([path, source]) => [path, missing(path, source, reached(source))]).filter(([, found]) => found.length > 0)).toEqual([]);
+  });
+
+  it('refuse another runtime, a factory that takes the real one, a Call that is not a vi.fn in place, or a real module', () => {
+    const plain = "vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());";
+    expect(gaps(NEEDED_WEAK, plain)).toEqual([]);
+    expect(gaps(NEEDED_WEAK, "vi.mock('@wailsio/runtime', async () => ({ ...(await import('../testing/dom')).wailsRuntime(), Clipboard: { SetText: vi.fn(async () => {}) } }));")).toEqual([]);
+    expect(gaps(NEEDED_WEAK, "vi.mock('@wailsio/runtime', async (original) => ({ ...(await original()), ...(await import('../testing/dom')).wailsRuntime() }));")).toContain(
+      'the runtime mocked by a factory that takes nothing',
+    );
+    expect(gaps(NEEDED_WEAK, `${plain}\nconst extra = { Call: real.Call };`)).toContain('a Call only as a vi.fn in place');
+    expect(gaps(NEEDED_WEAK, `${plain}\nvi.doUnmock('@wailsio/runtime');`)).toContain('the runtime of lib/testing/dom.ts, once');
+    expect(gaps(NEEDED_WEAK, `${plain}\nconst real = await vi.importActual('@wailsio/runtime');`)).toContain('no real module behind a mock');
+  });
+
+  it('run on the runtime that cannot send', () => {
+    expect(weak.map(([path, source]) => [path, gaps(NEEDED_WEAK, source)]).filter(([, found]) => found.length > 0)).toEqual([]);
   });
 });
