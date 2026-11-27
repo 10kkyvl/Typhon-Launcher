@@ -135,6 +135,25 @@ describe('EmulatorNeededModal: the standing prompt', () => {
     expect(site.getAttribute('aria-disabled')).toBe('true');
   });
 
+  it('cannot be dismissed while the file is chosen, and a refusal shows in the prompt', async () => {
+    const choosing = held<string>();
+    vi.mocked(selectEmulatorFile).mockReturnValueOnce(choosing.promise);
+    render(EmulatorNeededModal, { target: app });
+    const { answer, dialog } = await ask();
+    const settled = vi.fn();
+    void answer.then(settled);
+    const keys = user();
+    await keys.click(button(dialog, 'emul.neededChoose'));
+
+    await keys.keyboard('{Escape}');
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+
+    choosing.reject(new Error('typhon:emulators.not_found: gone'));
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emul.saveFailed'));
+    expect(dialog.isConnected).toBe(true);
+  });
+
   it('says a refused file in the prompt by code', async () => {
     vi.mocked(selectEmulatorFile).mockResolvedValueOnce('/apps/pcsx2');
     vi.mocked(setEmulatorPath).mockRejectedValueOnce(new Error('typhon:emulators.not_exe: no'));

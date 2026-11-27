@@ -49,6 +49,15 @@ const DIALOGS = [
   'DeleteAccountModal',
   'AvatarCropModal',
   'SocialConsentScreen',
+  // The dialogs of game properties, emulators and runtimes: a wrapper switch rewrites the game's files,
+  // a runtime installer runs as administrator, closing the open emulator ends its process, and the rest
+  // write the library or the settings.
+  'GamePropertiesModal',
+  'RedistModal',
+  'EmulatorNeededModal',
+  'BiosNeededModal',
+  'EmulatorBusyModal',
+  'AddImageModal',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -162,6 +171,17 @@ describe('tests that mount a game or library dialog', () => {
         './DeleteAccountModal.dom.test.ts',
         './AvatarCropModal.dom.test.ts',
         './SocialConsentScreen.dom.test.ts',
+        './GamePropertiesModal.dom.test.ts',
+        './GamePropertiesModal.controls.dom.test.ts',
+        './GamePropertiesModal.kit.dom.test.ts',
+        './RedistModal.dom.test.ts',
+        './RedistModal.install.dom.test.ts',
+        './EmulatorPrompts.dom.test.ts',
+        './EmulatorNeededModal.dom.test.ts',
+        './BiosNeededModal.dom.test.ts',
+        './EmulatorBusyModal.dom.test.ts',
+        './AddImageModal.dom.test.ts',
+        './addDialogs.dom.test.ts',
         ...HELD,
       ]),
     );
@@ -228,6 +248,8 @@ describe('tests of a component that mounts a game or library dialog', () => {
         'Friends',
         'Activity',
         'UserProfile',
+        'Installed',
+        'BigPictureHarness',
       ]),
     );
     expect(WRAPPERS).not.toContain('GameCard');

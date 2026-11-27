@@ -3,27 +3,17 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudErrorText } from '../cloudsaves/messages';
 import { msg } from '../i18n';
-import { libraryErrorText } from '../library/errors';
 import { cloudResolveConflict, type CloudConflict } from '../services/cloudsaves';
-import { selectEmulatorFile } from '../services/emulators';
 import { cloudConflictTarget, cloudStatus } from '../stores/cloudsaves';
-import { askForEmulator, emulatorPrompt } from '../stores/emulatorPrompt';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import CloudConflictModal from './CloudConflictModal.svelte';
-import EmulatorNeededModal from './EmulatorNeededModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/cloudsaves', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/cloudsaves')>()),
   cloudResolveConflict: vi.fn(),
-}));
-vi.mock('../services/emulators', () => ({
-  listPlatforms: vi.fn(async () => [{ id: 'ps2', name: 'PlayStation 2', emulator: 'PCSX2', status: 'not_set' }]),
-  openOfficialPage: vi.fn(async () => {}),
-  selectEmulatorFile: vi.fn(),
-  setEmulatorPath: vi.fn(async () => {}),
 }));
 
 // The operation each dialog waits on: held open by the test, then failed.
@@ -44,7 +34,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  get(emulatorPrompt)?.settle(false);
   cloudConflictTarget.set(null);
   cloudStatus.set(null);
   toasts.set([]);
@@ -73,24 +62,4 @@ describe('a dialog busy with its operation', () => {
     expect(dialog.isConnected).toBe(true);
   });
 
-  it('EmulatorNeededModal: Escape does nothing while the emulator is being chosen, and a failure shows in the dialog', async () => {
-    const choosing = held();
-    vi.mocked(selectEmulatorFile).mockReturnValueOnce(choosing.promise);
-    render(EmulatorNeededModal, { target: app });
-    const answer = askForEmulator('ps2', 'emulators.not_configured');
-    const settled = vi.fn();
-    void answer.then(settled);
-    const keys = user();
-    const dialog = await screen.findByRole('dialog', { name: msg('emul.neededTitle') });
-    await keys.click(within(dialog).getByRole('button', { name: msg('emul.neededChoose') }));
-
-    await keys.keyboard('{Escape}');
-    await Promise.resolve();
-    expect(settled).not.toHaveBeenCalled();
-
-    const failure = new Error('typhon:emulators.not_found: gone');
-    choosing.fail(failure);
-    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(libraryErrorText(failure, msg('emul.saveFailed')));
-    expect(dialog.isConnected).toBe(true);
-  });
 });
