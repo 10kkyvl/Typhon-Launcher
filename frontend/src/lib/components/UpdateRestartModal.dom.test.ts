@@ -8,10 +8,13 @@ import { selfUpdateStatus } from '../stores/selfupdate';
 import { toasts } from '../stores/toasts';
 import { endUpdateShow, updateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import UpdateBanner from './UpdateBanner.svelte';
+import UpdateRestartModal from './UpdateRestartModal.svelte';
 import UpdateShow from './UpdateShow.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/selfupdate')>()),
@@ -30,10 +33,47 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
   endUpdateShow();
   toasts.set([]);
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
+});
+
+describe('the restart dialog on its own', () => {
+  const footer = (dialog: HTMLElement) => within(dialog).getAllByRole('button').filter((button) => !button.closest('[data-skip-autofocus]'));
+
+  it('opens with the focus on Cancel, never on the restart, and has no native title', () => {
+    selfUpdateStatus.set(READY);
+    renderDom(UpdateRestartModal, { open: true });
+    const dialog = screen.getByRole('dialog', { name: msg('ui.restartLauncherTitle') });
+
+    expect(footer(dialog).map((button) => button.textContent?.trim())).toEqual([msg('common.cancel'), msg('ui.restartAndUpdate')]);
+    expect(document.activeElement).toBe(footer(dialog)[0]);
+    expect(dialog.querySelectorAll('[title]').length).toBe(0);
+  });
+
+  it('closes on Escape as Cancel does, and applies nothing', async () => {
+    selfUpdateStatus.set(READY);
+    const { user } = renderDom(UpdateRestartModal, { open: true });
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('after a seamless restart Go rolled back, opens with the focus on Cancel before the two ways on', () => {
+    selfUpdateStatus.set({ ...READY, error: 'selfupdate: rolled back', errorCode: 'handoff_failed' });
+    renderDom(UpdateRestartModal, { open: true });
+    const dialog = screen.getByRole('dialog', { name: msg('ui.handoffFailedTitle') });
+
+    expect(footer(dialog).map((button) => button.textContent?.trim())).toEqual([msg('common.cancel'), msg('ui.updateWithRestart'), msg('common.retry')]);
+    expect(document.activeElement).toBe(footer(dialog)[0]);
+    expect(dialog.querySelectorAll('[title]').length).toBe(0);
+  });
 });
 
 async function confirmRestart() {
