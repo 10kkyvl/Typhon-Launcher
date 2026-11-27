@@ -78,14 +78,28 @@
 
   const strategyLabel = $derived(strategyLabels(plan?.strategy ?? availability.strategy));
 
+  // One read per press, History busy meanwhile; an answer for a game the card has turned away from
+  // opens nothing.
+  let loadingHistory = $state(false);
   async function openHistory() {
+    const gameId = update.gameId;
+    loadingHistory = true;
     try {
-      history = await getUpdateHistory(update.gameId);
+      const found = await getUpdateHistory(gameId);
+      if (gameId !== update.gameId) return;
+      history = found;
       historyOpen = true;
     } catch (err) {
-      toast(updateErrorText(err, msg('ui.updateHistoryFailed')), 'danger');
+      if (gameId === update.gameId) toast(updateErrorText(err, msg('ui.updateHistoryFailed')), 'danger');
+    } finally {
+      loadingHistory = false;
     }
   }
+
+  // Why the question's Update waits: the game started, moved or began updating while it was open.
+  const confirmHeld = $derived(
+    running ? msg('ui.gameRunningBeforeUpdate') : moving ? msg('games.mainActionMoving') : busy ? msg('ui.updateInProgress') : '',
+  );
 
   function confirm() {
     confirmOpen = false;
@@ -222,7 +236,7 @@
         {msg('ui.restorePreviousVersion')}
       </Button>
     {/if}
-    <Button onclick={openHistory}>
+    <Button busy={loadingHistory} onclick={openHistory}>
       <History size="1.5rem" strokeWidth={1.8} />
       {msg('ui.history')}
     </Button>
@@ -300,7 +314,7 @@
   </dl>
   {#snippet footer()}
     <Button onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" onclick={confirm}>{msg('ui.updateAction')}</Button>
+    <Button variant="primary" disabled={confirmHeld !== ''} reason={confirmHeld} onclick={confirm}>{msg('ui.updateAction')}</Button>
   {/snippet}
 </Modal>
 

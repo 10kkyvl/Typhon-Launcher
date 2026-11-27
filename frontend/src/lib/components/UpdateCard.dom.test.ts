@@ -1,25 +1,33 @@
-import { screen } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { getUpdateHistory, type Update } from '../services/updates';
+import { getUpdateHistory, startUpdate, type Update, type UpdateHistory } from '../services/updates';
 import type { MoveJob } from '../services/relocate';
 import { moves } from '../stores/relocate';
 import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { held, sentToGo } from '../testing/gameDialogsTesting';
 import UpdateCard from './UpdateCard.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/updates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/updates')>()),
   getUpdateHistory: vi.fn(async () => []),
+  startUpdate: vi.fn(),
 }));
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   toasts.set([]);
   moves.set([]);
   vi.mocked(getUpdateHistory).mockReset();
+  vi.mocked(startUpdate).mockReset();
+  document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 function move(patch: Partial<MoveJob> = {}): MoveJob {
@@ -102,6 +110,147 @@ describe('UpdateCard', () => {
     await user.click(screen.getByRole('button', { name: msg('ui.history') }));
 
     await vi.waitFor(() => expect(get(toasts).map((item) => [item.message, item.kind])).toEqual([[msg('ui.updateHistoryFailed'), 'danger']]));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+const footerOf = (dialog: HTMLElement) => within(dialog).getAllByRole('button').filter((button) => !button.closest('[data-skip-autofocus]'));
+const reasonOf = (button: HTMLElement) =>
+  (button.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent?.trim());
+
+describe('UpdateCard: the update question', () => {
+  async function ask(props: { running?: boolean } = {}) {
+    const rendered = renderDom(UpdateCard, { update: update({ plan } as Partial<Update>), running: props.running ?? false });
+    await rendered.user.click(screen.getByRole('button', { name: msg('ui.updateAction') }));
+    return { ...rendered, dialog: screen.getByRole('dialog', { name: msg('ui.updateGameTitle') }) };
+  }
+
+  it('opens with the focus on Cancel, says the plan, and has no native title', async () => {
+    const { dialog } = await ask();
+
+    expect(footerOf(dialog).map((button) => button.textContent?.trim())).toEqual([msg('common.cancel'), msg('ui.updateAction')]);
+    expect(document.activeElement).toBe(footerOf(dialog)[0]);
+    expect(dialog.textContent).toContain(msg('ui.backupWillBeCreated'));
+    expect(dialog.querySelectorAll('[title]').length).toBe(0);
+  });
+
+  it('starts the update once for a press and closes; Escape starts nothing', async () => {
+    vi.mocked(startUpdate).mockResolvedValue(undefined);
+    const first = await ask();
+
+    await first.user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(vi.mocked(startUpdate)).not.toHaveBeenCalled();
+
+    await first.user.click(screen.getByRole('button', { name: msg('ui.updateAction') }));
+    const dialog = screen.getByRole('dialog', { name: msg('ui.updateGameTitle') });
+    await first.user.click(footerOf(dialog)[1]);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(vi.mocked(startUpdate).mock.calls).toEqual([['g']]);
+  });
+
+  it('holds Update with the reason when the game starts while the question is open, and starts nothing', async () => {
+    const { dialog, user, rerender } = await ask();
+
+    await rerender({ update: update({ plan } as Partial<Update>), running: true });
+
+    const go = footerOf(dialog)[1];
+    expect(go.hasAttribute('disabled')).toBe(false);
+    expect(go.getAttribute('aria-disabled')).toBe('true');
+    expect(reasonOf(go)).toContain(msg('ui.gameRunningBeforeUpdate'));
+    await user.click(go);
+    expect(vi.mocked(startUpdate)).not.toHaveBeenCalled();
+    expect(dialog.isConnected).toBe(true);
+  });
+
+  it('holds Update with the reason when the update starts elsewhere while the question is open', async () => {
+    const { dialog, user, rerender } = await ask();
+
+    await rerender({ update: update({ plan, state: 'updating' } as Partial<Update>), running: false });
+
+    expect(reasonOf(footerOf(dialog)[1])).toContain(msg('ui.updateInProgress'));
+    await user.click(footerOf(dialog)[1]);
+    expect(vi.mocked(startUpdate)).not.toHaveBeenCalled();
+  });
+
+  it('holds Update with the reason when the game starts moving while the question is open', async () => {
+    const { dialog, user } = await ask();
+
+    moves.set([move()]);
+    await vi.waitFor(() => expect(footerOf(dialog)[1].getAttribute('aria-disabled')).toBe('true'));
+
+    expect(reasonOf(footerOf(dialog)[1])).toContain(msg('games.mainActionMoving'));
+    await user.click(footerOf(dialog)[1]);
+    expect(vi.mocked(startUpdate)).not.toHaveBeenCalled();
+  });
+});
+
+describe('UpdateCard: the history', () => {
+  const entry = { id: 'h1', gameId: 'g', fromVersion: '1', toVersion: '2', strategy: 'full_release', downloadBytes: 10, startedAt: '2026-11-01T10:00:00Z', completedAt: null, status: 'completed' } as UpdateHistory;
+
+  it('is read once for two presses, History busy and focused while it is', async () => {
+    const reading = held<UpdateHistory[]>();
+    vi.mocked(getUpdateHistory).mockReturnValueOnce(reading.promise);
+    const { user } = renderDom(UpdateCard, { update: update(), running: false });
+    const history = screen.getByRole('button', { name: msg('ui.history') });
+    history.focus();
+
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Enter}');
+
+    expect(vi.mocked(getUpdateHistory).mock.calls).toEqual([['g']]);
+    expect(history.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(history);
+    reading.resolve([entry]);
+    const dialog = await screen.findByRole('dialog', { name: msg('ui.updateHistoryTitle') });
+    expect(within(dialog).getByText('1 → 2')).toBeTruthy();
+    expect(dialog.querySelectorAll('[title]').length).toBe(0);
+  });
+
+  it('says there is none with an empty state, and Close gives the focus back to History', async () => {
+    const { user } = renderDom(UpdateCard, { update: update(), running: false });
+    const history = screen.getByRole('button', { name: msg('ui.history') });
+
+    await user.click(history);
+
+    const dialog = await screen.findByRole('dialog', { name: msg('ui.updateHistoryTitle') });
+    expect(within(dialog).getByText(msg('ui.noUpdatesYet'))).toBeTruthy();
+    await user.click(footerOf(dialog)[0]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(history);
+  });
+
+  it('opens nothing when the history answers after the card turned to another game', async () => {
+    const reading = held<UpdateHistory[]>();
+    vi.mocked(getUpdateHistory).mockReturnValueOnce(reading.promise);
+    const { user, rerender } = renderDom(UpdateCard, { update: update(), running: false });
+    await user.click(screen.getByRole('button', { name: msg('ui.history') }));
+
+    const other = update({ gameId: 'g2', title: 'Other' });
+    await rerender({ update: { ...other, availability: { ...other.availability, gameId: 'g2' } }, running: false });
+    reading.resolve([entry]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: msg('ui.history') }).getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('says nothing when the history fails after the card turned to another game', async () => {
+    const reading = held<UpdateHistory[]>();
+    vi.mocked(getUpdateHistory).mockReturnValueOnce(reading.promise);
+    const { user, rerender } = renderDom(UpdateCard, { update: update(), running: false });
+    await user.click(screen.getByRole('button', { name: msg('ui.history') }));
+
+    const other = update({ gameId: 'g2', title: 'Other' });
+    await rerender({ update: { ...other, availability: { ...other.availability, gameId: 'g2' } }, running: false });
+    reading.reject(new Error('backend down'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(get(toasts)).toEqual([]);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
