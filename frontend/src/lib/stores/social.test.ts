@@ -702,6 +702,27 @@ describe('the read of a start (the stored session checked behind the splash)', (
     expect(held(store)).toEqual({ friends: 1, incoming: 0, loaded: true, error: null });
   });
 
+  it('gives way to a page Go sent while the session was checked: that page is dropped, the kick’s poll fills it', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.handler()({ data: page(5, 2) });
+    answer.resolve(page(3, 1));
+    await started;
+    store.authState.set('authenticated');
+    await flush();
+    const confirmed = held(store);
+    store.handler()({ data: page(5, 2) });
+
+    expect({ confirmed, kicks: asked(store.service)[0], polled: held(store) }).toEqual({
+      confirmed: { friends: 0, incoming: 0, loaded: false, error: null },
+      kicks: 1,
+      polled: { friends: 5, incoming: 2, loaded: true, error: null },
+    });
+  });
+
   it('is the Friends screen’s read when the screen arrives while it runs: no second read', async () => {
     const store = await starting();
     const answer = deferred<ReturnType<typeof page>>();

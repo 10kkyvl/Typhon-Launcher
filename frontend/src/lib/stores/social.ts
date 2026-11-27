@@ -226,8 +226,12 @@ export async function initSocial(): Promise<void> {
   if (!inWails) return;
 
   Events.On('social:friends', (event) => {
-    // Go's poll can answer after a sign-out, and its page is the account that left.
-    if (get(authState) !== 'authenticated') return;
+    // Go's poll can answer after a sign-out, and its page is the account that left. One sent while
+    // the stored session is checked is newer than the start's read all the same: that answer gives
+    // way, and the poll after the kick brings the page.
+    const state = get(authState);
+    if (state === 'bootstrapping') heard += 1;
+    if (state !== 'authenticated') return;
     heard += 1;
     received(toFriendsPage(event.data));
   });
