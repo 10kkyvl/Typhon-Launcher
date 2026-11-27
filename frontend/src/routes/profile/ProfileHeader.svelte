@@ -113,6 +113,9 @@
   );
 
   const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
+  const saveRefusal = $derived(
+    $savingProfile ? '' : $isOffline ? msg('social.editRequiresConnection') : !dirty ? msg('state.accountErrorNoChanges') : '',
+  );
 
   $effect(() => {
     unsaved = editing && dirty;
@@ -342,13 +345,13 @@
       <div class="foot">
         {#if fieldErrors.general}<div class="general"><Notice tone="danger" compact>{fieldErrors.general}</Notice></div>{/if}
         <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>{msg('common.cancel')}</Button>
-        <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Offline it stays
-             in the Tab order, refused, and says why. -->
+        <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Refused, offline
+             or with nothing to save, it stays in the Tab order and says why. -->
         <Button
           variant="primary"
           busy={$savingProfile}
-          disabled={!$savingProfile && (!dirty || $isOffline)}
-          reason={$isOffline ? msg('social.editRequiresConnection') : ''}
+          disabled={saveRefusal !== ''}
+          reason={saveRefusal}
           onclick={save}
         >
           {$savingProfile ? msg('social.saving') : msg('common.save')}

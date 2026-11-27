@@ -143,13 +143,56 @@ describe("the edit bar's Save", () => {
     expect(updateProfile).not.toHaveBeenCalled();
   });
 
-  it('with nothing changed, online, Save is natively disabled and says no reason', async () => {
-    await editor();
+  // Save is refused, never natively disabled, whenever it can hold focus, and says why.
+  const refusal = (save: HTMLElement) => ({ ariaDisabled: save.getAttribute('aria-disabled'), disabled: save.matches(':disabled'), reason: description(save) });
+
+  it('with nothing changed, Save stays in the Tab order, refused, and says there is nothing to save', async () => {
+    const { user } = await editor();
     const save = button(msg('common.save'));
 
-    expect(save.matches(':disabled')).toBe(true);
-    expect(save.hasAttribute('aria-disabled')).toBe(false);
-    expect(description(save)).toBe('');
+    expect(refusal(save)).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('state.accountErrorNoChanges') });
+    save.focus();
+    await user.keyboard('{Enter}');
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('unchanged and focused while the connection goes and comes back, keeps focus and changes only its reason', async () => {
+    await editor();
+    authState.set('offline');
+    const save = button(msg('common.save'));
+    save.focus();
+
+    await waitFor(() => expect(description(save)).toBe(msg('social.editRequiresConnection')));
+    expect(refusal(save)).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('social.editRequiresConnection') });
+
+    authState.set('authenticated');
+
+    await waitFor(() => expect(description(save)).toBe(msg('state.accountErrorNoChanges')));
+    expect(refusal(save)).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('state.accountErrorNoChanges') });
+    expect(document.activeElement).toBe(save);
+  });
+
+  it('with a status text the server refuses, says so as the bar does', async () => {
+    const { user } = await editor();
+
+    await user.type(screen.getByRole('textbox', { name: msg('profileStyle.status') }), 'a‮b');
+
+    expect(refusal(button(msg('common.save')))).toEqual({ ariaDisabled: 'true', disabled: false, reason: layoutErrorText({ code: 'bad_chars', field: 'statusText' }) });
+  });
+
+  it('with a block left unfilled, says so as the bar does', async () => {
+    const pinnedEmpty = { ...still(), profile: { ...still().profile, layout: { version: 1, blocks: [{ id: 'p1', type: 'pinned', width: 'full', config: { igdbId: 0, caption: '' } }] } } } as CurrentUser;
+    const { user } = await editor(pinnedEmpty);
+    await change(user);
+
+    expect(refusal(button(msg('common.save')))).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('profile.fillBlocks') });
+  });
+
+  it('changed and online, is free and says no reason', async () => {
+    const { user } = await editor();
+    await change(user);
+
+    expect(refusal(button(msg('common.save')))).toEqual({ ariaDisabled: null, disabled: false, reason: '' });
   });
 });
 

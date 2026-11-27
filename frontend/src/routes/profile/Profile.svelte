@@ -111,6 +111,20 @@
   );
   const statusProblem = $derived(editing ? statusIssue(draft.statusText) : null);
   const canSave = $derived(dirty && issues.length === 0 && statusProblem === null && !saving && !$isOffline);
+  // Why Save is refused, in the words the bar shows for it; '' while it is free or busy.
+  const saveRefusal = $derived(
+    saving
+      ? ''
+      : $isOffline
+        ? msg('social.editRequiresConnection')
+        : !dirty
+          ? msg('state.accountErrorNoChanges')
+          : statusProblem
+            ? layoutErrorText(statusProblem)
+            : issues.length > 0
+              ? msg('profile.fillBlocks')
+              : '',
+  );
 
   function empty(type: string): boolean {
     const snapshot = $profileSnapshot;
@@ -432,14 +446,14 @@
               <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
             </Button>
             <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
-            <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Offline it stays
-                 in the Tab order, refused, and says why. Unchanged it is plainly disabled: only an edit
-                 elsewhere, which holds the focus, takes a draft back to unchanged. -->
+            <!-- Busy, not disabled, while it waits: it keeps the focus it was pressed with. Refused, it
+                 stays in the Tab order and says why: the reason changes under a focus it holds (the
+                 connection coming back to an unchanged draft), it never turns disabled. -->
             <Button
               variant="primary"
               busy={saving}
-              disabled={!saving && !canSave}
-              reason={$isOffline ? msg('social.editRequiresConnection') : ''}
+              disabled={saveRefusal !== ''}
+              reason={saveRefusal}
               onclick={save}
             >
               {saving ? msg('social.saving') : msg('common.save')}

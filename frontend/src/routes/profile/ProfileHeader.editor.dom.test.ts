@@ -175,6 +175,41 @@ describe('Save and Cancel', () => {
   });
 });
 
+describe("the editor's Save when it is refused", () => {
+  const refusal = (save: HTMLElement) => ({ ariaDisabled: save.getAttribute('aria-disabled'), disabled: save.matches(':disabled'), reason: description(save) });
+
+  it('with nothing typed, stays in the Tab order, refused, and says there is nothing to save', async () => {
+    const { user } = await headerEditor();
+    const save = button(msg('common.save'));
+
+    expect(refusal(save)).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('state.accountErrorNoChanges') });
+    save.focus();
+    await user.keyboard('{Enter}');
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('unchanged and focused while the connection goes and comes back, keeps focus and changes only its reason', async () => {
+    await headerEditor();
+    authState.set('offline');
+    const save = button(msg('common.save'));
+    save.focus();
+
+    await waitFor(() => expect(description(save)).toBe(msg('social.editRequiresConnection')));
+    authState.set('authenticated');
+
+    await waitFor(() => expect(description(save)).toBe(msg('state.accountErrorNoChanges')));
+    expect(refusal(save)).toEqual({ ariaDisabled: 'true', disabled: false, reason: msg('state.accountErrorNoChanges') });
+    expect(document.activeElement).toBe(save);
+  });
+
+  it('with text typed and online, is free and says no reason', async () => {
+    const { user } = await headerEditor();
+    await user.type(field(msg('social.aboutTitle')), 'Hi');
+
+    expect(refusal(button(msg('common.save')))).toEqual({ ariaDisabled: null, disabled: false, reason: '' });
+  });
+});
+
 describe('the connection going while the player edits', () => {
   it('the form says so, keeps what was typed, and the field keeps its focus', async () => {
     const { user } = await headerEditor();

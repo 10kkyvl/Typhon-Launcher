@@ -264,7 +264,11 @@ describe('the messages of the profile appearance', () => {
 
     const said = screen.getAllByRole('alert').filter((alert) => alert.textContent?.includes('characters that are not allowed'));
     expect(said).toEqual([document.getElementById(field.getAttribute('aria-describedby') ?? '')]);
-    expect(screen.getAllByText(/^The text has characters that are not allowed/)).toHaveLength(2);
+    // Shown at the field and in the bar, and the bar's Save, refused, is described by the same words.
+    const shown = screen.getAllByText(/^The text has characters that are not allowed/);
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(shown).toHaveLength(3);
+    expect(shown.filter((node) => (save.getAttribute('aria-describedby') ?? '').split(' ').includes(node.id))).toHaveLength(1);
   });
 
   it('a cover that cannot be used is a danger notice of the cover section', async () => {
