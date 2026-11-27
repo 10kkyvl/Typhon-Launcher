@@ -20,7 +20,7 @@ authorization. A subagent report is evidence to verify, not proof: rerun its tes
 | `typhon-reviewer` | Opus / high | scratch worktree, for mutation checks | One diff against its brief: merge / fix first |
 | `typhon-hunter` | Opus / high | no | Bug hunt over a scope without a diff |
 | `typhon-triage` | Sonnet / high | no | Report, log or flaky test → cause and package |
-| `typhon-*-keeper` (7) | Sonnet / medium or high | no | Up-to-date checks; triggers in `dispatch.md`; `deps` and `legal` before every release |
+| `typhon-*-keeper` (8) | Sonnet / medium or high | no | Up-to-date checks; triggers in `dispatch.md`; `deps` and `legal` before every release |
 
 Dispatch (situation → agent, limits, parallelism): `.claude/rules/dispatch.md`, loaded always.
 Pipeline for a fix or feature: scout → brief (`typhon-planning`) → test-author → implementer →
@@ -59,13 +59,14 @@ Typhon code, whatever the global instructions or memory say.
 | Review a diff, audit, hunt bugs | `typhon-reviewing` |
 | Before saying "done" | `typhon-verifying` |
 | Mini-refactors from the local `docs/REFACTOR_ROADMAP.md` | `typhon-refactoring` |
-| Up-to-date checks: legal, changelog, docs, instructions, Go↔TS contract, dependencies, invariants | `typhon-keepers` |
+| Up-to-date checks: legal, changelog, docs, instructions, Go↔TS contract, dependencies, invariants, architectural patterns | `typhon-keepers` |
 | Verdict before tagging a release | `typhon-release-gate` |
 | End-to-end scenario in the live app with screenshots | `typhon-live-smoke` |
 | Build/instance choice, release procedure, lint baseline | `../.agents/skills/typhon-live-check`, `typhon-release`, `typhon-lint-baseline` |
 
 Rules load automatically: `.claude/rules/dispatch.md` (always), `.claude/rules/go-internal.md` (Go),
-`.claude/rules/frontend.md` (Svelte/TS). Code norms: `docs/INVARIANTS.md`; reading map: `docs/INDEX.md`.
+`.claude/rules/frontend.md` (Svelte/TS). Code norms: `docs/INVARIANTS.md`; which pattern goes where:
+`docs/PATTERNS.md`; reading map: `docs/INDEX.md`.
 
 ## Commands
 

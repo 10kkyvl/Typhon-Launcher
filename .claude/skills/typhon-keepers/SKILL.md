@@ -1,11 +1,11 @@
 ---
 name: typhon-keepers
-description: Use when a change in Typhon Launcher trips a keeper row of .claude/rules/dispatch.md (contract, docs, invariants, legal, instructions), when preparing a release, or when the user asks to check that legal texts, release notes, docs, instructions, the Go↔frontend contract, dependencies or invariant hygiene are still up to date.
+description: Use when a change in Typhon Launcher trips a keeper row of .claude/rules/dispatch.md (contract, docs, invariants, architecture, legal, instructions), when preparing a release, or when the user asks to check that legal texts, release notes, docs, instructions, the Go↔frontend contract, dependencies or invariant hygiene are still up to date.
 ---
 
 # Keepers
 
-Seven read-only Sonnet agents. Each returns mismatches with file:line and ready patches; the
+Eight read-only Sonnet agents. Each returns mismatches with file:line and ready patches; the
 orchestrator applies, verifies and commits. One agent = one area.
 
 | Agent | Keeps current | Runs |
@@ -17,12 +17,14 @@ orchestrator applies, verifies and commits. One agent = one area.
 | `typhon-instructions-keeper` | CLAUDE.md, AGENTS.md, rules, skills, agents, hooks | see `dispatch.md` |
 | `typhon-contract-keeper` | events, `uierr` codes ↔ i18n, bindings ↔ TS types, enum labels | see `dispatch.md` |
 | `typhon-invariant-keeper` | code sweep against I-1…I-17 and test hygiene; lint candidates | see `dispatch.md` |
+| `typhon-architecture-keeper` | new packages, imports, services, stores, components, routes, migrations, modules against the pattern maps (`docs/PATTERNS.md`; backend, site, bot: `../.agents/architecture/`); map drift | see `dispatch.md` |
 
 Triggers: `.claude/rules/dispatch.md`. The two pre-release keepers are part of `typhon-release-gate`.
 
 ## How to run one
 
-1. Give the agent a narrow input: a `git diff` range, a file list, or "full" with a bounded area. Run
+1. Give the agent a narrow input: a `git diff` range, a file list, or "full" with a bounded area; the
+   architecture keeper also needs the repository's name. Run
    in parallel only agents of different areas.
 2. Re-check every finding by reading the code before applying it (an agent can be wrong about its own
    refutation).

@@ -1,6 +1,6 @@
 # Launcher knowledge base — reading guide
 
-Local reference for coding agents. Start with the task row below, then read the relevant sections and actual implementation; do not load all six documents for every task. For a small isolated edit, the owning file and its tests may be enough.
+Local reference for coding agents. Start with the task row below, then read the relevant sections and actual implementation; do not load every document for every task. For a small isolated edit, the owning file and its tests may be enough.
 
 ## What lives where
 
@@ -10,6 +10,7 @@ Local reference for coding agents. Start with the task row below, then read the 
 | [CODEMAP.md](CODEMAP.md) | File and symbol lookup; package-relative paths are relative to the section's package |
 | [FLOWS.md](FLOWS.md) | Ordered calls, side effects and recovery for a user operation |
 | [INVARIANTS.md](INVARIANTS.md) | Required properties, implementation pointers, exceptions and regression patterns |
+| [PATTERNS.md](PATTERNS.md) | Which structural pattern is used where, each with a command that finds candidates; sibling repositories' maps |
 | [TEST_MAP.md](TEST_MAP.md) | Test selection, fixtures, platform gates and coverage limits |
 | [DEBUGGING.md](DEBUGGING.md) | Commands, environment, logs, authoritative state/marker inventory and symptoms |
 
@@ -32,6 +33,7 @@ All document names in this table are relative to `docs/`; Go package paths witho
 | Persistence / startup crash | `FLOWS.md` §1, §14; `INVARIANTS.md` I-1–I-3; `internal/storage/doc.go`; owner's `load`/`persist`; `store_integrity_test.go` files |
 | Self-update | `FLOWS.md` §13; `internal/selfupdate/{service,client,download,apply_*,worker*}.go`; `tools/devrelease` |
 | Account / sync / social / telemetry | `ARCHITECTURE.md` §8–9; `internal/{account,accountsync,social,online,heartbeat,usagestats,diagnostics}`; consent rules in `internal/settings/settings.go` |
+| New package, service, store, component, or "which pattern goes here" | `PATTERNS.md`; the row's canonical example |
 | Frontend behaviour | `ARCHITECTURE.md` §10; the store in `frontend/src/lib/stores/`, the service in `lib/services/`, the route in `src/routes/`; i18n catalogs `lib/i18n/catalog/{ru,en}` |
 | Tests, CI, lint | `TEST_MAP.md`; `.github/workflows/ci.yml`; `.golangci.yml`; `.github/lint-baseline.txt` |
 | Debugging a report | `DEBUGGING.md` §7 first |

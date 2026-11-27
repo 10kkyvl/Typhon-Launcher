@@ -18,6 +18,7 @@ work itself. Agents are listed in `CLAUDE.md`; their briefs follow `typhon-plann
 | Change touched events, `uierr` codes, exported methods or TS types | `typhon-contract-keeper` on the diff range | Go ↔ TS drift is the most common breakage |
 | Change altered a flow, state file, startup recovery or event wiring | `typhon-docs-keeper` on the diff range | the knowledge base must follow the code |
 | Change touched `download`, `install`, `updates`, `relocate` or `storage` | `typhon-invariant-keeper` on the diff range | destructive paths and locks |
+| Change added an `internal/` package, a service constructor, an import between two domain packages (not `storage`, `uierr`, `settings`, `platform`), a store, a page controller or a base component; in a sibling repository: a route, a migration, a worker, a site page or fetch, a bot module | `typhon-architecture-keeper` on the diff range, with the repository named | patterns erode one exception at a time; maps: `docs/PATTERNS.md`, `../.agents/architecture/` |
 | Change touched what data leaves the device or which content exists | `typhon-legal-keeper` on the diff range; wording changes need the user's decision | consent versions and legal texts |
 | Preparing release notes | `typhon-changelog-keeper` with the previous tag | signrelease parser format |
 | Before a tag or a dev → main release merge | `typhon-release-gate` skill: `typhon-deps-keeper` and `typhon-legal-keeper`, then its checklist | the two mandatory pre-release keepers |
