@@ -6,7 +6,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
+
+	"typhon/internal/settings"
 )
 
 func TestQANewServiceRefusesARemoteOrHalfSource(t *testing.T) {
@@ -26,6 +29,22 @@ func TestQANewServiceRefusesARemoteOrHalfSource(t *testing.T) {
 				t.Fatalf("NewService() = %v, want errQAUpdateSource", err)
 			}
 		})
+	}
+}
+
+// The test binary runs without portable.txt beside it, so with the source
+// set the service must refuse to start on the installed launcher's data.
+func TestQANewServiceRefusesTheSourceOutsidePortableMode(t *testing.T) {
+	if settings.IsPortable() {
+		t.Skip("this test process runs in portable mode")
+	}
+	_, pub := testKeyPair(t)
+	testConfigDir(t)
+	t.Setenv(qaManifestURLEnv, "http://127.0.0.1:8099")
+	t.Setenv(qaReleasePubKeyEnv, base64.StdEncoding.EncodeToString(pub))
+	_, err := NewService()
+	if !errors.Is(err, errQAUpdateSource) || !strings.Contains(err.Error(), settings.PortableEnv) {
+		t.Fatalf("NewService() = %v, want errQAUpdateSource naming %s", err, settings.PortableEnv)
 	}
 }
 

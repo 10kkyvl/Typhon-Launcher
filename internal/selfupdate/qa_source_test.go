@@ -138,3 +138,41 @@ func TestQASourceNeedsBothVariables(t *testing.T) {
 		})
 	}
 }
+
+// The test source publishes no installer, so a qa launcher it feeds updates
+// the portable way; and its update record, cache and worker live in its
+// config dir, which outside portable mode is the one the installed launcher
+// reads: there the source is refused with words that say how to isolate it.
+func TestQAUpdateModeFollowsTheTestSource(t *testing.T) {
+	_, pub := testKeyPair(t)
+	active := map[string]string{qaManifestURLEnv: "http://127.0.0.1:8099", qaReleasePubKeyEnv: base64.StdEncoding.EncodeToString(pub)}
+	for _, tc := range []struct {
+		name     string
+		env      map[string]string
+		portable bool
+		want     bool
+		wantErr  string
+	}{
+		{name: "no source, portable", portable: true, want: true},
+		{name: "no source, installed", portable: false, want: false},
+		{name: "blank source, installed", env: map[string]string{qaManifestURLEnv: " ", qaReleasePubKeyEnv: " "}, portable: false, want: false},
+		{name: "source, portable", env: active, portable: true, want: true},
+		{name: "source, installed", env: active, portable: false, wantErr: "TYPHON_PORTABLE_DIR"},
+		{name: "url only, portable", env: map[string]string{qaManifestURLEnv: "http://127.0.0.1:8099"}, portable: true, wantErr: qaReleasePubKeyEnv + " is missing"},
+		{name: "url only, installed", env: map[string]string{qaManifestURLEnv: "http://127.0.0.1:8099"}, portable: false, wantErr: qaReleasePubKeyEnv + " is missing"},
+		{name: "remote url, portable", env: map[string]string{qaManifestURLEnv: "https://typhon.example", qaReleasePubKeyEnv: active[qaReleasePubKeyEnv]}, portable: true, wantErr: qaManifestURLEnv},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := qaUpdatesPortable(tc.portable, qaLookup(tc.env))
+			if tc.wantErr != "" {
+				if !errors.Is(err, errQAUpdateSource) || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("qaUpdatesPortable(%v) = %v, %v; want errQAUpdateSource naming %q", tc.portable, got, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("qaUpdatesPortable(%v) = %v, %v; want %v", tc.portable, got, err, tc.want)
+			}
+		})
+	}
+}

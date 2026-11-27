@@ -27,8 +27,8 @@ func TestDevmockUpdateModeFollowsTheMockSource(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(manifestURLEnv, tc.url)
-			if got := updatesPortable(tc.portable); got != tc.want {
-				t.Fatalf("updatesPortable(%v) with %s=%q = %v, want %v", tc.portable, manifestURLEnv, tc.url, got, tc.want)
+			if got, err := updatesPortable(tc.portable); err != nil || got != tc.want {
+				t.Fatalf("updatesPortable(%v) with %s=%q = %v, %v; want %v", tc.portable, manifestURLEnv, tc.url, got, err, tc.want)
 			}
 		})
 	}
@@ -55,9 +55,13 @@ func TestPortableDevmockLauncherTakesTheMockReleaseAllTheWay(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	portable, err := updatesPortable(true)
+	if err != nil {
+		t.Fatalf("updatesPortable: %v", err)
+	}
 	dir := t.TempDir()
 	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: client,
-		currentVersion: "1.0.0", portable: updatesPortable(true)}
+		currentVersion: "1.0.0", portable: portable}
 	t.Cleanup(func() {
 		if err := s.ServiceShutdown(); err != nil {
 			t.Errorf("ServiceShutdown: %v", err)

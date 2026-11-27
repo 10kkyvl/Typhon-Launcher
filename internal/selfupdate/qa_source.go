@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"typhon/internal/settings"
 )
 
 // The qa Windows build (url_qa.go, key_qa.go) can take its launcher updates
@@ -94,4 +96,24 @@ func qaPublicKey(encoded string) (ed25519.PublicKey, error) {
 		return nil, fmt.Errorf("%w: %w: %s holds %d bytes, want %d", errQAUpdateSource, ErrBadPublicKey, qaReleasePubKeyEnv, len(raw), ed25519.PublicKeySize)
 	}
 	return ed25519.PublicKey(raw), nil
+}
+
+// qaUpdatesPortable is the update mode of a qa launcher (mode_qa.go). The
+// test source publishes no installer, only the portable zip, so a launcher it
+// feeds must update the portable way. It must also run portable: the update
+// record, the cache and the worker live in the config dir, and outside
+// portable mode that is the one the installed launcher shares, which would
+// then offer a test build it cannot apply.
+func qaUpdatesPortable(portable bool, lookup func(string) (string, bool)) (bool, error) {
+	_, active, err := parseQASource(lookup)
+	if err != nil {
+		return false, err
+	}
+	if !active {
+		return portable, nil
+	}
+	if !portable {
+		return false, fmt.Errorf("%w: %s is set but this launcher is not portable, so the test updates would land in the installed launcher's data; set %s to a fresh absolute folder (or put %s beside typhon.exe)", errQAUpdateSource, qaManifestURLEnv, settings.PortableEnv, settings.PortableMarkerName)
+	}
+	return true, nil
 }

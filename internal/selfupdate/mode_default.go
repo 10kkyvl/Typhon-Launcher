@@ -1,10 +1,10 @@
-//go:build !devmock
+//go:build !devmock && !(qa && windows)
 
 package selfupdate
 
 // updatesPortable decides whether this launcher updates as a portable copy
 // (a zip with typhon.exe swapped beside it) or as an installed one, given
 // whether it runs in portable mode.
-func updatesPortable(portable bool) bool {
-	return portable
+func updatesPortable(portable bool) (bool, error) {
+	return portable, nil
 }

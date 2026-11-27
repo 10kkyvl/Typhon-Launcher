@@ -136,6 +136,10 @@ func NewService() (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: resolve manifest url: %w", err)
 	}
+	updatePortable, err := updatesPortable(portable)
+	if err != nil {
+		return nil, fmt.Errorf("selfupdate: resolve update mode: %w", err)
+	}
 	client, err := NewClient(base)
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: create client: %w", err)
@@ -153,7 +157,7 @@ func NewService() (*Service, error) {
 		client:         client,
 		store:          store,
 		notes:          notes,
-		portable:       updatesPortable(portable),
+		portable:       updatePortable,
 		currentVersion: app.Version,
 	}, nil
 }
