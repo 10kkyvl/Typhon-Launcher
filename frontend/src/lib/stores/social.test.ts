@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import { msg } from '../i18n';
 
@@ -529,5 +529,153 @@ describe('the read of a start (the stored session checked behind the splash)', (
     await started;
     expect(asked(store.service)).toEqual([1, 1, 2]);
     expect(held(store).friends).toBe(5);
+  });
+});
+
+describe('the account boundary: what each change of the sign-in state does to the friends', () => {
+  // Offline starts the user store's reconnect loop: a window to listen on, and its timer held.
+  beforeEach(() => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function signedIn() {
+    const store = await load();
+    const service = await import('../services/social');
+    const { Events } = await import('@wailsio/runtime');
+    vi.mocked(service.friends).mockReset();
+    vi.mocked(service.refresh).mockReset();
+    const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as (event: { data: unknown }) => void;
+    return { ...store, service, handler };
+  }
+
+  type Store = Pick<Awaited<ReturnType<typeof signedIn>>, 'friendsPage' | 'incomingCount' | 'friendsLoaded'>;
+  const held = (store: Store) => ({
+    friends: get(store.friendsPage).friends.length,
+    incoming: get(store.incomingCount),
+    loaded: get(store.friendsLoaded),
+  });
+  const nothing = { friends: 0, incoming: 0, loaded: false };
+
+  it('S6 a page of account A that Go sends after the sign-out is not shown to B', async () => {
+    const store = await signedIn();
+    store.handler({ data: page(2, 0) });
+    store.authState.set('unauthenticated');
+    store.handler({ data: page(5, 2) });
+
+    store.authState.set('authenticated');
+
+    expect(held(store)).toEqual(nothing);
+  });
+
+  it('S7 an answer of A that lands after B’s first page is dropped', async () => {
+    const store = await signedIn();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+    const reading = store.reloadFriends();
+    await flush();
+    store.authState.set('unauthenticated');
+    store.authState.set('authenticated');
+    store.handler({ data: page(1, 0) });
+    answer.resolve(page(4, 0));
+    await reading;
+
+    expect(get(store.friendsPage).friends.length).toBe(1);
+  });
+
+  it.each(['unauthenticated', 'guest', 'unavailable', 'offline', 'bootstrapping'] as const)(
+    'a page Go sends while %s is dropped',
+    async (state) => {
+      const store = await signedIn();
+      store.authState.set(state);
+
+      store.handler({ data: page(3, 1) });
+
+      expect(held(store)).toEqual(nothing);
+    },
+  );
+
+  it('a request count Go sends after the sign-out is not B’s badge', async () => {
+    const store = await signedIn();
+    const { Events } = await import('@wailsio/runtime');
+    const requests = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:requests')?.[1] as (event: { data: unknown }) => void;
+    store.authState.set('unauthenticated');
+    requests({ data: { incoming: 3 } });
+
+    store.authState.set('authenticated');
+    expect(get(store.incomingCount)).toBe(0);
+
+    requests({ data: { incoming: 2 } });
+    expect(get(store.incomingCount)).toBe(2);
+  });
+
+  it.each([
+    ['authenticated', 'unauthenticated'],
+    ['authenticated', 'guest'],
+    ['unauthenticated', 'authenticated'],
+    ['unauthenticated', 'guest'],
+    ['guest', 'unauthenticated'],
+    ['offline', 'authenticated'],
+    ['offline', 'unauthenticated'],
+    ['unavailable', 'bootstrapping'],
+    ['unauthenticated', 'bootstrapping'],
+  ] as const)('%s → %s clears the page and drops a read of the session that ended', async (from, to) => {
+    const store = await signedIn();
+    if (from !== 'authenticated') store.authState.set(from);
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+    const reading = store.reloadFriends();
+    await flush();
+    store.friendsPage.set(page(2, 1));
+    store.friendsLoaded.set(true);
+
+    store.authState.set(to);
+    expect(held(store)).toEqual(nothing);
+
+    answer.resolve(page(4, 0));
+    await reading;
+    expect(held(store)).toEqual(nothing);
+  });
+
+  async function started() {
+    vi.resetModules();
+    const service = await import('../services/social');
+    vi.mocked(service.friends).mockReset();
+    const social = await import('./social');
+    const { authState } = await import('./user');
+    return { ...social, service, authState };
+  }
+
+  it.each(['unauthenticated', 'guest', 'unavailable', 'offline'] as const)(
+    'a start that ends %s clears the page the start’s read brought',
+    async (to) => {
+      const store = await started();
+      vi.mocked(store.service.friends).mockResolvedValueOnce(page(2, 1) as never);
+      await store.initSocial();
+      expect(held(store)).toEqual({ friends: 2, incoming: 1, loaded: true });
+
+      store.authState.set(to);
+
+      expect(held(store)).toEqual(nothing);
+    },
+  );
+
+  it('a start whose read still runs when it ends signed out drops its answer, for the next sign-in too', async () => {
+    const store = await started();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+    const starting = store.initSocial();
+
+    store.authState.set('unauthenticated');
+    store.authState.set('authenticated');
+    answer.resolve(page(2, 1));
+    await starting;
+
+    expect(held(store)).toEqual(nothing);
   });
 });

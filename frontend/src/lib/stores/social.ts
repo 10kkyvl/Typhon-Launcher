@@ -203,6 +203,21 @@ async function readAgain(): Promise<boolean> {
   return get(friendsLoaded);
 }
 
+/**
+ * Ends the session the reads and the page belong to: an answer asked for in it is dropped, and the
+ * page goes before the next session's first read, so one account's friends never reach the next.
+ */
+function forget() {
+  session += 1;
+  // A read of the session that ended does not hold the next one's.
+  inFlight = null;
+  followUp = null;
+  opening = null;
+  setPage(emptyFriendsPage());
+  friendsLoaded.set(false);
+  friendsLoadError.set(null);
+}
+
 let started = false;
 
 export async function initSocial(): Promise<void> {
@@ -211,6 +226,8 @@ export async function initSocial(): Promise<void> {
   if (!inWails) return;
 
   Events.On('social:friends', (event) => {
+    // Go's poll can answer after a sign-out, and its page is the account that left.
+    if (get(authState) !== 'authenticated') return;
     heard += 1;
     received(toFriendsPage(event.data));
   });
@@ -232,18 +249,8 @@ export async function initSocial(): Promise<void> {
       kick().catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
       return;
     }
-    session += 1;
-    // A read of the session that ended does not hold the next one's.
-    inFlight = null;
-    followUp = null;
-    opening = null;
-    friendsLoaded.set(false);
-    friendsLoadError.set(null);
-    if (state !== 'authenticated') {
-      setPage(emptyFriendsPage());
-      return;
-    }
-    kick().catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
+    forget();
+    if (state === 'authenticated') kick().catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
   });
 
   let consentWithheld: boolean | undefined;
