@@ -116,7 +116,7 @@ async function requestOnItsWay() {
 function hearing() {
   const heard: unknown[] = [];
   const offs = [
-    onReplyBack({ ticket: 7, empty: () => true, sending: () => false, take: (text) => heard.push(text) }),
+    onReplyBack({ ticket: 7, empty: () => true, sending: () => false, shown: () => true, take: (text) => heard.push(text) }),
     onRequestBack({
       by: {},
       free: () => {
@@ -124,6 +124,7 @@ function hearing() {
         return false;
       },
       sending: () => false,
+      shown: () => true,
       take: (back) => heard.push(back),
     }),
   ];
@@ -152,7 +153,7 @@ describe('a reply of A that fails once B is signed in', () => {
     signIn(a);
     first.reject(new AccountError('network_error'));
     await settled();
-    expect(said()).toEqual([['danger', msg('tickets.replyNotSentKept', { subject: 'Game will not start' })]]);
+    expect(said()).toEqual([['danger', msg('tickets.replyNotSentSaved', { subject: 'Game will not start' })]]);
     await opened();
     expect(replyBox().value).toBe('From A.');
   });
@@ -284,7 +285,7 @@ describe('a new request of A that fails once B is signed in', () => {
     signIn(a);
     first.reject(new AccountError('network_error'));
     await settled();
-    expect(said()).toEqual([['danger', msg('tickets.requestNotSentKept', { subject: 'Private matter of A' })]]);
+    expect(said()).toEqual([['danger', msg('tickets.requestNotSentSaved', { subject: 'Private matter of A' })]]);
     await newRequest();
     expect([subjectField().value, bodyField().value]).toEqual(['Private matter of A', 'Text of A.']);
   });

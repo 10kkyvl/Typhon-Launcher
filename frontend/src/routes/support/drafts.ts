@@ -275,6 +275,8 @@ export interface RequestForm {
   free(): boolean;
   /** Its own request is on its way: its text has left the draft. */
   sending(): boolean;
+  /** Its fields and its notice are drawn (not waiting for, or failing, the read of the limits). */
+  shown(): boolean;
   /** Puts the text in its fields; the form writes the draft from then on. */
   take(draft: RequestDraft): void;
 }
@@ -287,18 +289,19 @@ export function onRequestBack(form: RequestForm): () => void {
 }
 
 /**
- * Where a text that came back went: into an open form's fields (`form`); the draft, no form being open
- * (`kept`); offered by the form's notice, as the spare or as a draft beside the form's own send
- * (`offered`); nowhere, every place being taken (`none`).
+ * Where a text that came back went, as its toast may say it: into the fields of a form on screen
+ * (`form`); kept, with no form on screen showing it or naming it (`kept`); kept and named by the notice
+ * of a form on screen (`offered`); nowhere, both places being taken (`none`).
  */
 export type Placed = 'form' | 'kept' | 'offered' | 'none';
 
 /**
  * A send of `draft` from `by`, started under the account `from`, failed after its form was left: the
  * text goes to the first free place. An open form that holds nothing takes it into its fields; else the
- * draft, when no form is open or the open one sends its own; else the spare. Answers where it went, or
- * null when there is no one to tell: with no one signed in it is kept for `from` all the same (the
- * draft, else the spare), and under another account it is not kept at all.
+ * draft, when no form is open or the open one sends its own; else the spare; else the draft, when it is
+ * empty, whoever asks. Answers where it went, or null when there is no one to tell: with no one signed
+ * in it is kept for `from` all the same (the draft, else the spare), and under another account it is
+ * not kept at all.
  */
 export function returnRequest(draft: RequestDraft, by: Writer, from: string | null): Placed | null {
   if (!from) return null;
@@ -323,20 +326,24 @@ export function returnRequest(draft: RequestDraft, by: Writer, from: string | nu
     into.request = { ...slot(draft), by: free.by };
     changed();
     free.take(copy(draft));
-    return 'form';
+    return free.shown() ? 'form' : 'kept';
   }
-  if (!into.request && open.every((form) => form.sending())) {
+  // Beside a form that may write the draft at its next key the spare is the safer place; an empty
+  // draft is still a free place when the spare is taken.
+  let placed: Slot;
+  if (!into.request && (open.every((form) => form.sending()) || into.spare)) {
     into.request = { ...slot(draft), by };
-    changed();
-    return open.length > 0 ? 'offered' : 'kept';
-  }
-  if (!into.spare) {
+    placed = into.request;
+  } else if (!into.spare) {
     into.spare = slot(draft);
-    changed();
-    return 'offered';
+    placed = into.spare;
+  } else {
+    settle();
+    return 'none';
   }
-  settle();
-  return 'none';
+  changed();
+  const named = open.some((form) => form.shown() && offeredRequest(form.by)?.id === placed.id);
+  return named ? 'offered' : 'kept';
 }
 
 /**
@@ -388,6 +395,8 @@ export interface ReplyBox {
   empty(): boolean;
   /** A reply of its own is on its way: the box shows it, and the kept slot is free. */
   sending(): boolean;
+  /** The box is drawn (its request and the limits are read). */
+  shown(): boolean;
   /** Puts the text in the box. */
   take(text: string): void;
 }
@@ -400,9 +409,9 @@ export function onReplyBack(box: ReplyBox): () => void {
 }
 
 /**
- * Where a reply that came back went: into the open box (`box`); kept for its request, no box being open
- * (`kept`); kept for the box once the reply on its way from it is done (`after`); nowhere, the request
- * keeping another reply (`none`).
+ * Where a reply that came back went, as its toast may say it: into the box on screen (`box`); kept for
+ * its request, no box on screen showing it (`kept`); kept for the box once the reply on its way from it
+ * is done (`after`); nowhere, the request keeping another reply (`none`).
  */
 export type ReplyPlaced = 'box' | 'kept' | 'after' | 'none';
 
@@ -431,7 +440,7 @@ export function returnReply(ticket: number, text: string, from: string | null): 
   if (!box) return 'kept';
   if (box.sending()) return 'after';
   box.take(text);
-  return 'box';
+  return box.shown() ? 'box' : 'kept';
 }
 
 /**

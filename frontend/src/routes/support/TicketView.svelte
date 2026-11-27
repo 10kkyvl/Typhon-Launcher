@@ -117,6 +117,7 @@
       },
       empty: () => !reply.trim(),
       sending: () => sending,
+      shown: () => !loading && thread !== null && limits !== null && !limitsFailure && !limitsRetrying,
       take: (text) => {
         reply = text;
       },
@@ -230,9 +231,12 @@
       if (!onScreen || changed) {
         // Under another account nothing is kept; with no one signed in it is kept for `who`, unsaid.
         const placed = started ? returnReply(number, text, who) : null;
-        if (placed === 'box' || placed === 'kept') accountToast(who, msg('tickets.replyNotSentKept', { subject: about }), 'danger');
-        else if (placed === 'after') accountToast(who, msg('tickets.replyNotSentAfter', { subject: about }), 'danger');
-        else if (placed) accountToast(who, msg('tickets.replyNotSentNotKept', { subject: about }), 'danger', copyAction(text.trim(), who));
+        // Only a reply back in the box on screen needs nothing more; any other is offered for copying.
+        const copy = copyAction(text.trim(), who);
+        if (placed === 'box') accountToast(who, msg('tickets.replyNotSentKept', { subject: about }), 'danger');
+        else if (placed === 'kept') accountToast(who, msg('tickets.replyNotSentSaved', { subject: about }), 'danger', copy);
+        else if (placed === 'after') accountToast(who, msg('tickets.replyNotSentAfter', { subject: about }), 'danger', copy);
+        else if (placed) accountToast(who, msg('tickets.replyNotSentNotKept', { subject: about }), 'danger', copy);
         return;
       }
       // The failed reply is what the box shows: one that came back meanwhile goes before it.

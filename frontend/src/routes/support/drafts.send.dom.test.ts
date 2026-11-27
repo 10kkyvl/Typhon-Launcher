@@ -169,7 +169,7 @@ describe('a reply on its way', () => {
     expect({ shown, replies: replies() }).toEqual({ shown: '', replies: ['First.'] });
   });
 
-  it('that fails after its request was left is in the box again, and a toast names the request', async () => {
+  it('that fails after its request was left is kept for it: a toast names the request, says so and offers Copy, and the box has it', async () => {
     const first = held<ReturnType<typeof message>>();
     vi.mocked(replyTicket).mockReturnValue(first.promise);
     const { user } = await opened();
@@ -179,7 +179,8 @@ describe('a reply on its way', () => {
     first.reject(new AccountError('network_error'));
     await settled();
     await settled();
-    expect(said()).toEqual([['danger', msg('tickets.replyNotSentKept', { subject: 'Game will not start' })]]);
+    expect(said()).toEqual([['danger', msg('tickets.replyNotSentSaved', { subject: 'Game will not start' })]]);
+    expect(actions()).toEqual([msg('tickets.copyText')]);
     await opened();
     expect(replyBox().value).toBe('First.');
   });
@@ -347,7 +348,7 @@ describe('a reply on its way', () => {
         ['danger', msg('tickets.replyNotSentAfter', { subject: 'Game will not start' })],
         ['danger', msg('tickets.replyNotSentNotKept', { subject: 'Game will not start' })],
       ],
-      actions: [null, msg('tickets.copyText')],
+      actions: [msg('tickets.copyText'), msg('tickets.copyText')],
       written: ['Second.'],
       reopened: 'First.',
     });
@@ -442,14 +443,14 @@ describe('a new request on its way', () => {
     expect(subjectField().value).toBe('Another matter');
   });
 
-  it('that fails after the form was left is in the form again, whole, and a toast names it', async () => {
+  it('that fails after the form was left is kept: a toast names it, says so and offers Copy, and the form opens with it whole', async () => {
     const { first } = await requestOnItsWay();
     cleanup();
     first.reject(new AccountError('network_error'));
     await settled();
     await settled();
-    expect(said()).toEqual([['danger', msg('tickets.requestNotSentKept', { subject: 'Cannot sign in' })]]);
-    expect(actions()).toEqual([null]);
+    expect(said()).toEqual([['danger', msg('tickets.requestNotSentSaved', { subject: 'Cannot sign in' })]]);
+    expect(actions()).toEqual([msg('tickets.copyText')]);
     await newRequest();
     expect(shownRequest()).toEqual(SENT);
   });

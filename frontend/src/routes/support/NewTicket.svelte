@@ -152,6 +152,7 @@
       by: me,
       free: () => holdsNothing && !sending,
       sending: () => sending,
+      shown: () => limits !== null && !limitsFailure && !limitsRetrying,
       take: (back) => {
         fill(back);
         owns = true;
@@ -189,13 +190,15 @@
     accountToast(who, words, 'danger', copyAction(`${subject}\n\n${text.body.trim()}`.trim(), who));
   }
 
-  // A failed send's toast says only where its text is: "back in the form" when the form holds it (or
-  // will open with it); one only offered, or kept nowhere, says so and offers to copy it.
+  // A failed send's toast says only where its text is: "back in the form" while a form on screen shows
+  // it, with nothing more to do; "you can restore it" while the notice on screen names it; else kept, or
+  // kept nowhere. Each of those offers to copy it: the text is not on screen.
   function sayPlaced(placed: Placed, sent: RequestDraft, who: string | null) {
     const subject = sent.subject.trim();
     const copy = copyAction(`${subject}\n\n${sent.body.trim()}`, who);
-    if (placed === 'form' || placed === 'kept') accountToast(who, msg('tickets.requestNotSentKept', { subject }), 'danger');
+    if (placed === 'form') accountToast(who, msg('tickets.requestNotSentKept', { subject }), 'danger');
     else if (placed === 'offered') accountToast(who, msg('tickets.requestNotSentOffered', { subject }), 'danger', copy);
+    else if (placed === 'kept') accountToast(who, msg('tickets.requestNotSentSaved', { subject }), 'danger', copy);
     else accountToast(who, msg('tickets.requestNotSentNotKept', { subject }), 'danger', copy);
   }
 

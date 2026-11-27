@@ -317,7 +317,7 @@ describe('the kept drafts themselves', () => {
     const second = { ...DRAFT, subject: 'Second' };
     const third = { ...DRAFT, subject: 'Third' };
     expect(returnRequest(DRAFT, form, me)).toBe('kept');
-    expect(returnRequest(second, form, me)).toBe('offered');
+    expect(returnRequest(second, form, me)).toBe('kept');
     expect(returnRequest(third, form, me)).toBe('none');
     expect([keptRequest(), spareRequest()]).toEqual([DRAFT, second]);
   });
@@ -325,7 +325,7 @@ describe('the kept drafts themselves', () => {
   it('give the text of a failed send to an open form that holds nothing, else beside its own send, else to the spare', () => {
     const taken: RequestDraft[] = [];
     const state = { free: false, sending: false };
-    const open: RequestForm = { by: {}, free: () => state.free, sending: () => state.sending, take: (back) => taken.push(back) };
+    const open: RequestForm = { by: {}, free: () => state.free, sending: () => state.sending, shown: () => true, take: (back) => taken.push(back) };
     const off = onRequestBack(open);
     try {
       state.free = true;
@@ -360,9 +360,10 @@ describe('the kept drafts themselves', () => {
           return true;
         },
         sending: () => false,
+        shown: () => true,
         take: (back) => heard.push(back),
       }),
-      onReplyBack({ ticket: 7, empty: () => true, sending: () => false, take: (text) => heard.push(text) }),
+      onReplyBack({ ticket: 7, empty: () => true, sending: () => false, shown: () => true, take: (text) => heard.push(text) }),
     ];
     try {
       as(null);
