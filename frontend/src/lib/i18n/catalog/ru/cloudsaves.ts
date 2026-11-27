@@ -119,6 +119,12 @@ export const cloudsaves = {
   'cloudsaves.disableBusy': 'Облачные сохранения выключаются, дождитесь ответа',
   'cloudsaves.disableFailed': 'Облачные сохранения не выключены: настройку не удалось сохранить. Копии в облаке не тронуты.',
   'cloudsaves.forgetFailed': 'Не удалось удалить сохранения из облака',
+  'cloudsaves.forgetDone': 'Копии сохранений удалены из облака',
+  // Why a cloud saves control is held while other cloud work runs: the settings switch, and "Turn on"
+  // of the consent dialog.
+  'cloudsaves.heldSaving': 'Настройка сохраняется, дождитесь ответа',
+  'cloudsaves.heldDeleting': 'Копии удаляются из облака, дождитесь окончания',
+  'cloudsaves.consentHeld': 'Идёт другое действие с облачными сохранениями, дождитесь его окончания',
   // The conflict banner of the game page.
   'cloudsaves.bannerWhen': 'Сохранения изменились здесь ({local}) и в облаке ({remote})',
   'cloudsaves.bannerWhenDevice': 'Сохранения изменились здесь ({local}) и в облаке ({remote}, {device})',

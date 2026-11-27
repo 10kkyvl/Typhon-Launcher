@@ -122,6 +122,12 @@ export const cloudsaves: Record<CloudsavesKey, Message> = {
   'cloudsaves.disableBusy': 'Turning cloud saves off, wait for the answer',
   'cloudsaves.disableFailed': 'Cloud saves were not turned off: the setting could not be saved. The copies in the cloud are untouched.',
   'cloudsaves.forgetFailed': 'Could not delete the saves from the cloud',
+  'cloudsaves.forgetDone': 'The copies of your saves were deleted from the cloud',
+  // Why a cloud saves control is held while other cloud work runs: the settings switch, and "Turn on"
+  // of the consent dialog.
+  'cloudsaves.heldSaving': 'The setting is being saved, wait for the answer',
+  'cloudsaves.heldDeleting': 'The copies are being deleted from the cloud, wait for it to finish',
+  'cloudsaves.consentHeld': 'Another cloud saves action is running, wait for it to finish',
   // The conflict banner of the game page.
   'cloudsaves.bannerWhen': 'The saves changed here ({local}) and in the cloud ({remote})',
   'cloudsaves.bannerWhenDevice': 'The saves changed here ({local}) and in the cloud ({remote}, {device})',
