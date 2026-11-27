@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { allTags, setTags, type LibraryGame } from '../../lib/services/library';
+import { allTags, setStatus, setTags, type LibraryGame } from '../../lib/services/library';
 import { applyMetadataMatch, findMetadataCandidates, type MetadataCandidate, type MetadataView } from '../../lib/services/metadata';
 import { toasts } from '../../lib/stores/toasts';
 import { resetBindings } from '../../lib/testing/fakeBinding';
@@ -26,6 +27,9 @@ vi.mock('../../lib/services/metadata', async (importOriginal) => ({
 }));
 
 const hades = { id: 'g1', title: 'Hades', status: '', tags: ['coop'] } as unknown as LibraryGame;
+const hadesMatch: MetadataCandidate = { providerId: 'igdb:10', title: 'Hades', releaseYear: 2020, thumb: '', confidence: 0.9 };
+const celesteMatch: MetadataCandidate = { providerId: 'igdb:20', title: 'Celeste', releaseYear: 2018, thumb: '', confidence: 0.9 };
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 let app: HTMLDivElement;
 
@@ -130,8 +134,6 @@ describe('GameDialogs: which dialog opens for which request', () => {
 
 describe('GameDialogs: the page turned to another game while a match was applied', () => {
   it('keeps the page\'s metadata and the open dialog of the game now shown', async () => {
-    const hadesMatch: MetadataCandidate = { providerId: 'igdb:10', title: 'Hades', releaseYear: 2020, thumb: '', confidence: 0.9 };
-    const celesteMatch: MetadataCandidate = { providerId: 'igdb:20', title: 'Celeste', releaseYear: 2018, thumb: '', confidence: 0.9 };
     const applied = held<MetadataView>();
     vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'igdb:1' ? [hadesMatch] : [celesteMatch]));
     vi.mocked(applyMetadataMatch).mockReturnValueOnce(applied.promise);
@@ -154,6 +156,65 @@ describe('GameDialogs: the page turned to another game while a match was applied
     expect(data.metaView).toBeNull();
     expect(dialog.isConnected).toBe(true);
     expect(openDialogs()).toEqual([msg('modals.metadataMatchFindTitle')]);
+  });
+});
+
+describe('GameDialogs: the dialogs of a page that lost its game come back for the next one', () => {
+  const celeste = { id: 'g2', title: 'Celeste', status: 'backlog', tags: [] } as unknown as LibraryGame;
+
+  it('a status answer for the game before leaves the next library game\'s dialog open and as it was', async () => {
+    const saved = held<LibraryGame>();
+    vi.mocked(setStatus).mockReturnValueOnce(saved.promise);
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open status' }));
+    const first = await screen.findByRole('dialog', { name: msg('modals.gameStatusTitle') });
+    await keys.click(within(first).getByRole('button', { name: msg('games.statusPlaying') }));
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith('g1', 'playing');
+
+    await rerender({ game: undefined, canonicalId: 'igdb:9', title: 'Catalog only' });
+    expect(openDialogs()).toEqual([]);
+    await rerender({ game: celeste, canonicalId: 'igdb:2', title: 'Celeste' });
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.gameStatusTitle') });
+    saved.resolve({ ...hades, status: 'playing' } as LibraryGame);
+    await settle();
+    await settle();
+
+    expect(dialog.isConnected).toBe(true);
+    expect(openDialogs()).toEqual([msg('modals.gameStatusTitle')]);
+    const buttons = within(dialog).getAllByRole('button');
+    expect(buttons.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent?.trim())).toEqual([msg('games.statusBacklog')]);
+    expect(buttons.filter((button) => button.getAttribute('aria-disabled') === 'true' || button.getAttribute('aria-busy') === 'true')).toEqual([]);
+  });
+
+  it('a match answer for the game before, from the dialogs the page took down, leaves the next game\'s dialog and metadata alone', async () => {
+    const applied = held<MetadataView>();
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'igdb:1' ? [hadesMatch] : [celesteMatch]));
+    vi.mocked(applyMetadataMatch).mockReturnValueOnce(applied.promise);
+    const data = { metaView: null } as unknown as GamePageData;
+    const { rerender } = render(GameDialogsHarness, { target: app, props: { game: hades, data } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Open match' }));
+    const first = await screen.findByRole('dialog', { name: msg('modals.metadataMatchFindTitle') });
+    const row = await within(first).findByRole('radio', { name: /^Hades \(2020\)/ });
+    row.focus();
+    await keys.keyboard('{Enter}');
+    expect(applyMetadataMatch).toHaveBeenCalledExactlyOnceWith('igdb:1', 'igdb:10');
+
+    await rerender({ game: undefined, data, canonicalId: 'igdb:9', title: 'Missing', shown: false });
+    expect(openDialogs()).toEqual([]);
+    await rerender({ game: celeste, data, canonicalId: 'igdb:2', title: 'Celeste', shown: true });
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.metadataMatchFindTitle') });
+    const celesteRow = await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+    applied.resolve({ game: { id: 'igdb:1', title: 'Hades' } } as MetadataView);
+    await settle();
+    await settle();
+
+    expect(dialog.isConnected).toBe(true);
+    expect(openDialogs()).toEqual([msg('modals.metadataMatchFindTitle')]);
+    expect(data.metaView).toBeNull();
+    expect(celesteRow.closest('[role="radiogroup"]')?.getAttribute('aria-disabled')).not.toBe('true');
+    expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([[msg('modals.metadataMatchApplied', { title: 'Hades' }), 'success']]);
   });
 });
 

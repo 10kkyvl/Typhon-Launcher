@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
@@ -59,8 +59,13 @@
   // opening, and each game, starts from that game's own status, and an answer for an earlier one is
   // dropped.
   // Keyed on the id, not the object: the library sends a new copy of the same game after each write.
+  // A destroyed dialog hears nothing either: its bound `open` may already be the next game's dialog.
   const gameId = $derived(game.id);
   let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
   $effect(() => {
     const isOpen = open;
     void gameId;
@@ -81,6 +86,7 @@
   async function apply(status: GameStatus, from: GameStatus | 'save' = status) {
     if (saving) return;
     const at = opening;
+    const heard = () => alive && at === opening;
     const id = game.id;
     const changes = status !== current;
     const date = isFinished(status) ? dateFromInput(day) : null;
@@ -95,22 +101,22 @@
     try {
       if (changes) {
         await setStatus(id, status);
-        if (at === opening) saved = status;
+        if (heard()) saved = status;
       }
       statusDone = true;
       if (date) await setCompletedAt(id, date);
-      if (at === opening) open = false;
+      if (heard()) open = false;
     } catch (err) {
-      if (at !== opening) return;
+      if (!heard()) return;
       if (statusDone) dateFailure = dateFailureText(err);
       else failure = libraryErrorText(err, msg('modals.gameStatusUpdateFailed'));
     } finally {
-      if (at === opening) {
+      if (heard()) {
         saving = false;
         sent = null;
       }
     }
-    if (at !== opening) return;
+    if (!heard()) return;
     if (dateFailure) await hand(() => document.getElementById(dateId));
     else if (failure) await hand(() => document.getElementById(failureId));
   }

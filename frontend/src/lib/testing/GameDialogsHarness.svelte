@@ -11,7 +11,16 @@
     canonicalId = 'igdb:1',
     title = 'Hades',
     data = { metaView: null } as unknown as GamePageData,
-  }: { game: LibraryGame | undefined; matchMode?: 'find' | 'change'; canonicalId?: string; title?: string; data?: GamePageData } = $props();
+    shown = true,
+  }: {
+    game: LibraryGame | undefined;
+    matchMode?: 'find' | 'change';
+    canonicalId?: string;
+    title?: string;
+    data?: GamePageData;
+    /** False: the page shows its "missing" or "failed" branch, which has no dialogs (GameDetails). */
+    shown?: boolean;
+  } = $props();
 
   let statusOpen = $state(false);
   let tagsOpen = $state(false);
@@ -32,28 +41,30 @@
   <button type="button" onclick={() => (pickerOpen = true)}>Open picker</button>
 </main>
 
-<GameDialogs
-  {data}
-  localGame={game}
-  installed={false}
-  emulated={false}
-  {title}
-  {canonicalId}
-  shots={[]}
-  downloadPool={[]}
-  downloadRelease={() => {}}
-  {matchMode}
-  downloadSource=""
-  downloadOrigin={undefined}
-  installModalDownloadId={null}
-  bind:statusOpen
-  bind:tagsOpen
-  bind:removeOpen
-  bind:removeMode
-  bind:pickerOpen
-  bind:lightboxOpen
-  bind:lightboxIndex
-  bind:matchOpen
-  bind:downloadModalOpen
-  bind:installModalOpen
-/>
+{#if shown}
+  <GameDialogs
+    {data}
+    localGame={game}
+    installed={false}
+    emulated={false}
+    {title}
+    {canonicalId}
+    shots={[]}
+    downloadPool={[]}
+    downloadRelease={() => {}}
+    {matchMode}
+    downloadSource=""
+    downloadOrigin={undefined}
+    installModalDownloadId={null}
+    bind:statusOpen
+    bind:tagsOpen
+    bind:removeOpen
+    bind:removeMode
+    bind:pickerOpen
+    bind:lightboxOpen
+    bind:lightboxIndex
+    bind:matchOpen
+    bind:downloadModalOpen
+    bind:installModalOpen
+  />
+{/if}

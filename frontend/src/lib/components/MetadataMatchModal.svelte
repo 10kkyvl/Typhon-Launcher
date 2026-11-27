@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import {
     applyMetadataMatch,
     findMetadataCandidates,
@@ -68,8 +68,13 @@
   let searchToken = 0;
   let candidatesToken = 0;
   // One per opening and game: an apply answered after the dialog closed or turned to another game is
-  // that game's, not the one on screen.
+  // that game's, not the one on screen. A destroyed dialog (the page showed a missing game) hears
+  // nothing either: its bound `open` may already be the next game's dialog.
   let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
@@ -199,6 +204,7 @@
   async function apply(candidate: MetadataCandidate, hand: ReturnType<typeof focusHandOff>) {
     if (applying) return;
     const at = opening;
+    const heard = () => alive && at === opening;
     applying = true;
     applyingId = candidate.providerId;
     failure = '';
@@ -206,14 +212,14 @@
     try {
       view = await applyMetadataMatch(gameId, candidate.providerId);
     } catch (err) {
-      if (at !== opening) return;
+      if (!heard()) return;
       failure = metadataErrorText(err);
       settle();
       await hand(() => document.getElementById(failureId));
       return;
     }
     toast(msg('modals.metadataMatchApplied', { title: view.game.title }), 'success');
-    if (at !== opening) return;
+    if (!heard()) return;
     settle();
     open = false;
     onapplied?.(view);
