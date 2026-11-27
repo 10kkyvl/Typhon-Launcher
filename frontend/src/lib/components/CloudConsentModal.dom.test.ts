@@ -72,15 +72,41 @@ describe('CloudConsentModal', () => {
     expect(onpolicy).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the focus on "enable", busy, while its caller turns cloud saves on', async () => {
-    const { rerender, enable } = show();
+  it('holds "enable", not busy, with its reason while its caller runs other work; Cancel and Escape still close', async () => {
+    const onenable = vi.fn(async () => {});
+    const { rerender, enable, cancel } = show(onenable);
+    const keys = user();
     const button = enable();
     button.focus();
 
     await rerender({ busy: true });
 
-    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBeNull();
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button).toHaveProperty('disabled', false);
+    expect(describedBy(button)).toBe(msg('cloudsaves.consentHeld'));
     expect(document.activeElement).toBe(button);
+    await keys.keyboard('{Enter}');
+    await keys.click(button);
+    expect(onenable).not.toHaveBeenCalled();
+    expect(cancel().getAttribute('aria-disabled')).toBeNull();
+    await keys.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('stays busy on "enable", the focus on it, while its own press runs and its caller says it is busy', async () => {
+    const saving = deferred<void>();
+    const { rerender, enable, cancel } = show(() => saving.promise);
+    const keys = user();
+    enable().focus();
+    await keys.keyboard('{Enter}');
+
+    await rerender({ busy: true });
+
+    expect(enable().getAttribute('aria-busy')).toBe('true');
+    expect(describedBy(enable())).toBe('');
+    expect(document.activeElement).toBe(enable());
+    expect(describedBy(cancel())).toBe(msg('cloudsaves.consentBusy'));
   });
 
   it('closes on Cancel and on Escape alike, turning nothing on', async () => {

@@ -51,6 +51,11 @@
   let retrying = $state(false);
   const forgetLeft = $derived((page.cloudForgetFailed || retrying) && !current?.cloudSaves);
   const cloudOff = $derived(!accountReady && !current?.cloudSaves);
+  // The switch stays reachable while the page's cloud work runs: it keeps the focus the closed dialog
+  // gave back, and says what runs.
+  const cloudHeld = $derived(
+    page.cloudWork === 'deleting' ? msg('cloudsaves.heldDeleting') : page.cloudWork === 'saving' ? msg('cloudsaves.heldSaving') : '',
+  );
 
   async function retryForget() {
     if (retrying) return;
@@ -270,10 +275,18 @@
           label={msg('cloudsaves.settingsLabel')}
           hint={msg('cloudsaves.settingsSub')}
           disabledReason={cloudOff ? msg('cloudsaves.settingsNeedsAccount') : undefined}
-          note={!accountReady && !cloudOff ? msg('cloudsaves.settingsNeedsAccount') : forgetLeft ? msg('cloudsaves.retryForgetHint') : undefined}
+          note={cloudHeld || (!accountReady && !cloudOff ? msg('cloudsaves.settingsNeedsAccount') : forgetLeft ? msg('cloudsaves.retryForgetHint') : undefined)}
         >
           {#snippet children({ labelId, hintId, disabled })}
-            <Toggle id="{fieldId}-cloud" checked={current?.cloudSaves ?? false} labelledby={labelId} describedby={hintId} {disabled} onchange={page.changeCloudSaves} />
+            <Toggle
+              id="{fieldId}-cloud"
+              checked={current?.cloudSaves ?? false}
+              labelledby={labelId}
+              describedby={hintId}
+              {disabled}
+              aria-disabled={cloudHeld ? 'true' : undefined}
+              onchange={page.changeCloudSaves}
+            />
           {/snippet}
           {#snippet below({ disabled })}
             {#if accountReady && cloudLine}<p class="cloud-line">{cloudLine}</p>{/if}

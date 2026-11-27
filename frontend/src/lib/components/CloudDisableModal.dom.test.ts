@@ -231,4 +231,50 @@ describe('CloudDisableModal on the settings page', () => {
     expect(cloudForget).not.toHaveBeenCalled();
     expect(get(settings)?.cloudSaves).toBe(true);
   });
+
+  it('holds the switch, saying the copies are being deleted, while they are: it keeps the focus and opens no dialog', async () => {
+    saved();
+    const forget = deferred<void>();
+    vi.mocked(cloudForget).mockImplementation(() => forget.promise);
+    const { keys, toggle } = openSettings();
+    await keys.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+    await vi.waitFor(() => expect(cloudForget).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(document.activeElement).toBe(toggle));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(toggle).toHaveProperty('disabled', false);
+    expect(toggle.getAttribute('aria-disabled')).toBe('true');
+    expect(describedBy(toggle)).toContain(msg('cloudsaves.heldDeleting'));
+    await keys.click(toggle);
+    await keys.keyboard('{Enter}');
+    await keys.keyboard(' ');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+
+    forget.resolve();
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-disabled')).toBeNull());
+    expect(describedBy(toggle)).not.toContain(msg('cloudsaves.heldDeleting'));
+    expect(saveSettingsPatch).toHaveBeenCalledTimes(1);
+    expect(cloudForget).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the switch, saying the setting is being saved, while the write runs', async () => {
+    const write = deferred<SettingsData>();
+    vi.mocked(saveSettingsPatch).mockImplementation(() => write.promise);
+    const { keys, toggle } = openSettings();
+    await keys.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableKeep') }));
+
+    expect(toggle.getAttribute('aria-disabled')).toBe('true');
+    expect(describedBy(toggle)).toContain(msg('cloudsaves.heldSaving'));
+
+    write.resolve({ ...get(settings), cloudSaves: false } as SettingsData);
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-disabled')).toBeNull());
+    expect(describedBy(toggle)).not.toContain(msg('cloudsaves.heldSaving'));
+    expect(cloudForget).not.toHaveBeenCalled();
+  });
 });

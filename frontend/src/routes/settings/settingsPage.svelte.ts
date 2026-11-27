@@ -225,17 +225,19 @@ export function createSettingsPage() {
 
   let cloudConsentOpen = $state(false);
   let cloudDisableOpen = $state(false);
-  let cloudBusy = $state(false);
+  // The page's own cloud work: the switch is held, saying which, so no dialog opens into it.
+  let cloudWork = $state<'' | 'saving' | 'deleting'>('');
   let cloudForgetFailed = $state(false);
 
   function changeCloudSaves(on: boolean) {
+    if (cloudWork) return;
     if (on) cloudConsentOpen = true;
     else cloudDisableOpen = true;
   }
 
   async function enableCloudSaves() {
-    if (cloudBusy) return;
-    cloudBusy = true;
+    if (cloudWork) return;
+    cloudWork = 'saving';
     try {
       if (await updateSettingsResult({ cloudSaves: true })) {
         cloudConsentOpen = false;
@@ -243,7 +245,7 @@ export function createSettingsPage() {
         await refreshCloudStatus();
       }
     } finally {
-      cloudBusy = false;
+      cloudWork = '';
     }
   }
 
@@ -259,25 +261,29 @@ export function createSettingsPage() {
   }
 
   async function disableCloudSaves(forget: boolean) {
-    if (cloudBusy) return;
-    cloudBusy = true;
+    if (cloudWork) return;
+    cloudWork = 'saving';
     try {
       if (!(await updateSettingsResult({ cloudSaves: false }))) return;
       cloudDisableOpen = false;
-      if (forget) await runCloudForget();
-      else await refreshCloudStatus();
+      if (forget) {
+        cloudWork = 'deleting';
+        await runCloudForget();
+      } else {
+        await refreshCloudStatus();
+      }
     } finally {
-      cloudBusy = false;
+      cloudWork = '';
     }
   }
 
   async function retryCloudForget() {
-    if (cloudBusy) return;
-    cloudBusy = true;
+    if (cloudWork) return;
+    cloudWork = 'deleting';
     try {
       await runCloudForget();
     } finally {
-      cloudBusy = false;
+      cloudWork = '';
     }
   }
 
@@ -378,7 +384,8 @@ export function createSettingsPage() {
     set cloudConsentOpen(open: boolean) { cloudConsentOpen = open; },
     get cloudDisableOpen() { return cloudDisableOpen; },
     set cloudDisableOpen(open: boolean) { cloudDisableOpen = open; },
-    get cloudBusy() { return cloudBusy; },
+    get cloudBusy() { return cloudWork !== ''; },
+    get cloudWork() { return cloudWork; },
     get cloudForgetFailed() { return cloudForgetFailed; },
     get overlayInfo() { return overlayInfo; },
     get overlayInfoFailed() { return overlayInfoFailed; },

@@ -8,10 +8,10 @@
 
   /**
    * The question before cloud saves are turned on: what is sent, and the player's yes. The focus opens
-   * on Cancel. "Enable" sends `onenable` once; while it runs, and while the caller says it is `busy`,
-   * the other controls are held with the reason and the dialog cannot be dismissed. The caller closes
-   * the dialog once cloud saves are on: an answer that leaves this opening open did not turn them on,
-   * and the dialog says so.
+   * on Cancel. "Enable" sends `onenable` once; while it runs it is busy, Cancel is held with the reason
+   * and the dialog cannot be dismissed. A caller that says it is `busy` with other work holds only
+   * "Enable", with its reason: the dialog can still be left. The caller closes the dialog once cloud
+   * saves are on: an answer that leaves this opening open did not turn them on, and the dialog says so.
    */
   let {
     open = $bindable(false),
@@ -41,10 +41,11 @@
     });
   });
 
-  const held = $derived(busy || sending);
+  // The caller's work that is not this press.
+  const foreign = $derived(busy && !sending);
 
   async function enable() {
-    if (held) return;
+    if (sending || busy) return;
     const mine = opening;
     sending = true;
     failed = false;
@@ -59,7 +60,7 @@
   }
 </script>
 
-<Modal dismissible={!held} bind:open busy={held} title={msg('cloudsaves.consentTitle')} width="48rem">
+<Modal dismissible={!sending} bind:open busy={sending} title={msg('cloudsaves.consentTitle')} width="48rem">
   <p class="text">{msg('cloudsaves.consentIntro')}</p>
   <ul class="items">
     <li>{msg('cloudsaves.consentArchive')}</li>
@@ -77,10 +78,17 @@
   {/if}
 
   {#snippet footer()}
-    <Button data-autofocus disabled={held} reason={held ? msg('cloudsaves.consentBusy') : ''} onclick={() => (open = false)}>
+    <Button data-autofocus disabled={sending} reason={sending ? msg('cloudsaves.consentBusy') : ''} onclick={() => (open = false)}>
       {msg('common.cancel')}
     </Button>
-    <Button variant="primary" busy={held} aria-describedby={failed ? failureId : undefined} onclick={enable}>
+    <Button
+      variant="primary"
+      busy={sending}
+      disabled={foreign}
+      reason={foreign ? msg('cloudsaves.consentHeld') : ''}
+      aria-describedby={failed ? failureId : undefined}
+      onclick={enable}
+    >
       {msg('cloudsaves.consentEnable')}
     </Button>
   {/snippet}
