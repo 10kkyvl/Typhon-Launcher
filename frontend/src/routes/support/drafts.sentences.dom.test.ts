@@ -235,6 +235,24 @@ describe('a request whose send fails beside a form that does not show it', () =>
     expect({ toast, form: subjectField().value }).toEqual({ toast: [[msg('tickets.requestNotSentSaved', { subject: X }), COPY]], form: X });
   });
 
+  it('taken into a form whose limits read failed is not said to be back in the form: kept, with Copy, and in the fields after Retry', async () => {
+    const x = await requestOnItsWayAndLeft();
+    vi.mocked(ticketLimits).mockRejectedValueOnce(new AccountError('network_error'));
+    const { user } = renderDom(Support, PLAIN);
+    await screen.findByRole('button', { name: msg('common.retry') });
+    x.reject(new AccountError('network_error'));
+    await settled();
+    const toast = said();
+    const kept = store();
+    await user.click(screen.getByRole('button', { name: msg('common.retry') }));
+    await screen.findByRole('button', { name: msg('tickets.submit') });
+    expect({ toast, kept, form: [subjectField().value, bodyField().value] }).toEqual({
+      toast: [[msg('tickets.requestNotSentSaved', { subject: X }), COPY]],
+      kept: { draft: X, spare: null },
+      form: [X, 'The code never arrives.'],
+    });
+  });
+
   it('offered by a prefilled form whose notice is not on screen yet (its limits still read) is not said to be restorable there', async () => {
     const x = await requestOnItsWayAndLeft();
     const limits = held<typeof LIMITS>();
@@ -307,6 +325,21 @@ describe('a reply whose send fails with its box not on screen', () => {
     await settled();
     const toast = said();
     limits.resolve(LIMITS);
+    await vi.waitFor(() => expect(replyBox().value).toBe('First.'));
+    expect(toast).toEqual([[msg('tickets.replyNotSentSaved', { subject: 'Game will not start' }), COPY]]);
+  });
+
+  it('taken into a box whose request is still being read (its limits read) is not said to be back in the box', async () => {
+    const { r } = await replyOnItsWayAndLeft('First.');
+    cleanup();
+    const t = held<ReturnType<typeof thread>>();
+    vi.mocked(getTicket).mockReturnValueOnce(t.promise);
+    renderDom(TicketView, { number: 7 });
+    await settled();
+    r.reject(new AccountError('network_error'));
+    await settled();
+    const toast = said();
+    t.resolve(thread(TICKET, []));
     await vi.waitFor(() => expect(replyBox().value).toBe('First.'));
     expect(toast).toEqual([[msg('tickets.replyNotSentSaved', { subject: 'Game will not start' }), COPY]]);
   });

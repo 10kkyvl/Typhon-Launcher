@@ -322,6 +322,24 @@ describe('a new request of A that fails once B is signed in', () => {
     });
   });
 
+  it('that fails with no one signed in after B kept a draft and signed out: B\'s draft stays, nothing of A\'s is kept', async () => {
+    const first = await requestOnItsWay();
+    signOut();
+    signIn(`${a}-b`);
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Draft of B');
+    await user.type(bodyField(), 'Text of B.');
+    cleanup();
+    signOut();
+    first.reject(new AccountError('unauthenticated'));
+    await settled();
+    signIn(`${a}-b`);
+    const underB = [keptRequest()?.subject ?? null, spareRequest()?.subject ?? null];
+    signOut();
+    signIn(a);
+    expect({ underB, underA: [keptRequest(), spareRequest()], said: said() }).toEqual({ underB: ['Draft of B', null], underA: [null, null], said: [] });
+  });
+
   it('that fails with no one signed in, a draft of A kept, is offered beside it when A signs in again', async () => {
     const first = await requestOnItsWay();
     const { user } = await newRequest();
