@@ -116,9 +116,14 @@ function hearing() {
   const heard: unknown[] = [];
   const offs = [
     onReplyBack((...back) => heard.push(back)),
-    onRequestBack((back) => {
-      heard.push(back);
-      return false;
+    onRequestBack({
+      by: {},
+      free: () => {
+        heard.push('asked');
+        return false;
+      },
+      sending: () => false,
+      take: (back) => heard.push(back),
     }),
   ];
   return { heard, off: () => offs.forEach((off) => off()) };

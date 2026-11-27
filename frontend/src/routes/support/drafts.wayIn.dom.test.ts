@@ -92,6 +92,7 @@ const OLD = { topic: msg('tickets.topicInstall'), logs: 'true', subject: 'Old ma
 const EMPTY = { topic: msg('tickets.topicInstall'), logs: 'true', subject: '', body: '', offered: null };
 const BETA_FORM = { topic: msg('tickets.topicLauncher'), logs: 'true', subject: 'Beta 2.0: ', body: '' };
 const OFFER = `${msg('tickets.draftKept', { subject: 'Old matter' })} ${msg('tickets.draftRestore')}`;
+const SWAP_OFFER = `${msg('tickets.draftKept', { subject: 'Old matter' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`;
 
 describe('1. a draft exists only once the player types or chooses content', () => {
   it('a prefill left untouched is not kept: the next way in shows its own prefill, the plain one nothing', async () => {
@@ -235,29 +236,32 @@ describe('4. a prefilled way in while a draft is kept', () => {
     expect({ offered, later: shown() }).toEqual({ offered: OFFER, later: OLD });
   });
 
-  it('a field edited after a topic pick makes the form the writer: the old draft is replaced, the topic kept', async () => {
+  it('a field edited after a topic pick makes the form the writer, the topic kept, and the old draft stays offered', async () => {
     await oldDraft();
     const { user } = await open(MOVE);
     await user.click(topicBox());
     await user.click(screen.getByRole('option', { name: msg('tickets.topicAccount') }));
     await user.type(subjectField(), 'New matter');
-    expect(notice()).toBeNull();
+    const offered = shown().offered;
     cleanup();
     await open(PLAIN);
-    expect(shown()).toEqual({ topic: msg('tickets.topicAccount'), logs: 'false', subject: 'New matter', body: '', offered: null });
+    expect({ offered, later: shown() }).toEqual({
+      offered: SWAP_OFFER,
+      later: { topic: msg('tickets.topicAccount'), logs: 'false', subject: 'New matter', body: '', offered: SWAP_OFFER },
+    });
   });
 
-  it('an edit makes this form the draft: the old one is replaced and the notice leaves', async () => {
+  it('an edit makes this form the draft and never drops the old one: it stays offered, now as a swap', async () => {
     await oldDraft();
     const { user } = await open(BETA);
     await user.type(bodyField(), 'Crashes on start.');
-    expect(notice()).toBeNull();
+    const offered = shown().offered;
     cleanup();
     await open(PLAIN);
-    expect(shown()).toEqual({ ...BETA_FORM, body: 'Crashes on start.', offered: null });
+    expect({ offered, later: shown() }).toEqual({ offered: SWAP_OFFER, later: { ...BETA_FORM, body: 'Crashes on start.', offered: SWAP_OFFER } });
   });
 
-  it('a request sent from the prefilled form forgets what it wrote, and nothing else was kept by then', async () => {
+  it('a request sent from the prefilled form forgets what it wrote, and the older draft stays kept', async () => {
     vi.mocked(createTicket).mockResolvedValue(ticket(30, 'Beta 2.0: crash'));
     await oldDraft();
     const { user } = await open(BETA);
@@ -268,7 +272,7 @@ describe('4. a prefilled way in while a draft is kept', () => {
     await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
     cleanup();
     await open(PLAIN);
-    expect(shown()).toEqual(EMPTY);
+    expect(shown()).toEqual(OLD);
   });
 });
 
@@ -287,7 +291,7 @@ describe('a failed send and the ways in', () => {
     expect(shown().offered).toBeNull();
     first.reject(new AccountError('network_error'));
     await vi.waitFor(() => expect(shown()).toEqual({ ...BETA_FORM, offered: OFFER }));
-    expect(get(toasts).map((t) => t.message)).toEqual([msg('tickets.requestNotSentKept', { subject: 'Old matter' })]);
+    expect(get(toasts).map((t) => t.message)).toEqual([msg('tickets.requestNotSentNewer', { subject: 'Old matter' })]);
     expect({ polite: notice()?.querySelectorAll('[role="status"]').length, alerts: screen.queryAllByRole('alert').length }).toEqual({ polite: 1, alerts: 0 });
   });
 
@@ -307,9 +311,32 @@ describe('a failed send and the ways in', () => {
   it('a key on the subject of a prefilled form is an edit even when it changes nothing visible', async () => {
     await oldDraft();
     await open(BETA);
-    expect(notice()).not.toBeNull();
-    fireEvent.input(subjectField(), { target: { value: 'Beta 2.0: x' } });
+    const before = shown().offered;
+    fireEvent.input(subjectField(), { target: { value: 'Beta 2.0: ' } });
     await settled();
-    expect(notice()).toBeNull();
+    const after = shown().offered;
+    cleanup();
+    await open(PLAIN);
+    expect({ before, after, later: shown() }).toEqual({ before: OFFER, after: SWAP_OFFER, later: { ...BETA_FORM, offered: SWAP_OFFER } });
+  });
+
+  it('a request that fails while a prefilled form is open untouched stays offered after a key there and after the form is left', async () => {
+    const first = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(first.promise);
+    const { user } = await open(PLAIN);
+    await user.type(subjectField(), 'Old matter');
+    await user.type(bodyField(), 'Still broken.');
+    await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(1));
+    cleanup();
+    const beta = await open(BETA);
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(notice()).not.toBeNull());
+    await beta.user.type(subjectField(), 'x');
+    const afterKey = shown().offered;
+    cleanup();
+    await open(PLAIN);
+    expect({ afterKey, later: shown() }).toEqual({ afterKey: SWAP_OFFER, later: { ...BETA_FORM, subject: 'Beta 2.0: x', offered: SWAP_OFFER } });
   });
 });

@@ -31,7 +31,21 @@
   import { handleSessionLost } from '../../lib/stores/user';
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
-  import { account, forgetRequest, keepRequest, keptRequest, onRequestBack, returnRequest, type RequestDraft, type Writer } from './drafts';
+  import {
+    account,
+    forgetRequest,
+    keepRequest,
+    offeredRequest,
+    onRequestBack,
+    openPlain,
+    openPrefilled,
+    requestsChanged,
+    restoreRequest,
+    returnRequest,
+    returnShown,
+    type RequestDraft,
+    type Writer,
+  } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { bodyCounter, copyAction, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
@@ -40,16 +54,24 @@
   let { initialTopic, initialSubject }: { initialTopic?: SupportTopic; initialSubject?: string } = $props();
   const uid = $props.id();
 
+  // This form, as the writer of what is kept: its Cancel and its own send forget only what it wrote.
+  const me: Writer = {};
+
   // What the player left unsent (the session gone, another screen opened): a plain way in gives it back
-  // whole; a way in with a prefill opens with the prefill and offers it.
+  // whole; a way in with a prefill opens with the prefill and offers it. Another unsent request is
+  // offered beside it, from what is kept, so the offer outlives the form.
   const prefill = untrack(() => ({ topic: initialTopic, subject: initialSubject }));
   const prefilled = prefill.topic !== undefined || prefill.subject !== undefined;
   const startTopic = prefill.topic ?? parseTopic(undefined);
-  const kept = keptRequest();
-  const draft = prefilled ? null : kept;
-  let offered = $state<RequestDraft | null>(prefilled ? kept : null);
-  // The offer came while the form was open (a failed send handed it in): it is said once, politely.
-  let offeredLate = $state(false);
+  const draft = prefilled ? null : openPlain(me);
+  if (prefilled) openPrefilled(me);
+  const offer = $derived.by(() => {
+    void $requestsChanged;
+    return offeredRequest(me);
+  });
+  // The offer the form opened with, or the one Restore left, is a standing fact of the page; one that
+  // came later (a failed send handed it in) is said once, politely.
+  let quietOffer = $state(offeredRequest(me)?.id ?? null);
   let topic = $state<string>(draft?.topic ?? startTopic);
   let attachLogs = $state(draft?.attachLogs ?? attachLogsByDefault(startTopic));
   let logsTouched = draft?.logsTouched ?? false;
@@ -71,8 +93,6 @@
   const topics = $derived(topicOptions());
   const stage = $derived(logsStageText(upload));
 
-  // This form, as the writer of what is kept: its Cancel and its own send forget only what it wrote.
-  const me: Writer = {};
   // This form's content is what is kept: it gave back the draft, or the player typed or chose content
   // (a subject, a text, a game) or restored one. The topic and the logs switch are settings: they are
   // carried into the draft once there is one, and never make one. A prefill alone is never kept.
@@ -125,20 +145,16 @@
     const off = onLogUploadStatus((status) => {
       if (sending) upload = status;
     });
-    // A request of another form whose send failed comes into this one when it holds nothing, kept as
-    // its content again; otherwise it is offered beside what it holds (one offer at a time).
-    const offBack = onRequestBack((back, kept, by) => {
-      if (by === me) return false;
-      if (kept && holdsNothing) {
+    // A request of another form whose send failed comes into this one when it holds nothing, as its
+    // content; otherwise what is kept places it, and the notice offers it.
+    const offBack = onRequestBack({
+      by: me,
+      free: () => holdsNothing && !sending,
+      sending: () => sending,
+      take: (back) => {
         fill(back);
         owns = true;
-        return false;
-      }
-      if (!offered) {
-        offered = back;
-        offeredLate = true;
-      }
-      return holdsTyped;
+      },
     });
     return () => {
       onScreen = false;
@@ -152,25 +168,34 @@
   $effect(() => {
     const now = { topic, game, subject, body, attachLogs };
     if (!owns || untrack(() => sending)) return;
-    untrack(() => keepRequest({ ...now, logsTouched }, me));
+    untrack(() => {
+      const dropped = keepRequest({ ...now, logsTouched }, me);
+      if (dropped) sayDropped(dropped);
+    });
   });
 
-  // From the first content the player gives it this form's content is the draft: the draft offered
-  // then is replaced. One offered to a form that is the writer already stays until Restore.
+  // From the first content the player gives it this form's content is the draft. What it offers stays
+  // offered: an edit never drops it.
   function edit() {
-    if (owns) return;
     owns = true;
-    offered = null;
   }
 
-  // What the player typed is not lost to a restore: it is offered in turn.
+  // A kept text that found no place left is not lost unsaid: the toast names it and copies it.
+  function sayDropped(text: RequestDraft) {
+    const subject = text.subject.trim();
+    const words = subject ? msg('tickets.draftDropped', { subject }) : msg('tickets.draftDroppedNoSubject');
+    toast(words, 'danger', copyAction(`${subject}\n\n${text.body.trim()}`.trim()));
+  }
+
+  // What the player typed is not lost to a restore: it is offered in turn, from what is kept.
   async function restore() {
-    if (!offered || sending) return;
-    const typed = holdsTyped ? current() : null;
-    fill(offered);
-    offered = typed;
-    offeredLate = false;
+    if (!offer || sending) return;
+    const back = restoreRequest(me, holdsTyped ? current() : null);
+    if (!back) return;
+    fill(back.draft);
     owns = true;
+    quietOffer = offeredRequest(me)?.id ?? null;
+    if (back.dropped) sayDropped(back.dropped);
     // The notice's button may leave: focus goes on to the subject, never to the page.
     await tick();
     subjectField?.focus();
@@ -264,13 +289,14 @@
       });
     } catch (err) {
       const changed = started && account() !== who;
-      const back = started && !changed && returnRequest(sent, me, who);
       if (!onScreen || changed) {
+        const placed = started && !changed ? returnRequest(sent, me, who) : null;
         const subject = sent.subject.trim();
-        if (started && !changed && back) toast(msg('tickets.requestNotSentKept', { subject }), 'danger');
-        else if (started && !changed) toast(msg('tickets.requestNotSentNewer', { subject }), 'danger', copyAction(`${subject}\n\n${sent.body.trim()}`));
+        if (placed === 'form' || placed === 'kept') toast(msg('tickets.requestNotSentKept', { subject }), 'danger');
+        else if (placed) toast(msg('tickets.requestNotSentNewer', { subject }), 'danger', copyAction(`${subject}\n\n${sent.body.trim()}`));
         return;
       }
+      if (started) returnShown(sent, me, who);
       sending = false;
       await showError(err);
     } finally {
@@ -290,11 +316,11 @@
   <Spinner label={msg('tickets.loading')} />
 {:else}
   <div class="form" bind:this={form}>
-    {#if offered}
-      {#key offered}
-        <Notice tone="info" announce={offeredLate} action={restoreDraft}>
+    {#if offer}
+      {#key offer.id}
+        <Notice tone="info" announce={offer.id !== quietOffer} action={restoreDraft}>
           <span id="{uid}-offer">
-            {offered.subject.trim() ? msg('tickets.draftKept', { subject: offered.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
+            {offer.draft.subject.trim() ? msg('tickets.draftKept', { subject: offer.draft.subject.trim() }) : msg('tickets.draftKeptNoSubject')}
             {#if holdsTyped}{msg('tickets.draftSwapNote')}{/if}
           </span>
         </Notice>

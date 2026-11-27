@@ -426,6 +426,38 @@ describe('a new request on its way', () => {
     });
   });
 
+  it('offered beside typed text is still offered when the form is left and opened again', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(offer()).not.toBeNull());
+    cleanup();
+    await newRequest();
+    expect({ subject: subjectField().value, offered: offer() }).toEqual({
+      subject: 'Another matter',
+      offered: `${msg('tickets.draftKept', { subject: 'Cannot sign in' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+    });
+  });
+
+  it('restored in place of typed text leaves that text offered, as the notice said, when the form is left and opened again', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Typed meanwhile');
+    first.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(offer()).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: msg('tickets.draftRestore') }));
+    await vi.waitFor(() => expect(subjectField().value).toBe('Cannot sign in'));
+    cleanup();
+    await newRequest();
+    expect({ form: shownRequest(), offered: offer() }).toEqual({
+      form: SENT,
+      offered: `${msg('tickets.draftKept', { subject: 'Typed meanwhile' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+    });
+  });
+
   it('that fails while the open form sends another is kept, offered there, and in the form once that one is created', async () => {
     const { first } = await requestOnItsWay();
     cleanup();

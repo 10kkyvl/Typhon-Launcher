@@ -1,4 +1,4 @@
-import { get } from 'svelte/store';
+import { get, writable as store, type Readable } from 'svelte/store';
 import { currentUser } from '../../lib/stores/user';
 
 /**
@@ -7,8 +7,10 @@ import { currentUser } from '../../lib/stores/user';
  * sign-in. Kept for the account it was typed under: a guest keeps nothing, and another account signing
  * in drops it. In memory only, never on disk: it can hold personal text.
  *
- * A text leaves what is kept when its send starts, so a form opened again meanwhile cannot send it a
- * second time; a send that fails gives it back, unless something newer is kept by then.
+ * Per account: the request draft (what the new-request form writes), ONE spare request (another
+ * unsent one, which the form offers with "Restore it"), and a reply per request. A text leaves what is
+ * kept when its send starts, so a form opened again meanwhile cannot send it a second time; a send that
+ * fails gives it back to the first free place and answers where it went.
  */
 
 export interface RequestDraft {
@@ -24,14 +26,30 @@ export interface RequestDraft {
 /** The form that wrote what is kept: only it forgets it (Cancel, its own send). */
 export type Writer = object;
 
+/** A kept request; its `id` goes with it from the draft to the spare and back, so offers are told apart. */
+interface Slot {
+  draft: RequestDraft;
+  id: number;
+}
+
 interface Kept {
   owner: string;
-  request: { draft: RequestDraft; by: Writer } | null;
+  request: (Slot & { by: Writer }) | null;
+  spare: Slot | null;
   replies: Map<number, string>;
 }
 
 let kept: Kept | null = null;
 let stopWatching: (() => void) | null = null;
+let slots = 0;
+const changes = store(0);
+
+/** Ticks whenever the kept request or the spare changes: an open form reads its offer again. */
+export const requestsChanged: Readable<number> = { subscribe: changes.subscribe };
+
+function changed() {
+  changes.update((count) => count + 1);
+}
 
 function owner(): string | null {
   return get(currentUser)?.id || null;
@@ -43,9 +61,11 @@ export function account(): string | null {
 }
 
 function forget() {
+  const requests = Boolean(kept?.request || kept?.spare);
   kept = null;
   stopWatching?.();
   stopWatching = null;
+  if (requests) changed();
 }
 
 // Watched only while something is kept: a sign-in of another account drops it at once. Signing out
@@ -68,13 +88,13 @@ function mine(): Kept | null {
 function writable(): Kept | null {
   const id = owner();
   if (!id) return null;
-  if (kept?.owner !== id) kept = { owner: id, request: null, replies: new Map() };
+  if (kept?.owner !== id) kept = { owner: id, request: null, spare: null, replies: new Map() };
   watchOwner();
   return kept;
 }
 
 function settle() {
-  if (kept && !kept.request && kept.replies.size === 0) forget();
+  if (kept && !kept.request && !kept.spare && kept.replies.size === 0) forget();
 }
 
 function typed(draft: RequestDraft): boolean {
@@ -85,18 +105,42 @@ function copy(draft: RequestDraft): RequestDraft {
   return { ...draft, game: draft.game ? { ...draft.game } : null };
 }
 
+function slot(draft: RequestDraft): Slot {
+  slots += 1;
+  return { draft: copy(draft), id: slots };
+}
+
+/**
+ * `by` is to write the draft: a draft another form wrote moves to the spare. With the spare taken it
+ * has no place left: it is dropped and answered, for the form to say so and offer to copy it.
+ */
+function displace(into: Kept, by: Writer): RequestDraft | null {
+  const other = into.request;
+  if (!other || other.by === by) return null;
+  into.request = null;
+  if (!into.spare) {
+    into.spare = { draft: other.draft, id: other.id };
+    return null;
+  }
+  return copy(other.draft);
+}
+
 /**
  * Keeps the new request as the player has it now in `by`; a form with nothing typed keeps nothing, and
- * forgets what it wrote itself.
+ * forgets what it wrote itself. A draft another form wrote is not lost to it: it becomes the spare. An
+ * edit never touches the spare. Answers a draft that found no place left (both were taken), if any.
  */
-export function keepRequest(draft: RequestDraft, by: Writer): void {
+export function keepRequest(draft: RequestDraft, by: Writer): RequestDraft | null {
   if (!typed(draft)) {
     forgetRequest(by);
-    return;
+    return null;
   }
   const into = writable();
-  if (!into) return;
-  into.request = { draft: copy(draft), by };
+  if (!into) return null;
+  const dropped = displace(into, by);
+  into.request = into.request ? { ...into.request, draft: copy(draft) } : { ...slot(draft), by };
+  changed();
+  return dropped;
 }
 
 /** The new request the signed-in player left unsent, if any. */
@@ -105,45 +149,155 @@ export function keptRequest(): RequestDraft | null {
   return request ? copy(request.draft) : null;
 }
 
-/** Forgets the kept request if `by` wrote it: a draft of another form stays. */
+/** The other unsent request the signed-in player has, the one a form offers, if any. */
+export function spareRequest(): RequestDraft | null {
+  const spare = mine()?.spare;
+  return spare ? copy(spare.draft) : null;
+}
+
+/**
+ * A plain way in (the list's "New request") opens with what is kept: `by` becomes the writer of the
+ * draft, or, with no draft, of the spare, which is the draft from then on.
+ */
+export function openPlain(by: Writer): RequestDraft | null {
+  const from = mine();
+  if (!from) return null;
+  if (from.request) {
+    from.request.by = by;
+    return copy(from.request.draft);
+  }
+  if (!from.spare) return null;
+  from.request = { ...from.spare, by };
+  from.spare = null;
+  changed();
+  return copy(from.request.draft);
+}
+
+/**
+ * A way in with a prefill opens with the prefill: the draft kept then is offered as the spare when the
+ * spare is free (else it stays the draft, offered once the spare is restored).
+ */
+export function openPrefilled(by: Writer): void {
+  const from = mine();
+  if (!from?.request || from.request.by === by || from.spare) return;
+  from.spare = { draft: from.request.draft, id: from.request.id };
+  from.request = null;
+  changed();
+}
+
+/**
+ * What the form `by` offers with "Restore it": the spare, or else a draft another form wrote (one that
+ * came back while `by` sent its own). Its `id` tells one offer from the next.
+ */
+export function offeredRequest(by: Writer): { id: number; draft: RequestDraft } | null {
+  const from = mine();
+  const offer = from?.spare ?? (from?.request && from.request.by !== by ? from.request : null);
+  return offer ? { id: offer.id, draft: copy(offer.draft) } : null;
+}
+
+/**
+ * "Restore it" in the form `by`, which shows `shown`: the offer becomes the draft, and what the form
+ * held typed becomes the spare in its place, the swap the notice promises. Answers the restored request
+ * and a text that found no place left, if any.
+ */
+export function restoreRequest(by: Writer, shown: RequestDraft | null): { draft: RequestDraft; dropped: RequestDraft | null } | null {
+  const from = mine();
+  if (!from) return null;
+  const other = from.request && from.request.by !== by ? from.request : null;
+  const offer = from.spare ?? other;
+  if (!offer) return null;
+  const out = shown && typed(shown) ? slot(shown) : null;
+  let dropped: RequestDraft | null = null;
+  if (from.spare) {
+    if (out && other) dropped = copy(other.draft);
+    from.spare = out ?? (other ? { draft: other.draft, id: other.id } : null);
+  } else {
+    from.spare = out;
+  }
+  from.request = { draft: offer.draft, id: offer.id, by };
+  changed();
+  return { draft: copy(offer.draft), dropped };
+}
+
+/** Forgets the kept request if `by` wrote it: a draft of another form and the spare stay. */
 export function forgetRequest(by: Writer): void {
   const from = mine();
   if (!from || from.request?.by !== by) return;
   from.request = null;
+  changed();
   settle();
 }
 
-/**
- * Listeners of a request given back by a failed send of `by`, `kept` when it is the draft again. A form
- * that holds nothing takes it in; one that holds something offers it, and answers whether what it
- * holds is text the player typed, which then stays in it.
- */
-type RequestBack = (draft: RequestDraft, kept: boolean, by: Writer) => boolean;
-const requestBack = new Set<RequestBack>();
+/** An open new-request form, as a text that comes back sees it. */
+export interface RequestForm {
+  by: Writer;
+  /** It holds nothing typed and no game, and sends nothing: a text can go into its fields. */
+  free(): boolean;
+  /** Its own request is on its way: its text has left the draft. */
+  sending(): boolean;
+  /** Puts the text in its fields; the form writes the draft from then on. */
+  take(draft: RequestDraft): void;
+}
 
-export function onRequestBack(listener: RequestBack): () => void {
-  requestBack.add(listener);
-  return () => requestBack.delete(listener);
+const forms = new Set<RequestForm>();
+
+export function onRequestBack(form: RequestForm): () => void {
+  forms.add(form);
+  return () => forms.delete(form);
 }
 
 /**
- * A send of `draft` from `by`, started under the account `from`, failed: it is kept again unless
- * something newer is kept by now, and an open form hears of it either way. Answers whether the text is
- * back as the form's content: kept, and no open form holds text typed after it. Nothing is kept or
- * heard once another account (or no one) is signed in.
+ * Where a text that came back went: into an open form's fields (`form`); the draft, no form being open
+ * (`kept`); offered by the form's notice, as the spare or as a draft beside the form's own send
+ * (`offered`); nowhere, every place being taken (`none`).
  */
-export function returnRequest(draft: RequestDraft, by: Writer, from: string | null): boolean {
+export type Placed = 'form' | 'kept' | 'offered' | 'none';
+
+/**
+ * A send of `draft` from `by`, started under the account `from`, failed after its form was left: the
+ * text goes to the first free place. An open form that holds nothing takes it into its fields; else the
+ * draft, when no form is open or the open one sends its own; else the spare. Answers where it went, or
+ * null once another account (or no one) is signed in: nothing is kept or heard then.
+ */
+export function returnRequest(draft: RequestDraft, by: Writer, from: string | null): Placed | null {
   // The text is lost with its account's session rather than given to whoever signed in since.
-  if (!from || owner() !== from) return false;
-  const kept = !mine()?.request;
-  if (kept) {
-    const into = writable();
-    if (!into) return false;
-    into.request = { draft: copy(draft), by };
+  if (!from || owner() !== from) return null;
+  const into = writable();
+  if (!into) return null;
+  const open = [...forms].filter((form) => form.by !== by);
+  // A form takes the text only where the draft it then writes pushes nothing out.
+  const free = open.find((form) => form.free() && (!into.request || into.request.by === form.by || !into.spare));
+  if (free) {
+    displace(into, free.by);
+    into.request = { ...slot(draft), by: free.by };
+    changed();
+    free.take(copy(draft));
+    return 'form';
   }
-  let newer = false;
-  for (const listener of [...requestBack]) if (listener(copy(draft), kept, by)) newer = true;
-  return kept && !newer;
+  if (!into.request && open.every((form) => form.sending())) {
+    into.request = { ...slot(draft), by };
+    changed();
+    return open.length > 0 ? 'offered' : 'kept';
+  }
+  if (!into.spare) {
+    into.spare = slot(draft);
+    changed();
+    return 'offered';
+  }
+  settle();
+  return 'none';
+}
+
+/**
+ * A send of `draft` from `by` failed with its form on screen: the form still shows it, so it is the
+ * draft again when nothing else was kept as the draft meanwhile. Nothing is kept under another account.
+ */
+export function returnShown(draft: RequestDraft, by: Writer, from: string | null): void {
+  if (!from || owner() !== from) return;
+  const into = writable();
+  if (!into || into.request) return;
+  into.request = { ...slot(draft), by };
+  changed();
 }
 
 /** Keeps the reply typed in a request; an empty one keeps nothing. */

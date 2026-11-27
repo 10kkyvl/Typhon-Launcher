@@ -11,7 +11,22 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { LIMITS, message, thread, ticket } from '../../lib/testing/supportTesting';
-import { forgetReply, forgetRequest, keepReply, keepRequest, keptReply, keptRequest, onReplyBack, onRequestBack, returnReply, returnRequest, type RequestDraft } from './drafts';
+import {
+  forgetReply,
+  forgetRequest,
+  keepReply,
+  keepRequest,
+  keptReply,
+  keptRequest,
+  offeredRequest,
+  onReplyBack,
+  onRequestBack,
+  returnReply,
+  returnRequest,
+  spareRequest,
+  type RequestDraft,
+  type RequestForm,
+} from './drafts';
 import NewTicket from './NewTicket.svelte';
 import TicketView from './TicketView.svelte';
 
@@ -298,33 +313,38 @@ describe('the kept drafts themselves', () => {
     expect(keptRequest()).toEqual(DRAFT);
   });
 
-  it('take the text of a failed send back only while nothing newer is kept, tell an open form either way, and call it back only while that form holds nothing typed', () => {
-    const heard: [RequestDraft, boolean][] = [];
-    let typedInForm = false;
-    const off = onRequestBack((back, kept) => {
-      heard.push([back, kept]);
-      return typedInForm;
-    });
+  it('give the text of a failed send to the first free place, and answer where it went', () => {
+    const second = { ...DRAFT, subject: 'Second' };
+    const third = { ...DRAFT, subject: 'Third' };
+    expect(returnRequest(DRAFT, form, me)).toBe('kept');
+    expect(returnRequest(second, form, me)).toBe('offered');
+    expect(returnRequest(third, form, me)).toBe('none');
+    expect([keptRequest(), spareRequest()]).toEqual([DRAFT, second]);
+  });
+
+  it('give the text of a failed send to an open form that holds nothing, else beside its own send, else to the spare', () => {
+    const taken: RequestDraft[] = [];
+    const state = { free: false, sending: false };
+    const open: RequestForm = { by: {}, free: () => state.free, sending: () => state.sending, take: (back) => taken.push(back) };
+    const off = onRequestBack(open);
     try {
-      expect(returnRequest(DRAFT, form, me)).toBe(true);
-      expect(keptRequest()).toEqual(DRAFT);
+      state.free = true;
+      expect([returnRequest(DRAFT, form, me), taken, keptRequest()]).toEqual(['form', [DRAFT], DRAFT]);
+      forgetRequest(open.by);
+      state.free = false;
+      state.sending = true;
+      expect([returnRequest(DRAFT, form, me), keptRequest(), spareRequest()]).toEqual(['offered', DRAFT, null]);
+      expect(offeredRequest(open.by)?.draft).toEqual(DRAFT);
       forgetRequest(form);
-      typedInForm = true;
-      expect(returnRequest(DRAFT, form, me)).toBe(false);
-      expect(keptRequest()).toEqual(DRAFT);
-      typedInForm = false;
-      const newer = { ...DRAFT, subject: 'Written after' };
-      keepRequest(newer, {});
-      expect(returnRequest(DRAFT, form, me)).toBe(false);
-      expect(keptRequest()).toEqual(newer);
-      expect(heard).toEqual([
-        [DRAFT, true],
-        [DRAFT, true],
-        [DRAFT, false],
-      ]);
+      state.sending = false;
+      expect([returnRequest(DRAFT, form, me), keptRequest(), spareRequest()]).toEqual(['offered', null, DRAFT]);
+      expect(taken).toEqual([DRAFT]);
     } finally {
       off();
     }
+  });
+
+  it('take a failed reply back only while nothing newer is kept in its request', () => {
     keepReply(7, 'Written after');
     expect([returnReply(7, 'Failed', me), keptReply(7)]).toEqual([false, 'Written after']);
     expect([returnReply(8, 'Failed', me), keptReply(8)]).toEqual([true, 'Failed']);
@@ -333,18 +353,23 @@ describe('the kept drafts themselves', () => {
   it('take nothing back for a guest, nor for an account other than the one the send started under', () => {
     const heard: unknown[] = [];
     const off = [
-      onRequestBack((back) => {
-        heard.push(back);
-        return false;
+      onRequestBack({
+        by: {},
+        free: () => {
+          heard.push('asked');
+          return true;
+        },
+        sending: () => false,
+        take: (back) => heard.push(back),
       }),
       onReplyBack((...back) => heard.push(back)),
     ];
     try {
       as(null);
-      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me)]).toEqual([false, false]);
+      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me)]).toEqual([null, false]);
       as(`${me}-other`);
-      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me), keptRequest(), keptReply(7)]).toEqual([false, false, null, '']);
-      expect([returnRequest(DRAFT, form, null), returnReply(7, 'Failed', null)]).toEqual([false, false]);
+      expect([returnRequest(DRAFT, form, me), returnReply(7, 'Failed', me), keptRequest(), keptReply(7)]).toEqual([null, false, null, '']);
+      expect([returnRequest(DRAFT, form, null), returnReply(7, 'Failed', null)]).toEqual([null, false]);
       expect(heard).toEqual([]);
     } finally {
       for (const stop of off) stop();
