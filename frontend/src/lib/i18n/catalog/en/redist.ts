@@ -24,6 +24,7 @@ export const redist: Record<RedistKey, Message> = {
   'redist.resultOk': 'Installed: {name}',
   'redist.resultReboot': 'Installed: {name}. A restart is needed to finish',
   'redist.resultAlready': 'The same or a newer version is already installed: {name}',
+  'redist.lateFailed': 'Could not install {name}. {reason}',
   'redist.systemHeading': 'Installed on this system',
   'redist.systemEmpty': 'No Visual C++ runtimes found on this system',
   'redist.systemLoading': 'Checking the system…',

@@ -21,6 +21,7 @@ export const redist = {
   'redist.resultOk': 'Установлено: {name}',
   'redist.resultReboot': 'Установлено: {name}. Для завершения нужна перезагрузка',
   'redist.resultAlready': 'Такая или более новая версия уже установлена: {name}',
+  'redist.lateFailed': 'Не удалось установить {name}. {reason}',
   'redist.systemHeading': 'Установлено в системе',
   'redist.systemEmpty': 'Среды Visual C++ в системе не найдены',
   'redist.systemLoading': 'Проверяем систему…',
