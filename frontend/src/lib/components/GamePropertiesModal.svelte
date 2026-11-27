@@ -1,32 +1,18 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { FolderOpen } from '@lucide/svelte';
-  import Tooltip from './Tooltip.svelte';
-  import Button from './Button.svelte';
-  import EmptyState from './EmptyState.svelte';
-  import ProgressBar from './ProgressBar.svelte';
   import Modal from './Modal.svelte';
   import GameProfiles from './GameProfiles.svelte';
-  import Notice from './Notice.svelte';
-  import Select from './Select.svelte';
-  import Spinner from './Spinner.svelte';
-  import Toggle from './Toggle.svelte';
+  import PropertiesCompat from './PropertiesCompat.svelte';
+  import PropertiesExecutable from './PropertiesExecutable.svelte';
+  import PropertiesLaunch from './PropertiesLaunch.svelte';
+  import PropertiesPlaying from './PropertiesPlaying.svelte';
+  import PropertiesSaves from './PropertiesSaves.svelte';
   import { chooseSavesDir } from '../game/actions/saves';
   import { emulationPlatform, isEmulated } from '../library/emulation';
   import { selectImageFile } from '../services/emulators';
   import { errorCode, hasMessage, msg } from '../i18n';
   import { installErrorText } from '../install/installErrors';
-  import {
-    WRAPPERS,
-    defaultWrapper,
-    describeImports,
-    presetLabel,
-    presetsFor,
-    problemActions,
-    problemText,
-    progressView,
-    wrapperName,
-  } from '../game/compatMode';
+  import { defaultWrapper, describeImports, presetsFor, problemActions, progressView } from '../game/compatMode';
   import {
     clearSavesDir,
     getLaunchArgsLine,
@@ -52,20 +38,12 @@
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
   import { libraryGames, runningGames } from '../stores/library';
   import { settings } from '../stores/settings';
-  import {
-    gameModeKeys,
-    inheritLabel,
-    overrideState,
-    withOverride,
-    type GameModeKey,
-    type OverrideState,
-  } from '../gamemode/gamemode';
+  import { gameModeKeys, inheritLabel, withOverride, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
   import { focusableIn } from '../layers/focus';
   import { focusHandOff } from '../utils/focusHandOff';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize } from '../utils/format';
 
-  const uid = $props.id();
   const target = $derived($gamePropertiesTarget);
   const game = $derived(target ? ($libraryGames.find((g) => g.id === target.gameId) ?? null) : null);
 
@@ -449,303 +427,90 @@
 >
   {#if game}
     <div class="props" bind:this={propsEl}>
-      <section class="section">
-        <h4>{msg('modals.propertiesExeTitle')}</h4>
-        <p class="path">
-          {game.executable ? msg('modals.propertiesExeCurrent', { path: game.executable }) : msg('modals.propertiesExeNone')}
-        </p>
-        {#if emulated}
-          <p class="hint">{msg('emul.imageHint')}</p>
-        {:else if candidatesLoading}
-          <Spinner size="sm" label={msg('modals.propertiesExeLoading')} />
-        {:else if candidatesError}
-          <Notice tone="danger" compact>{candidatesError}</Notice>
-        {:else if candidates.length === 0}
-          <EmptyState size="inline" title={msg('modals.propertiesExeNoCandidates')} />
-        {:else}
-          <span class="label">{msg('modals.propertiesExeCandidates')}</span>
-          <div class="candidates">
-            {#each candidates as candidate (candidate.path)}
-              <Tooltip text={candidate.path}>
-                <button
-                  type="button"
-                  class="candidate"
-                  aria-current={candidate.path === game.executable || undefined}
-                  aria-disabled={exeBusy !== '' || undefined}
-                  onclick={() => pickCandidate(candidate.path)}
-                >
-                  {truncateMiddle(candidate.path, 70)}
-                </button>
-              </Tooltip>
-            {/each}
-          </div>
-        {/if}
-        {#if exeError}
-          <Notice tone="danger" compact announce={false}>{exeError}</Notice>
-        {/if}
-        <div>
-          <Button size="sm" disabled={exeBusy === 'pick'} busy={exeBusy === 'browse'} onclick={browseExecutable}>
-            <FolderOpen size="1.5rem" strokeWidth={1.8} />
-            {msg('modals.propertiesExeBrowse')}
-          </Button>
-        </div>
-      </section>
+      <PropertiesExecutable
+        {game}
+        {emulated}
+        {candidates}
+        {candidatesLoading}
+        {candidatesError}
+        {exeBusy}
+        {exeError}
+        onpick={pickCandidate}
+        onbrowse={browseExecutable}
+      />
+
+      <PropertiesLaunch
+        {emulated}
+        {adminShown}
+        bind:argsLine
+        bind:argsInput
+        {argsLoading}
+        {argsBusy}
+        {argsDirty}
+        {argsLoadError}
+        {argsError}
+        onsave={saveArgs}
+        {admin}
+        {adminBusy}
+        {adminError}
+        onadmin={(on) => {
+          admin = on;
+          void changeAdmin(on);
+        }}
+      />
 
       {#if !emulated}
-      <section class="section">
-        <h4 id="{uid}-args-label">{msg('modals.propertiesArgsTitle')}</h4>
-        <div class="row">
-          <input
-            class="input sm"
-            type="text"
-            aria-labelledby="{uid}-args-label"
-            bind:this={argsInput}
-            spellcheck="false"
-            autocomplete="off"
-            placeholder={msg('modals.propertiesArgsPlaceholder')}
-            disabled={argsLoading}
-            bind:value={argsLine}
-            onkeydown={(e) => e.key === 'Enter' && argsDirty && saveArgs()}
-          />
-          <Button size="sm" variant="primary" disabled={argsLoading || (!argsDirty && !argsBusy)} busy={argsBusy} onclick={saveArgs}>
-            {msg('modals.propertiesArgsSave')}
-          </Button>
-        </div>
-        {#if argsLoadError}
-          <Notice tone="danger" compact>{argsLoadError}</Notice>
-        {:else if argsError}
-          <Notice tone="danger" compact announce={false}>{argsError}</Notice>
-        {/if}
-        <p class="hint">{msg('modals.propertiesArgsHint')}</p>
-      </section>
-      {/if}
-
-      {#if adminShown && !emulated}
-        <section class="section">
-          <div class="row spread">
-            <h4 id="{uid}-properties-admin-label">{msg('modals.propertiesAdminTitle')}</h4>
-            <Toggle
-              checked={admin}
-              labelledby="{uid}-properties-admin-label"
-              disabled={adminBusy}
-              onchange={(on) => {
-                admin = on;
-                void changeAdmin(on);
-              }}
-            />
-          </div>
-          <p class="hint">{msg('modals.propertiesAdminHint')}</p>
-          {#if adminError}
-            <Notice tone="danger" compact announce={false}>{adminError}</Notice>
-          {/if}
-        </section>
-      {/if}
-
-      {#if !emulated && compatLoading && !compat}
-        <section class="section">
-          <h4>{msg('modals.compatTitle')}</h4>
-          <Spinner size="sm" label={msg('modals.compatLoading')} />
-        </section>
-      {:else if !emulated && compatVisible && compat}
-        <section class="section" bind:this={compatSection}>
-          <div class="row spread">
-            <h4>{msg('modals.compatTitle')}</h4>
-            <Toggle
-              checked={compatOn}
-              label={msg('modals.compatToggle')}
-              disabled={compatBusy || running || (compatLocked && !compat.active)}
-              onchange={(on) => {
-                compatOn = on;
-                void changeCompat(on);
-              }}
-            />
-          </div>
-          {#if compat.active}
-            <p class="path">
-              {msg('modals.compatActive', {
-                wrapper: wrapperName(compat.active.wrapper),
-                version: compat.active.version,
-                files: compatFiles,
-              })}
-            </p>
-            <p class="hint">{msg('modals.compatActivePreset', { preset: presetLabel(compat.active.preset) })}</p>
-          {:else}
-            <p class="path">{compatApi ? msg('modals.compatFound', { api: compatApi }) : msg('modals.compatFoundUnknown')}</p>
-            <p class="hint">
-              {compatSuggested
-                ? msg('modals.compatSuggest', { wrapper: wrapperName(compatSuggested) })
-                : msg('modals.compatNotNeeded')}
-            </p>
-            {#if compatSuggested === ''}
-              <div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-expanded={compatForce}
-                  aria-controls="{uid}-compat-choice"
-                  onclick={() => (compatForce = !compatForce)}
-                >
-                  {compatForce ? msg('modals.compatForceHide') : msg('modals.compatForce')}
-                </Button>
-              </div>
-            {/if}
-            <div class="choice" id="{uid}-compat-choice">
-            {#if !compatLocked}
-              <div class="row spread">
-                <span class="label" id="{uid}-wrapper-label">{msg('modals.compatWrapper')}</span>
-                <Select
-                  labelledby="{uid}-wrapper-label"
-                  value={compatWrapper}
-                  width="26rem"
-                  disabled={compatBusy || running}
-                  options={WRAPPERS.map((id) => ({ id, label: wrapperName(id) }))}
-                  onchange={pickWrapper}
-                />
-              </div>
-              {#if presetsFor(compatWrapper).length > 1}
-                <div class="row spread">
-                  <span class="label" id="{uid}-preset-label">{msg('modals.compatPresetLabel')}</span>
-                  <Select
-                    labelledby="{uid}-preset-label"
-                    bind:value={compatPreset}
-                    width="26rem"
-                    disabled={compatBusy || running}
-                    options={presetsFor(compatWrapper).map((id) => ({ id, label: presetLabel(id) }))}
-                  />
-                </div>
-              {/if}
-            {/if}
-            </div>
-          {/if}
-          {#if compatView}
-            <p class="hint">{compatView.text}</p>
-            <ProgressBar value={compatView.fraction ?? 0} max={1} indeterminate={compatView.fraction === null} label={msg('modals.compatTitle')} valueText={compatView.text} />
-          {/if}
-          {#if running}
-            <p class="hint">{msg('modals.compatRunning')}</p>
-          {/if}
-          {#if compat.problem && compatActions?.dirMissing}
-            <p class="hint">{problemText(compat.problem.code)}</p>
-          {:else if compat.problem && compatActions}
-            {@const actions = compatActions}
-            <Notice tone="danger" compact title={msg('modals.compatProblemTitle')}>
-              {problemText(compat.problem.code, compat.problem.file)}
-              {#if actions.keepChanged}
-                <span class="note">{msg('modals.compatKeepChangedHint')}</span>
-              {/if}
-              {#snippet action()}
-                <div class="row">
-                  <Button
-                    size="sm"
-                    disabled={(compatBusy && compatAction !== 'revert') || running}
-                    busy={compatAction === 'revert'}
-                    onclick={() => changeCompat(false, false, 'revert')}
-                  >
-                    {msg('modals.compatRevert')}
-                  </Button>
-                  {#if actions.keepChanged}
-                    <Button
-                      size="sm"
-                      disabled={(compatBusy && compatAction !== 'keep') || running}
-                      busy={compatAction === 'keep'}
-                      onclick={() => changeCompat(false, true, 'keep')}
-                    >
-                      {msg('modals.compatKeepChanged')}
-                    </Button>
-                  {/if}
-                </div>
-              {/snippet}
-            </Notice>
-          {:else if compatKeepOffer}
-            <Notice tone="warning" compact>
-              {msg('modals.compatKeepChangedHint')}
-              {#snippet action()}
-                <Button
-                  size="sm"
-                  disabled={(compatBusy && compatAction !== 'keep') || running}
-                  busy={compatAction === 'keep'}
-                  onclick={() => changeCompat(false, true, 'keep')}
-                >
-                  {msg('modals.compatKeepChanged')}
-                </Button>
-              {/snippet}
-            </Notice>
-          {/if}
-          {#if compatError}
-            <Notice tone="danger" compact>{compatError}</Notice>
-          {/if}
-          <p class="hint">{msg('modals.compatHint')}</p>
-        </section>
-      {:else if !emulated && compatError}
-        <section class="section">
-          <h4>{msg('modals.compatTitle')}</h4>
-          <Notice tone="danger" compact>{compatError}</Notice>
-        </section>
+        <PropertiesCompat
+          {compat}
+          loading={compatLoading}
+          visible={compatVisible}
+          on={compatOn}
+          busy={compatBusy}
+          {running}
+          locked={compatLocked}
+          suggested={compatSuggested}
+          api={compatApi}
+          view={compatView}
+          actions={compatActions}
+          files={compatFiles}
+          force={compatForce}
+          wrapper={compatWrapper}
+          bind:preset={compatPreset}
+          action={compatAction}
+          error={compatError}
+          keepOffer={compatKeepOffer}
+          bind:section={compatSection}
+          onswitch={(on) => {
+            compatOn = on;
+            void changeCompat(on);
+          }}
+          onforce={() => (compatForce = !compatForce)}
+          onwrapper={pickWrapper}
+          onrevert={() => changeCompat(false, false, 'revert')}
+          onkeep={() => changeCompat(false, true, 'keep')}
+        />
       {/if}
 
       {#if !emulated}
         <GameProfiles {game} {candidates} {adminShown} />
       {/if}
-      {#if gameModeShown}
-        <section class="section">
-          <h4>{msg('modals.propertiesGameModeTitle')}</h4>
-          {#each gameModeRows as row (row.key)}
-            <div class="row spread">
-              <span class="label" id="{uid}-gamemode-{row.key}-label">{row.title}</span>
-              <Select
-                labelledby="{uid}-gamemode-{row.key}-label"
-                value={overrideState(game.gameMode, row.key)}
-                width="26rem"
-                options={row.options}
-                onchange={(id) => changeGameMode(row.key, id as OverrideState)}
-              />
-            </div>
-          {/each}
-          <p class="hint">{msg('modals.propertiesGameModeHint')}</p>
-          {#if gameModeError}
-            <Notice tone="danger" compact announce={false}>{gameModeError}</Notice>
-          {/if}
-        </section>
-      {/if}
-
-      <section class="section">
-        <div class="row spread">
-          <h4 id="{uid}-properties-presence-label">{msg('modals.propertiesPresenceTitle')}</h4>
-          <Toggle
-            checked={presence}
-            labelledby="{uid}-properties-presence-label"
-            disabled={presenceBusy}
-            onchange={(on) => {
-              presence = on;
-              void changePresence(on);
-            }}
-          />
-        </div>
-        <p class="hint">{msg('modals.propertiesPresenceHint')}</p>
-        {#if presenceError}
-          <Notice tone="danger" compact announce={false}>{presenceError}</Notice>
-        {/if}
-      </section>
+      <PropertiesPlaying
+        {game}
+        {gameModeShown}
+        {gameModeRows}
+        {gameModeError}
+        ongamemode={changeGameMode}
+        {presence}
+        {presenceBusy}
+        {presenceError}
+        onpresence={(on) => {
+          presence = on;
+          void changePresence(on);
+        }}
+      />
 
       {#if !emulated && (game.installDir || game.savesDir)}
-        <section class="section">
-          <h4>{msg('modals.propertiesSavesTitle')}</h4>
-          <p class="path">{game.savesDir || msg('modals.propertiesSavesAuto')}</p>
-          {#if savesError}
-            <Notice tone="danger" compact announce={false}>{savesError}</Notice>
-          {/if}
-          <div class="row">
-            <Button size="sm" disabled={savesBusy === 'reset'} busy={savesBusy === 'browse'} onclick={browseSaves}>
-              <FolderOpen size="1.5rem" strokeWidth={1.8} />
-              {msg('modals.propertiesSavesBrowse')}
-            </Button>
-            {#if game.savesDir}
-              <Button size="sm" variant="ghost" disabled={savesBusy === 'browse'} busy={savesBusy === 'reset'} onclick={resetSaves}>
-                {msg('modals.propertiesSavesReset')}
-              </Button>
-            {/if}
-          </div>
-        </section>
+        <PropertiesSaves {game} {savesBusy} {savesError} onbrowse={browseSaves} onreset={resetSaves} />
       {/if}
     </div>
   {/if}
@@ -756,98 +521,5 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
-  }
-
-  .section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  h4 {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text);
-  }
-
-  .label {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .path {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    word-break: break-all;
-  }
-
-  .hint {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .note {
-    display: block;
-    margin-top: var(--space-1);
-  }
-
-  /* Holds the wrapper choice the "force" disclosure shows, as a part of the section's own column. */
-  .choice {
-    display: contents;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .row .input {
-    flex: 1;
-  }
-
-  .spread {
-    justify-content: space-between;
-  }
-
-  .candidates {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    max-height: 18rem;
-    overflow-y: auto;
-  }
-
-  .candidate {
-    text-align: left;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--text-2);
-    font-size: var(--font-sm);
-    cursor: pointer;
-  }
-
-  .candidate:hover:not([aria-disabled='true']) {
-    border-color: var(--border-strong);
-    color: var(--text);
-  }
-
-  .candidate[aria-current='true'] {
-    border-color: var(--accent-bright);
-    color: var(--text);
-  }
-
-  .candidate[aria-disabled='true'] {
-    opacity: 0.6;
-    cursor: default;
-  }
-
-  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
-  .candidate:focus-visible {
-    outline-offset: -2px;
   }
 </style>

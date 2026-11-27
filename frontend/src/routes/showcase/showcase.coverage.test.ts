@@ -77,6 +77,7 @@ const NOT_BASE: Record<string, string> = {
   LogoArcs: 'the logo in vector, drawn by the sidebar logo and the update show while its arcs fly',
   MaskedEmail: "the profile's e-mail and its reveal",
   MenuList: 'the body of DropdownMenu and ContextMenu, shown through them',
+  PropertiesLaunch: 'the launch arguments and the administrator switch of the game properties dialog',
   RateLimitInput: 'the download speed limit field of the settings',
   SavesCandidatesModal: 'the save folder picker of the game menu',
   TagEditor: 'the tag list of the collection and tag dialogs, built on Chip',
