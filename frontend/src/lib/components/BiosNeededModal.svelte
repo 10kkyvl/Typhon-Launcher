@@ -1,25 +1,42 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { FolderOpen, RefreshCw } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
-  import { msg } from '../i18n';
+  import { errorCode, hasMessage, msg } from '../i18n';
   import { libraryErrorText } from '../library/errors';
   import { biosFolder, listPlatforms, openBiosFolder, type PlatformStatus } from '../services/emulators';
   import { biosPrompt } from '../stores/biosPrompt';
+  import { toast } from '../stores/toasts';
 
   const prompt = $derived($biosPrompt);
 
   let platforms = $state<PlatformStatus[]>([]);
   let folder = $state('');
+  let folderFailed = $state(false);
   let failure = $state('');
+  let opening = $state(false);
 
   const info = $derived(prompt ? platforms.find((item) => item.id === prompt.platform) : undefined);
+  // Open folder needs the folder: held, and reachable by the D-pad in Big Picture, until it is read.
+  const openHeld = $derived(folder ? '' : folderFailed ? msg('emulators.bios_dir_unknown') : msg('common.loading'));
+
+  // A launch can replace the prompt while the folder opens: the answer then belongs to no prompt on
+  // screen and is said once in a toast naming the emulator. A destroyed prompt hears nothing either.
+  let asked = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   $effect(() => {
     const current = prompt;
+    asked += 1;
     failure = '';
     folder = '';
+    folderFailed = false;
+    opening = false;
     if (!current) return;
     let stale = false;
     listPlatforms().then(
@@ -37,7 +54,9 @@
       },
       (err) => {
         console.warn('bios folder', err);
-        if (!stale) failure = libraryErrorText(err, msg('emul.biosOpenFailed'));
+        if (stale) return;
+        folderFailed = true;
+        failure = libraryErrorText(err, msg('emul.biosOpenFailed'));
       },
     );
     return () => {
@@ -46,13 +65,24 @@
   });
 
   async function openFolder() {
-    if (!prompt) return;
+    const current = prompt;
+    if (!current || opening || !folder) return;
+    const at = asked;
+    const heard = () => alive && at === asked;
+    const emulator = info?.emulator ?? current.platform;
+    opening = true;
     failure = '';
     try {
-      await openBiosFolder(prompt.platform);
+      await openBiosFolder(current.platform);
     } catch (err) {
-      failure = libraryErrorText(err, msg('emul.biosOpenFailed'));
+      if (heard()) {
+        failure = libraryErrorText(err, msg('emul.biosOpenFailed'));
+      } else {
+        const code = errorCode(err);
+        toast(hasMessage(code) ? msg('emul.lateFailed', { emulator, reason: msg(code) }) : msg('emul.biosOpenFailedFor', { emulator }), 'danger');
+      }
     }
+    if (heard()) opening = false;
   }
 </script>
 
@@ -68,7 +98,7 @@
   {/if}
   {#snippet footer()}
     <Button onclick={() => prompt?.settle(false)}>{msg('common.cancel')}</Button>
-    <Button disabled={!folder} onclick={openFolder}>
+    <Button disabled={!!openHeld} reason={openHeld} busy={opening} onclick={openFolder}>
       <FolderOpen size="1.4rem" strokeWidth={1.8} />
       {msg('emul.biosOpenFolder')}
     </Button>
