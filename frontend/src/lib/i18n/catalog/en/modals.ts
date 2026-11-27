@@ -77,6 +77,11 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addSourceAdding': 'Adding…',
   'modals.addSourceMinimize': 'Minimize',
   'modals.addSourceBackgroundNote': 'You can minimize this window: the source keeps being added in the background and you will be notified when it is done.',
+  'modals.addSourceNoFile': 'No file chosen',
+  'modals.addSourceNeedInput': 'Type the source URL or choose a feed file',
+  'modals.addSourceCheckFailed': 'Could not check the source',
+  'modals.addSourceAddFailed': 'Could not add the source',
+  'modals.addSourcePickFailed': 'Could not open the file picker',
 
   // AvatarCropModal.svelte
   'modals.avatarCropTitle': 'Avatar',

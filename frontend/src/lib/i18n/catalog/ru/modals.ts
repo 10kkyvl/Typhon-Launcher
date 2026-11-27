@@ -74,6 +74,11 @@ export const modals = {
   'modals.addSourceAdding': 'Добавление…',
   'modals.addSourceMinimize': 'Свернуть',
   'modals.addSourceBackgroundNote': 'Окно можно свернуть: источник добавится в фоне, а лаунчер сообщит, когда закончит.',
+  'modals.addSourceNoFile': 'Файл не выбран',
+  'modals.addSourceNeedInput': 'Введите URL источника или выберите файл фида',
+  'modals.addSourceCheckFailed': 'Не удалось проверить источник',
+  'modals.addSourceAddFailed': 'Не удалось добавить источник',
+  'modals.addSourcePickFailed': 'Не удалось открыть выбор файла',
 
   // AvatarCropModal.svelte
   'modals.avatarCropTitle': 'Аватар',
