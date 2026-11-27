@@ -172,4 +172,24 @@ describe('SentDataModal', () => {
     expect(within(dialog).queryByText('https://old.test')).toBeNull();
     expect(within(dialog).getByText('https://new.test')).toBeTruthy();
   });
+
+  it('keeps the list of its latest opening when the failure of an earlier one lands last', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const first = deferred<SentDataEntry[]>();
+    const second = deferred<SentDataEntry[]>();
+    vi.mocked(listSentData).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { rerender } = show();
+    await rerender({ open: false });
+    await rerender({ open: true });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.sentDataTitle') });
+
+    second.resolve([entry({ endpoint: 'https://new.test' })]);
+    expect(await within(dialog).findByText('https://new.test')).toBeTruthy();
+    first.reject(new Error('late'));
+    await expect(first.promise).rejects.toThrow('late');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByText('https://new.test')).toBeTruthy();
+  });
 });

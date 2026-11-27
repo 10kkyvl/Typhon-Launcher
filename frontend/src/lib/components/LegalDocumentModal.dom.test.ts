@@ -236,4 +236,24 @@ describe('LegalDocumentModal', () => {
     expect(within(dialog).queryByText('The privacy text.')).toBeNull();
     expect(within(dialog).getByText('The terms text.')).toBeTruthy();
   });
+
+  it('keeps the document of its latest opening when an earlier one’s failure lands last', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const first = deferred<LegalDocument>();
+    const second = deferred<LegalDocument>();
+    vi.mocked(getLegalDocument).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { rerender } = show('privacy', 'Privacy');
+    await rerender({ open: false });
+    await rerender({ open: true, documentId: 'terms', title: 'Terms' });
+    const dialog = screen.getByRole('dialog', { name: 'Terms' });
+
+    second.resolve({ id: 'terms', title: 'Terms', body: 'The terms text.' });
+    expect(await within(dialog).findByText('The terms text.')).toBeTruthy();
+    first.reject(new Error('typhon:legal.read: late'));
+    await expect(first.promise).rejects.toThrow('late');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByText('The terms text.')).toBeTruthy();
+  });
 });
