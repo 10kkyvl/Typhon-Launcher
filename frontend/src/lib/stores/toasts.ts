@@ -22,7 +22,11 @@ import { writable, type Readable } from 'svelte/store';
  *   hold up the plain ones and the errors raised after them;
  * - while the live island shows the toasts (`toastsInIsland(true)`, motion on in the main window) it
  *   shows one at a time and ranks them itself, so every toast is on the list at once: none waits
- *   for a slot and none goes stale. The island keeps the clocks of the ones it does not show paused.
+ *   for a slot and none goes stale. The island keeps the clocks of the ones it does not show paused;
+ * - a toast with an action belongs to the session it was raised in: when the host tells another
+ *   session (`toastSession`, an opaque key: this store knows nothing of accounts), every toast with an
+ *   action goes, shown, held or waiting, so its action never runs for someone else. A plain one runs
+ *   out as before. A shell that goes and another that comes under the same session change nothing.
  */
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'danger';
@@ -77,6 +81,8 @@ let queue: Toast[] = [];
 let nextId = 1;
 let dialogOpen = false;
 let slots = MAX_VISIBLE;
+/** The session the host last told; `undefined` until it tells one. */
+let session: string | null | undefined;
 const clocks = new Map<number, Clock>();
 /** When each waiting toast joined the queue, or was last raised again. */
 const queuedAt = new Map<number, number>();
@@ -137,6 +143,7 @@ function reset(list: Toast[]): void {
   clocks.clear();
   queuedAt.clear();
   queue = [];
+  session = undefined;
   publish(list);
 }
 
@@ -227,6 +234,26 @@ export function holdToasts(open: boolean): void {
       run(item, clock);
     }
   }
+  promote();
+}
+
+/**
+ * The host says whose session it is now (the signed-in account, null for no one). The first session
+ * told dismisses nothing; a different one dismisses every toast with an action.
+ */
+export function toastSession(key: string | null): void {
+  const before = session;
+  session = key;
+  if (before === undefined || before === key) return;
+  const gone = new Set([...shown, ...queue].filter((item) => item.action).map((item) => item.id));
+  if (gone.size === 0) return;
+  for (const id of gone) {
+    clearTimeout(clocks.get(id)?.handle);
+    clocks.delete(id);
+    queuedAt.delete(id);
+  }
+  queue = queue.filter((item) => !gone.has(item.id));
+  publish(shown.filter((item) => !gone.has(item.id)));
   promote();
 }
 

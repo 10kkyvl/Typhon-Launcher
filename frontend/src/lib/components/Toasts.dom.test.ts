@@ -3,9 +3,11 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
+import type { CurrentUser } from '../services/account';
 import type { Theme } from '../services/theme';
 import { activeTheme, endTrial, themeTrial, tryTheme } from '../stores/theme';
 import { ACTION_MS, PLAIN_MS, RESUME_FLOOR_MS, dismissToast, holdToasts, toast, toasts } from '../stores/toasts';
+import { currentUser } from '../stores/user';
 import { user } from '../testing/dom';
 import ToastsHarness from '../testing/ToastsHarness.svelte';
 import { mountThemeGuard } from './ThemeGuard';
@@ -515,6 +517,79 @@ describe('Toasts: while a dialog is open', () => {
     await keys.click(close('Saved'));
 
     expect(shown()).toEqual([]);
+  });
+});
+
+describe('Toasts: the session a toast with an action was raised in', () => {
+  const player = (id: string) => ({ id, username: id, displayName: id }) as CurrentUser;
+
+  afterEach(() => {
+    currentUser.set(null);
+  });
+
+  // The sign-out as the app runs it: the account goes first, then the shell, with the sign-out
+  // dialog still open; the next account's shell mounts a new stack.
+  it('is gone when the account signs out under a dialog, and the next account\'s shell shows nothing of it', async () => {
+    currentUser.set(player('a'));
+    const first = render(ToastsHarness, { target: app, props: { dialog: false } });
+    let ran = 0;
+    toast('Mark "Game of A" as playing?', 'info', { label: 'Mark', run: () => void (ran += 1) });
+    toast('Saved');
+    await first.rerender({ dialog: true });
+    await tick();
+    vi.advanceTimersByTime(30_000);
+    await tick();
+    const held = get(toasts).map((item) => item.message);
+    currentUser.set(null);
+    const signedOut = get(toasts).map((item) => item.message);
+    first.unmount();
+    vi.advanceTimersByTime(3_000);
+    currentUser.set(player('b'));
+    render(ToastsHarness, { target: app, props: { dialog: false } });
+    await tick();
+    const underB = get(toasts).map((item) => item.message);
+    for (const item of get(toasts)) item.action?.run();
+    expect({ held, signedOut, underB, ran }).toEqual({
+      held: ['Mark "Game of A" as playing?'],
+      signedOut: [],
+      underB: [],
+      ran: 0,
+    });
+  });
+
+  it('is gone when another account is signed in while the stack is away, by the time the next stack is up', async () => {
+    currentUser.set(player('a'));
+    const first = render(ToastsHarness, { target: app, props: { dialog: false } });
+    await tick();
+    toast('Mark "Game of A" as playing?', 'info', { label: 'Mark', run: () => {} });
+    first.unmount();
+    currentUser.set(player('b'));
+    render(ToastsHarness, { target: app, props: { dialog: false } });
+    await tick();
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('outlives the swap between the desktop and the Big Picture shells under the same account, and still runs', async () => {
+    currentUser.set(player('a'));
+    const desktop = render(ToastsHarness, { target: app, props: { dialog: false } });
+    await tick();
+    let ran = 0;
+    toast('Mark "Game of A" as playing?', 'info', { label: 'Mark', run: () => void (ran += 1) });
+    vi.advanceTimersByTime(1_000);
+    desktop.unmount();
+    render(ToastsHarness, { target: app, props: { dialog: false } });
+    await tick();
+    const swapped = get(toasts).map((item) => item.message);
+    await user().click(screen.getByRole('button', { name: 'Mark' }));
+    expect({ swapped, ran, after: get(toasts) }).toEqual({ swapped: ['Mark "Game of A" as playing?'], ran: 1, after: [] });
+  });
+
+  it('raised before any stack was up stays when the first one mounts', async () => {
+    currentUser.set(player('a'));
+    toast('Mark "Game of A" as playing?', 'info', { label: 'Mark', run: () => {} });
+    render(ToastsHarness, { target: app, props: { dialog: false } });
+    await tick();
+    expect(get(toasts).map((item) => item.message)).toEqual(['Mark "Game of A" as playing?']);
   });
 });
 

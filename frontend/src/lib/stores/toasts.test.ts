@@ -17,6 +17,7 @@ import {
   toast,
   toastDuration,
   toasts,
+  toastSession,
   toastsInIsland,
 } from './toasts';
 
@@ -621,5 +622,53 @@ describe('toasts shown by the live island', () => {
     toast('three');
     expect(shown()).toHaveLength(MAX_VISIBLE);
     expect(waiting()).toEqual(['three']);
+  });
+});
+
+describe('the session the host tells', () => {
+  const offer = (label: string) => ({ label, run: () => {} });
+
+  it('dismisses nothing at the first session it is told, nor when it is told the same one again', () => {
+    toast('Mark as playing?', 'info', offer('Mark'));
+    toastSession('a');
+    toastSession('a');
+    expect(shown()).toEqual(['Mark as playing?']);
+  });
+
+  it('dismisses every toast with an action, shown or waiting, when the session changes; the plain ones stay', () => {
+    toastSession('a');
+    toast('Saved');
+    toast('Mark one?', 'info', offer('Mark'));
+    toast('Mark two?', 'info', offer('Mark'));
+    toast('Could not save', 'danger');
+    expect([shown(), waiting()]).toEqual([['Saved', 'Mark one?'], ['Could not save', 'Mark two?']]);
+    toastSession(null);
+    expect([shown(), waiting()]).toEqual([['Saved', 'Could not save'], []]);
+    vi.advanceTimersByTime(URGENT_MS);
+    expect(shown()).toEqual([]);
+  });
+
+  it('dismisses them from one account to another as from an account to no one', () => {
+    toastSession(null);
+    toast('Mark as playing?', 'info', offer('Mark'));
+    toastSession('b');
+    expect(shown()).toEqual([]);
+  });
+
+  it('dismisses those held by an open dialog too', () => {
+    toastSession('a');
+    holdToasts(true);
+    toast('Mark as playing?', 'info', offer('Mark'));
+    vi.advanceTimersByTime(60_000);
+    toastSession(null);
+    expect([shown(), waiting()]).toEqual([[], []]);
+  });
+
+  it('is forgotten with a clean slate: the next session told is a first one', () => {
+    toastSession('a');
+    toasts.set([]);
+    toast('Mark as playing?', 'info', offer('Mark'));
+    toastSession('b');
+    expect(shown()).toEqual(['Mark as playing?']);
   });
 });

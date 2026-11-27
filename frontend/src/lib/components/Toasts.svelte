@@ -3,7 +3,8 @@
   import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from '@lucide/svelte';
   import { msg } from '../i18n';
   import { modalOpen } from '../layers';
-  import { dismissToast, holdToasts, pauseToast, resumeToast, toasts, type Toast, type ToastKind } from '../stores/toasts';
+  import { dismissToast, holdToasts, pauseToast, resumeToast, toasts, toastSession, type Toast, type ToastKind } from '../stores/toasts';
+  import { currentUser } from '../stores/user';
   import Button from './Button.svelte';
   import { giveFocusBack } from './focusBack';
   import IconButton from './IconButton.svelte';
@@ -16,7 +17,7 @@
    * one (said when the reader is free). What a new toast adds to its lane is its message, the label of
    * its action (an offer worth hearing) and a close button that has a name but no text. Timing, the
    * queue and repeats are the store's (stores/toasts.ts); this component tells it when a toast is being
-   * read and whether a dialog is open.
+   * read, whether a dialog is open and whose session it is.
    */
 
   const icons = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert };
@@ -33,6 +34,11 @@
   $effect(() => holdToasts($modalOpen));
   // The shell can go with its dialog still open (the sign-out confirmation): nobody would release the hold.
   onDestroy(() => holdToasts(false));
+
+  // A subscription, not an effect: the sign-out sets the account before the shell goes, and an effect
+  // would be torn down with the shell before it ran. The swap between the desktop and Big Picture
+  // shells keeps the account, so the toasts outlive it.
+  onDestroy(currentUser.subscribe((user) => toastSession(user?.id ?? null)));
 
   const watch = createToastWatch<HTMLElement>();
   let stack = $state<HTMLElement>();
