@@ -77,7 +77,15 @@
     oninput={input}
     {onkeydown}
   />
-  <IconButton size="sm" label={msg('settings.copyHexOf', { name: label })} disabled={disabled || !validAccent(value)} onclick={copy}><Copy size="1.5rem" /></IconButton>
+  <!-- With no colour to copy it is refused in the Tab order and says why: the colour can turn invalid
+       under its focus (a palette, a reset). A field its caller disables keeps it plainly disabled. -->
+  <IconButton
+    size="sm"
+    label={msg('settings.copyHexOf', { name: label })}
+    disabled={disabled || !validAccent(value)}
+    reason={!disabled && !validAccent(value) ? msg('settings.copyHexNone') : ''}
+    onclick={copy}
+  ><Copy size="1.5rem" /></IconButton>
 </div>
 
 <style>

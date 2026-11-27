@@ -1,12 +1,28 @@
 import { screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 
 import { msg } from '../i18n';
+import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
+import { description } from '../testing/hints';
 import HexColorField from './HexColorField.svelte';
 import source from './HexColorField.svelte?raw';
+
+afterEach(() => {
+  toasts.set([]);
+  document.body.replaceChildren();
+});
+
+const copyButton = (name: string) => screen.getByRole('button', { name: msg('settings.copyHexOf', { name }) });
+const refusal = (control: HTMLElement) => ({
+  ariaDisabled: control.getAttribute('aria-disabled'),
+  disabled: control.matches(':disabled'),
+  title: control.getAttribute('title'),
+  reason: description(control),
+});
 
 describe('HexColorField', () => {
   it('is named by what colour it holds, with the visible "HEX" in the name', () => {
@@ -52,5 +68,34 @@ describe('HexColorField', () => {
     expect(screen.getByRole('textbox', { name: 'Frame color HEX' }).classList.contains('input')).toBe(true);
     const style = /<style>([\s\S]*)<\/style>/.exec(source)?.[1] ?? '';
     expect(style).not.toMatch(/:focus/);
+  });
+
+  it('with no colour to copy, keeps the copy button in the Tab order, refused, saying why; a press copies nothing', async () => {
+    const { user } = renderDom(HexColorField, { label: 'Frame color', value: '#12' });
+    const copy = copyButton('Frame color');
+
+    expect(refusal(copy)).toEqual({ ariaDisabled: 'true', disabled: false, title: null, reason: msg('settings.copyHexNone') });
+    copy.focus();
+    await user.keyboard('{Enter}');
+    await user.click(copy);
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('focused while its colour turns invalid, the copy button keeps focus and says why', async () => {
+    const { rerender } = renderDom(HexColorField, { label: 'Frame color', value: '#112233' });
+    const copy = copyButton('Frame color');
+    copy.focus();
+    expect(refusal(copy)).toEqual({ ariaDisabled: null, disabled: false, title: null, reason: '' });
+
+    await rerender({ label: 'Frame color', value: '#1122' });
+
+    expect(document.activeElement).toBe(copy);
+    expect(refusal(copy)).toEqual({ ariaDisabled: 'true', disabled: false, title: null, reason: msg('settings.copyHexNone') });
+  });
+
+  it('a field disabled by its caller keeps its copy button disabled, with no reason of its own', () => {
+    renderDom(HexColorField, { label: 'Frame color', value: '#112233', disabled: true });
+
+    expect(copyButton('Frame color').matches(':disabled')).toBe(true);
   });
 });
