@@ -7,9 +7,11 @@ import { accountService, coverService, MESSAGING_CALLS, profileService } from '.
  * this folder that mounts a part replaces the three services and the chat store whole
  * (profileTesting.ts), each by its one line and nothing else, and fakes the three generated bindings,
  * so a call that slipped past the mocks is recorded rather than sent, and asserts that none was. A
- * second mock of a module, a function laid over the factory's answer, or a way around the mocks would
- * put a real call back, so each is refused. A source tripwire over the test files: what a mock
- * answers is each test's to get right.
+ * second mock of one of those modules (vi.mock, vi.doMock, vi.unmock, vi.doUnmock, under any quote and
+ * any spelling of its path), a function laid over the factory's answer, the real module taken by
+ * vi.importActual, a module named by a path the guard cannot read, or a mock handed a function by
+ * reference would put a real call back, so each is refused. A source tripwire over the test files:
+ * what a mock answers is each test's to get right.
  */
 const tests = import.meta.glob<string>('./*.test.ts', { query: '?raw', import: 'default', eager: true });
 const services = import.meta.glob<string>(['../../lib/services/account.ts', '../../lib/services/profile.ts', '../../lib/services/profileCover.ts', '../../lib/stores/messaging.ts'], {
@@ -19,6 +21,14 @@ const services = import.meta.glob<string>(['../../lib/services/account.ts', '../
 });
 
 const MOUNTS = /\bimport\s+\w+\s+from\s+'\.\/\w+\.svelte'/;
+
+/** Where the tests of this folder sit: a module path in them is read from here. */
+const HERE = 'file:///src/routes/profile/';
+
+/** The module a path names from this folder: the extension, a query and a trailing index dropped. */
+function moduleOf(path: string): string {
+  return new URL(path, HERE).pathname.replace(/\/index(?:\.[cm]?[jt]s)?$/, '').replace(/\.[cm]?[jt]s$/, '');
+}
 
 const LINES: [what: string, line: string, module: string][] = [
   ['the account binding', "vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./profileTesting')).fakeService(await original(), 'account'));", '../../../bindings/typhon/internal/account'],
@@ -30,14 +40,24 @@ const LINES: [what: string, line: string, module: string][] = [
   ['the whole chat store', "vi.mock('../../lib/stores/messaging', async (original) => (await import('./profileTesting')).messagingStore(await original()));", '../../lib/stores/messaging'],
 ];
 
+// Every call that mocks, unmocks or takes the real module, with the path it is given as a literal or as
+// `import('…')`; a call given anything else names a module the guard cannot read.
+const MODULE_CALL = /\bvi\s*\.\s*(mock|doMock|unmock|doUnmock|importActual)\s*(?:<[^>]*>)?\s*\(\s*(?:import\s*\(\s*)?(?:(['"`])((?:(?!\2).)*)\2)?/g;
+// A mock runs what the test writes in place, never a function handed over by reference.
+const BY_REFERENCE = /\.mockImplementation(?:Once)?\(\s*(?!async\b|function\b|\(|[\w$]+\s*=>|vi\.fn\b)/;
+
+function moduleCalls(source: string): { kind: string; module: string | null }[] {
+  return [...source.matchAll(MODULE_CALL)].map((match) => ({ kind: match[1], module: match[3] === undefined ? null : moduleOf(match[3]) }));
+}
+
 function missing(source: string): string[] {
-  const lines = new Set(source.split('\n').map((line) => line.trim()));
-  const gaps = LINES.filter(([, line]) => !lines.has(line)).map(([what]) => what);
-  for (const [, , module] of LINES) {
-    const mocks = source.split(`ock('${module}'`).length - 1;
-    if (mocks !== 1) gaps.push(`one mock of ${module}, not ${mocks}`);
-  }
-  if (/\bimportActual\b|\bdoMock\b|\bspyOn\b|\bunmock\b/.test(source)) gaps.push('no way around the mocks');
+  const lines = source.split('\n').map((line) => line.trim());
+  const found = moduleCalls(source);
+  const gaps = LINES.filter(
+    ([, line, module]) => !lines.includes(line) || found.filter((call) => call.module === moduleOf(module)).length !== 1,
+  ).map(([what]) => what);
+  if (found.some((call) => call.module === null)) gaps.push('a module the guard cannot read');
+  if (BY_REFERENCE.test(source)) gaps.push('no real function behind a mock');
   if (!/expect\(calls\)\.toEqual\(\[\]\)/.test(source)) gaps.push('no call reached a binding');
   return gaps;
 }
@@ -77,9 +97,37 @@ describe('tests that mount a profile part', () => {
     const spread = whole.replace(account, account.replace(/=> (.*)\);$/, '=> ({ ...$1, updateProfile: realUpdate }));'));
     expect(missing(whole)).toEqual([]);
     expect(missing(spread)).toContain('the whole account service');
-    expect(missing(`${whole}\nvi.doMock('../../lib/services/profile', async (original) => ({ ...(await original()) }));`)).toContain('one mock of ../../lib/services/profile, not 2');
-    expect(missing(`${whole}\nconst real = await vi.importActual('../../lib/services/account');`)).toContain('no way around the mocks');
+    expect(missing(`${whole}\nvi.doMock('../../lib/services/profile', async (original) => ({ ...(await original()) }));`)).toContain('the whole profile service');
+    expect(missing(`${whole}\nconst real = await vi.importActual('../../lib/services/account');`)).toContain('the whole account service');
     expect(missing(whole.replace('expect(calls).toEqual([]);', ''))).toContain('no call reached a binding');
+  });
+
+  it('refuse a second mock of a module under any spelling of its path, or the real module taken', () => {
+    const whole = `${LINES.map(([, line]) => line).join('\n')}\nexpect(calls).toEqual([]);`;
+    for (const second of [
+      'vi.mock("../../lib/services/account", async (original) => await original());',
+      'vi.mock(`../../lib/services/profileCover.ts`, async (original) => await original());',
+      "vi.mock('../../lib/services/profile.js', async (original) => await original());",
+      "vi.doMock('../../lib/services/../services/account?x=1', async (original) => await original());",
+      "vi.mock(import('../../lib/stores/messaging'), async (original) => await original());",
+      "vi.unmock('./../../lib/services/profileCover');",
+      "vi.doUnmock('../../../bindings/typhon/internal/account/index.ts');",
+      "const real = await vi.importActual<typeof import('../../lib/services/account')>('../../lib/services/account');",
+    ]) {
+      expect(missing(`${whole}\n${second}\n`).some((gap) => gap.startsWith('the ')), second).toBe(true);
+    }
+    expect(missing(`${whole}\nvi.mock('../../lib/stores/profileAccent', async (actual) => ({ ...(await actual<object>()) }));\n`)).toEqual([]);
+  });
+
+  it('refuse a module named by a path the guard cannot read, or a real function handed to a mock', () => {
+    const whole = `${LINES.map(([, line]) => line).join('\n')}\nexpect(calls).toEqual([]);`;
+    for (const line of ["const path = '../../lib/services/account';\nconst real = await vi.importActual(path);", 'vi.doMock(coverPath, async (original) => await original());']) {
+      expect(missing(`${whole}\n${line}\n`), line).toContain('a module the guard cannot read');
+    }
+    for (const line of ['vi.mocked(updateProfile).mockImplementation(real.updateProfile);', 'vi.mocked(uploadProfileCover).mockImplementationOnce(actual.uploadProfileCover);']) {
+      expect(missing(`${whole}\n${line}\n`), line).toContain('no real function behind a mock');
+    }
+    expect(missing(`${whole}\nvi.mocked(updateProfile).mockImplementation(async () => player());\n`)).toEqual([]);
   });
 });
 
