@@ -212,7 +212,12 @@
       {:else}
         <div class="chips" role="group" aria-labelledby="{uid}-genres-label">
           {#each shownGenres as genre (genre)}
-            <Chip selected={picked.some((own) => fold(own) === fold(genre))} onclick={() => toggleGenre(genre)}>
+            <Chip
+              selected={picked.some((own) => fold(own) === fold(genre))}
+              disabled={busy}
+              reason={heldReason}
+              onclick={() => toggleGenre(genre)}
+            >
               {genreLabel(genre)}
             </Chip>
           {/each}
@@ -222,7 +227,9 @@
 
     <div class="field">
       <span class="field-label" id="{uid}-status-label">{msg('modals.collectionStatusLabel')}</span>
-      <Select options={statusOptions} bind:value={status} labelledby="{uid}-status-label" />
+      <!-- Select has no held state with a reason: natively disabled while a save runs, it leaves the Tab
+           order until the save answers. -->
+      <Select options={statusOptions} bind:value={status} labelledby="{uid}-status-label" disabled={busy} />
     </div>
 
     {#if noCriteria}

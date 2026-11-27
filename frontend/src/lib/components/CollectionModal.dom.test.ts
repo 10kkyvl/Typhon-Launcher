@@ -172,6 +172,41 @@ describe('CollectionModal: while a save or a delete runs', () => {
     call.resolve(evenings);
     await vi.waitFor(() => expect(editor.isConnected).toBe(false));
   });
+
+  it('holds the genre chips with the reason and the status field, so nothing changes under the save', async () => {
+    const call = held<LibraryCollection>();
+    vi.mocked(saveCollection).mockReturnValueOnce(call.promise);
+    const editor = openEditor();
+    const keys = user();
+    await keys.click(within(editor).getByRole('button', { name: msg('common.save') }));
+
+    const chip = within(within(editor).getByRole('group', { name: msg('modals.collectionGenresLabel') })).getByRole('button', { name: 'Roguelike' });
+    expect(chip).toHaveProperty('disabled', false);
+    expect(chip.getAttribute('aria-disabled')).toBe('true');
+    expect(describedBy(chip)).toContain(msg('modals.actionRunning'));
+    await keys.click(chip);
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    const status = within(editor).getByRole('combobox', { name: msg('modals.collectionStatusLabel') });
+    expect(status).toHaveProperty('disabled', true);
+
+    call.resolve(evenings);
+    await vi.waitFor(() => expect(editor.isConnected).toBe(false));
+    expect(saveCollection).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ genres: [], status: '' }));
+  });
+
+  it('gives the genre chips and the status field back when the save is refused', async () => {
+    vi.mocked(saveCollection).mockRejectedValueOnce(new Error('typhon:library.something_new: запись не удалась'));
+    const editor = openEditor();
+    const keys = user();
+    await keys.click(within(editor).getByRole('button', { name: msg('common.save') }));
+    await within(editor).findByRole('alert');
+
+    const chip = within(within(editor).getByRole('group', { name: msg('modals.collectionGenresLabel') })).getByRole('button', { name: 'Roguelike' });
+    expect(chip.getAttribute('aria-disabled')).toBeNull();
+    await keys.click(chip);
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    expect(within(editor).getByRole('combobox', { name: msg('modals.collectionStatusLabel') })).toHaveProperty('disabled', false);
+  });
 });
 
 describe('CollectionModal: the tag suggestions', () => {
