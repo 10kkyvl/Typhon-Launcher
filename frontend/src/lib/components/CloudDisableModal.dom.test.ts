@@ -180,8 +180,8 @@ function openSettings() {
   });
   authState.set('authenticated');
   settings.set({ ...SAVED });
-  render(Settings, { target: app, props: { tab: 'downloads' } });
-  return { keys: user(), toggle: screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') }) };
+  const { unmount } = render(Settings, { target: app, props: { tab: 'downloads' } });
+  return { keys: user(), toggle: screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') }), unmount };
 }
 
 const saved = () => vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...get(settings), ...patch }) as SettingsData);
@@ -260,6 +260,36 @@ describe('CloudDisableModal on the settings page', () => {
     expect(describedBy(toggle)).not.toContain(msg('cloudsaves.heldDeleting'));
     expect(saveSettingsPatch).toHaveBeenCalledTimes(1);
     expect(cloudForget).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the switch with its reason on a page opened again while the deletion still runs, and says its end once', async () => {
+    saved();
+    const forget = deferred<void>();
+    vi.mocked(cloudForget).mockImplementation(() => forget.promise);
+    const { keys, toggle, unmount } = openSettings();
+    await keys.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+    await vi.waitFor(() => expect(cloudForget).toHaveBeenCalledTimes(1));
+    unmount();
+
+    try {
+      render(Settings, { target: app, props: { tab: 'downloads' } });
+      const again = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+      expect(again.getAttribute('aria-disabled')).toBe('true');
+      expect(describedBy(again)).toContain(msg('cloudsaves.heldDeleting'));
+      await keys.click(again);
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      forget.resolve();
+      await vi.waitFor(() => expect(again.getAttribute('aria-disabled')).toBeNull());
+      expect(describedBy(again)).not.toContain(msg('cloudsaves.heldDeleting'));
+      expect(get(toasts).map(({ message, kind }) => [message, kind])).toEqual([[msg('cloudsaves.forgetDone'), 'success']]);
+      expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ cloudSaves: false });
+      expect(cloudForget).toHaveBeenCalledTimes(1);
+    } finally {
+      forget.resolve();
+    }
   });
 
   it('says once that the cloud copies were deleted, in a polite toast, when the deletion ends', async () => {

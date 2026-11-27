@@ -39,6 +39,11 @@ export function overlayReason(err: unknown): string {
   return codeText(err, '');
 }
 
+// The page's cloud work: the switch is held, saying which, so no dialog opens into it. It lives past
+// the page: a deletion runs on after the player leaves Settings, and a page opened meanwhile holds the
+// switch until it ends.
+let cloudWork = $state<'' | 'saving' | 'deleting'>('');
+
 /**
  * What the settings page keeps while its tabs come and go: the app, system and legal facts read on
  * opening, the logs export and send, the account sync actions, cloud saves, the overlay status, the
@@ -225,8 +230,6 @@ export function createSettingsPage() {
 
   let cloudConsentOpen = $state(false);
   let cloudDisableOpen = $state(false);
-  // The page's own cloud work: the switch is held, saying which, so no dialog opens into it.
-  let cloudWork = $state<'' | 'saving' | 'deleting'>('');
   let cloudForgetFailed = $state(false);
 
   // A failed cloud saves write is said by the dialog that stays open, not by a toast behind it; the
