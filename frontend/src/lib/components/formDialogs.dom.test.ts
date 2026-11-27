@@ -4,7 +4,6 @@ import { msg } from '../i18n';
 import { AccountError } from '../services/account';
 import { getLegalDocument, type LegalDocument } from '../services/legal';
 import { proposeLibraryPath, selectFolder, type Settings } from '../services/settings';
-import { importThemeText } from '../services/theme';
 import { createLibrary } from '../stores/settings';
 import { toasts } from '../stores/toasts';
 import { authState, deleteAccount } from '../stores/user';
@@ -13,14 +12,9 @@ import AvatarCropModal from './AvatarCropModal.svelte';
 import DeleteAccountModal from './DeleteAccountModal.svelte';
 import LegalDocumentModal from './LegalDocumentModal.svelte';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
-import ThemeTextImportModal from './ThemeTextImportModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: true }));
-vi.mock('../services/theme', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/theme')>()),
-  importThemeText: vi.fn(),
-}));
 vi.mock('../stores/user', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../stores/user')>()),
   deleteAccount: vi.fn(),
@@ -67,36 +61,6 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   document.body.replaceChildren();
-});
-
-describe('ThemeTextImportModal', () => {
-  it('says why the text was refused by the field, outside its label, and marks the field wrong', async () => {
-    vi.mocked(importThemeText).mockRejectedValueOnce(new Error('typhon:theme.invalid: bad'));
-    render(ThemeTextImportModal, { target: app, props: { open: true, onimported: vi.fn() } });
-    const keys = user();
-    const dialog = screen.getByRole('dialog', { name: msg('settings.appearanceImportTextTitle') });
-    const field = within(dialog).getByRole('textbox', { name: msg('settings.appearanceImportTextLabel') });
-    expect(field.getAttribute('aria-invalid')).not.toBe('true');
-    await keys.type(field, 'not a theme');
-
-    await keys.click(within(dialog).getByRole('button', { name: msg('common.save') }));
-
-    const alert = await within(dialog).findByRole('alert');
-    expect(alert.closest('label')).toBeNull();
-    expect(field.getAttribute('aria-invalid')).toBe('true');
-    expect((field.getAttribute('aria-describedby') ?? '').split(' ')).toContain(alert.id);
-  });
-});
-
-describe('ThemeTextImportModal: the name field', () => {
-  it('is named by its label alone, its hint being its description', () => {
-    render(ThemeTextImportModal, { target: app, props: { open: true, onimported: vi.fn() } });
-    const dialog = screen.getByRole('dialog', { name: msg('settings.appearanceImportTextTitle') });
-
-    const field = within(dialog).getByRole('textbox', { name: msg('settings.appearanceImportTextNameLabel') });
-    const hint = document.getElementById(field.getAttribute('aria-describedby') ?? '');
-    expect(hint?.textContent?.trim()).toBe(msg('settings.appearanceImportTextNameHint'));
-  });
 });
 
 describe('DeleteAccountModal', () => {

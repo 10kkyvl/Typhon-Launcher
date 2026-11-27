@@ -351,6 +351,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', true],
   ],
+  // A theme that could not be written just happened.
+  'lib/components/ThemeTextImportModal.svelte': [['danger', true]],
   'routes/settings/DiscordCard.svelte': [
     ['danger', true],
     ['danger', true],

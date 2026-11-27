@@ -1,70 +1,120 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
-  import { msg } from '../i18n';
+  import Notice from './Notice.svelte';
+  import TextArea from './TextArea.svelte';
+  import TextField from './TextField.svelte';
+  import { errorCode, msg } from '../i18n';
   import { importThemeText, type Theme } from '../services/theme';
-  import { themeErrorText } from '../theme/themeErrors';
+  import { REASONS, themeErrorText } from '../theme/themeErrors';
 
+  /**
+   * A theme imported from pasted text, under an optional name. Save sends one import per press and
+   * keeps the focus, busy, while the fields refuse edits and Cancel waits with the reason. A refusal
+   * is said where it belongs, in the launcher's words: a refused name the player gave at the name
+   * field, anything else about the text at the text field, each taking the focus; a failure that is not
+   * about either (the theme could not be written) in the dialog. What was pasted stays.
+   */
   let {
     open = $bindable(false),
     onimported,
   }: { open?: boolean; onimported: (theme: Theme) => void | Promise<void> } = $props();
   const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
   let text = $state('');
   let name = $state('');
-  let error = $state('');
+  let textError = $state('');
+  let nameError = $state('');
+  let failure = $state('');
   let busy = $state(false);
+  let textarea = $state<HTMLTextAreaElement>();
+  let input = $state<HTMLInputElement>();
 
   $effect(() => {
     if (!open) return;
     text = '';
     name = '';
-    error = '';
+    textError = '';
+    nameError = '';
+    failure = '';
   });
 
+  const empty = $derived(!text.trim());
+
   async function save() {
+    if (busy || empty) return;
     busy = true;
-    error = '';
+    textError = '';
+    nameError = '';
+    failure = '';
+    const named = name.trim();
+    let refusedAt: HTMLElement | undefined;
     try {
-      const theme = await importThemeText(text, name.trim());
+      const theme = await importThemeText(text, named);
       open = false;
       await onimported(theme);
     } catch (err) {
-      error = themeErrorText(err);
+      const code = errorCode(err);
+      if (code === 'theme.invalid_name' && named) {
+        nameError = themeErrorText(err);
+        refusedAt = input;
+      } else if (REASONS[code]) {
+        textError = themeErrorText(err);
+        refusedAt = textarea;
+      } else {
+        console.error('theme text import', err);
+        failure = msg('errLibrary.themeErrFallback');
+      }
     } finally {
       busy = false;
     }
+    if (!refusedAt) return;
+    await tick();
+    refusedAt.focus();
   }
 </script>
 
-<Modal dismissible={!busy} bind:open title={msg('settings.appearanceImportTextTitle')} width="56rem">
+<Modal dismissible={!busy} bind:open {busy} title={msg('settings.appearanceImportTextTitle')} width="56rem">
   <div class="form">
-    <div class="field">
-      <label class="field-label" for="{uid}-text">{msg('settings.appearanceImportTextLabel')}</label>
-      <textarea
-        id="{uid}-text"
-        class="input area"
-        rows="12"
-        spellcheck="false"
-        placeholder={msg('settings.appearanceImportTextPlaceholder')}
-        disabled={busy}
-        aria-invalid={error ? 'true' : undefined}
-        aria-describedby={error ? `${uid}-error` : undefined}
-        bind:value={text}
-      ></textarea>
-      {#if error}<span class="error" id="{uid}-error" role="alert">{error}</span>{/if}
-    </div>
-    <div class="field">
-      <label class="field-label" for="{uid}-name">{msg('settings.appearanceImportTextNameLabel')}</label>
-      <input id="{uid}-name" class="input" type="text" maxlength="64" disabled={busy} aria-describedby="{uid}-name-hint" bind:value={name} />
-      <span class="hint" id="{uid}-name-hint">{msg('settings.appearanceImportTextNameHint')}</span>
-    </div>
+    <TextArea
+      bind:value={text}
+      bind:textarea
+      label={msg('settings.appearanceImportTextLabel')}
+      placeholder={msg('settings.appearanceImportTextPlaceholder')}
+      rows={12}
+      readonly={busy}
+      error={textError}
+      oninput={() => (textError = '')}
+    />
+    <TextField
+      bind:value={name}
+      bind:input
+      label={msg('settings.appearanceImportTextNameLabel')}
+      hint={msg('settings.appearanceImportTextNameHint')}
+      maxlength={64}
+      readonly={busy}
+      error={nameError}
+      oninput={() => (nameError = '')}
+    />
+    {#if failure}
+      <Notice tone="danger" compact id={failureId}>{failure}</Notice>
+    {/if}
   </div>
 
   {#snippet footer()}
-    <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!busy && !text.trim()} {busy} onclick={save}>{msg('common.save')}</Button>
+    <Button disabled={busy} reason={busy ? msg('settings.appearanceImportTextBusy') : ''} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button
+      variant="primary"
+      disabled={!busy && empty}
+      reason={!busy && empty ? msg('settings.appearanceImportTextEmpty') : ''}
+      {busy}
+      aria-describedby={failure ? failureId : undefined}
+      onclick={save}
+    >
+      {msg('common.save')}
+    </Button>
   {/snippet}
 </Modal>
 
@@ -73,38 +123,5 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-  }
-
-  .field-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
-  }
-
-  .area {
-    height: auto;
-    padding: 0.9rem 1.2rem;
-    resize: vertical;
-    line-height: 1.5;
-    font-family: var(--font-mono);
-    font-variant-ligatures: none;
-    font-size: var(--font-sm);
-  }
-
-  .error {
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--danger);
-  }
-
-  .hint {
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 </style>
