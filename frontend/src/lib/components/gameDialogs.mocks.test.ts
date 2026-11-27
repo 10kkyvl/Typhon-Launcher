@@ -48,6 +48,7 @@ const DIALOGS = [
   // sync consent is a legal act that lets the library leave the device.
   'DeleteAccountModal',
   'AvatarCropModal',
+  'SocialConsentScreen',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -56,13 +57,17 @@ const WRAPPERS = wrappers(DIALOGS, components);
 const WRAPS = importOf(WRAPPERS);
 
 // Tests of a wrapper that open a dialog's flow: the status and tags dialogs from the game menu, the
-// report from a review card, the restart dialog from the sidebar and the banner in a seamless restart.
+// report from a review card, the restart dialog from the sidebar and the banner in a seamless restart,
+// and the sync consent given on each of the three screens that ask for it.
 const HELD = [
   './ContextMenu.dom.test.ts',
   './GameQuickMenu.dom.test.ts',
   './GameQuickMenu.focus.dom.test.ts',
   '../../routes/game/ReviewCard.dom.test.ts',
   './UpdateRestartModal.handoff.dom.test.ts',
+  '../../routes/friends/Friends.consent.dom.test.ts',
+  '../../routes/activity/Activity.consent.dom.test.ts',
+  '../../routes/user/User.consent.dom.test.ts',
 ];
 
 // Tests of the whole settings page, which mounts the sources notice and, through the About tab's
@@ -156,6 +161,7 @@ describe('tests that mount a game or library dialog', () => {
         './UpdateCard.test.ts',
         './DeleteAccountModal.dom.test.ts',
         './AvatarCropModal.dom.test.ts',
+        './SocialConsentScreen.dom.test.ts',
         ...HELD,
       ]),
     );
@@ -204,7 +210,25 @@ describe('tests that mount a game or library dialog', () => {
 describe('tests of a component that mounts a game or library dialog', () => {
   it('know the components that mount one, at any depth', () => {
     expect(WRAPPERS).toEqual(
-      expect.arrayContaining(['App', 'GameDetails', 'GameQuickMenu', 'GameReviews', 'GameSaves', 'Library', 'ReviewCard', 'Sources', 'Settings', 'UpdateBanner', 'SidebarStatus', 'GameSections']),
+      expect.arrayContaining([
+        'App',
+        'GameDetails',
+        'GameQuickMenu',
+        'GameReviews',
+        'GameSaves',
+        'Library',
+        'ReviewCard',
+        'Sources',
+        'Settings',
+        'UpdateBanner',
+        'SidebarStatus',
+        'GameSections',
+        'ProfileSettingsModal',
+        'AvatarEditor',
+        'Friends',
+        'Activity',
+        'UserProfile',
+      ]),
     );
     expect(WRAPPERS).not.toContain('GameCard');
   });

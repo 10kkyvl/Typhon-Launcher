@@ -1,39 +1,91 @@
 <script lang="ts">
-  import { get } from 'svelte/store';
-  import { accountErrorText } from '../services/accountMessages';
-  import { settings, updateSettings } from '../stores/settings';
+  import { onDestroy, untrack } from 'svelte';
+  import { saveSettingsPatch } from '../services/settings';
+  import { settings } from '../stores/settings';
   import { loadFriends } from '../stores/social';
   import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
-  import { msg } from '../i18n';
+  import Notice from './Notice.svelte';
+  import { errorCode, hasMessage, msg } from '../i18n';
 
+  /**
+   * The consent to sync the library with the account, which the friends, the feed and the players'
+   * pages need. Giving it is a legal act: it is sent once, only by Enable's own press, and "Not now"
+   * is the first focus. The consent shows in the settings only once Go has saved it, so the screen
+   * under the dialog reads nothing before that (the store's optimistic update would show it at once,
+   * while Go still refuses every social call); then the dialog reads the friends and closes. A failed
+   * save is said here and the dialog stays. An answer for an opening that is over, or for a dialog
+   * that is gone, is said once in a toast.
+   */
   let { open = $bindable(false), onclose }: { open?: boolean; onclose?: () => void } = $props();
+  const uid = $props.id();
+  const failureId = `${uid}-failure`;
 
   let saving = $state(false);
+  let failure = $state('');
+  let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
+  $effect(() => {
+    void open;
+    untrack(() => {
+      opening += 1;
+      saving = false;
+      failure = '';
+    });
+  });
 
   function close() {
     open = false;
     onclose?.();
   }
 
+  function failureText(err: unknown): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg('modals.socialConsentEnableFailedReason', { reason: msg(code) }) : msg('modals.socialConsentEnableFailed');
+  }
+
   async function enable() {
     if (saving) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     saving = true;
+    failure = '';
     try {
-      await updateSettings({ accountSync: true });
-      if (!get(settings)?.accountSync) return;
-      await loadFriends();
-      close();
+      const saved = await saveSettingsPatch({ accountSync: true });
+      if (!saved.accountSync) throw new Error('account sync not kept');
+      // Only the consent's own key: other saves may be on their way through the settings queue.
+      settings.update((current) => (current ? { ...current, accountSync: true } : current));
     } catch (err) {
-      toast(accountErrorText(err, msg('modals.socialConsentEnableFailed')), 'danger');
-    } finally {
-      saving = false;
+      if (heard()) {
+        failure = failureText(err);
+        saving = false;
+        await hand(() => document.getElementById(failureId));
+      } else {
+        toast(failureText(err), 'danger');
+      }
+      return;
     }
+    if (!heard()) {
+      toast(msg('modals.socialConsentEnabled'), 'success');
+      return;
+    }
+    await loadFriends();
+    if (!heard()) return;
+    saving = false;
+    close();
   }
+
+  const heldReason = $derived(saving ? msg('modals.actionRunning') : '');
 </script>
 
-<Modal dismissible={!saving} bind:open title={msg('modals.socialConsentTitle')} width="50rem" onclose={() => onclose?.()}>
+<Modal dismissible={!saving} busy={saving} bind:open title={msg('modals.socialConsentTitle')} width="50rem" onclose={() => onclose?.()}>
   <div class="body">
     <p class="text">
       {msg('modals.socialConsentIntro')}
@@ -48,11 +100,14 @@
     <p class="text">
       {msg('modals.socialConsentOutro')}
     </p>
+    {#if failure}<Notice tone="danger" compact id={failureId} tabindex={-1}>{failure}</Notice>{/if}
   </div>
 
   {#snippet footer()}
-    <Button disabled={saving} onclick={close}>{msg('modals.socialConsentNotNow')}</Button>
-    <Button variant="primary" disabled={saving} onclick={enable}>
+    <span class="safe" data-autofocus>
+      <Button disabled={saving} reason={heldReason} onclick={close}>{msg('modals.socialConsentNotNow')}</Button>
+    </span>
+    <Button variant="primary" busy={saving} onclick={enable}>
       {saving ? msg('modals.socialConsentEnabling') : msg('modals.socialConsentEnable')}
     </Button>
   {/snippet}
@@ -80,5 +135,9 @@
     font-size: var(--font-sm);
     line-height: 1.55;
     color: var(--text-2);
+  }
+
+  .safe {
+    display: contents;
   }
 </style>

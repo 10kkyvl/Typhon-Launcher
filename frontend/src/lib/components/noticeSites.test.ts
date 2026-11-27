@@ -207,6 +207,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['warning', false],
   ],
+  // A failed save of the sync consent just happened.
+  'lib/components/SocialConsentScreen.svelte': [['danger', true]],
   // The source's last stored error is shown on every opening; a failed load just happened.
   'lib/components/SourceDetailsModal.svelte': [
     ['danger', false],

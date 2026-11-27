@@ -9,6 +9,7 @@ import { friendsLoaded, friendsPage, loadFriends } from '../../lib/stores/social
 import { toast } from '../../lib/stores/toasts';
 import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
+import { sentToGo } from '../../lib/testing/gameDialogsTesting';
 import { user } from '../../lib/testing/dom';
 import Friends from './Friends.svelte';
 import { NoResize, friend } from './friendsTesting';
@@ -22,7 +23,7 @@ import { NoResize, friend } from './friendsTesting';
 
 const PAGE: FriendsPage = { friends: [friend('u-ana', 'Ana', 'online')], incoming: [], outgoing: [] };
 
-vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/gameDialogsTesting')).goRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/social', async (original) => (await import('./friendsTesting')).socialService(await original()));
 vi.mock('../../lib/services/messaging', async (original) => (await import('./friendsTesting')).messagingService(await original()));
@@ -61,6 +62,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
   expect(calls).toEqual([]);
   cleanup();
   document.body.replaceChildren();
@@ -71,6 +73,7 @@ afterEach(() => {
   // Back to each mock's own answer: a queued answer a test left unused must not reach the next one.
   vi.resetAllMocks();
   vi.unstubAllGlobals();
+  expect(sent).toEqual([]);
 });
 
 describe('Friends: the sync consent given on the screen', () => {
