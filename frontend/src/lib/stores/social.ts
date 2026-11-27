@@ -157,7 +157,16 @@ let opening: Promise<boolean> | null = null;
  * launcher started, it predates nothing the player did. Otherwise as `reloadFriends`.
  */
 export function readFriendsOnArrival(): Promise<boolean> {
-  return opening ?? reloadFriends();
+  const start = opening;
+  if (!start) return reloadFriends();
+  const asked = session;
+  // A start's answer that gave way to a page Go sent while the session was checked brings no page and
+  // no error: the screen then reads once itself, so that a failure is its notice with Retry, not a
+  // spinner until Go's next good poll.
+  return start.then((loaded) => {
+    if (loaded || asked !== session || get(friendsLoadError) != null) return loaded;
+    return reloadFriends();
+  });
 }
 
 /**

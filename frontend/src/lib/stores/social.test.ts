@@ -739,6 +739,63 @@ describe('the read of a start (the stored session checked behind the splash)', (
     expect(held(store).friends).toBe(2);
   });
 
+  it('that gave way to a page Go sent while the session was checked has the screen arriving meanwhile read once itself', async () => {
+    const store = await starting();
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never).mockResolvedValueOnce(page(4, 1) as never);
+
+    const started = store.initSocial();
+    store.handler()({ data: page(5, 2) });
+    store.authState.set('authenticated');
+    const arrival = store.readFriendsOnArrival();
+    answer.resolve(page(3, 1));
+
+    expect(await arrival).toBe(true);
+    await started;
+    await flush();
+    expect(asked(store.service)).toEqual([1, 1, 2]);
+    expect(held(store)).toEqual({ friends: 4, incoming: 1, loaded: true, error: null });
+  });
+
+  it('that gave way, the screen’s own read then failing, leaves the failure as the screen’s state, never a toast', async () => {
+    const store = await starting();
+    const failure = new Error('timeout');
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+    vi.mocked(store.service.refresh).mockRejectedValueOnce(failure);
+
+    const started = store.initSocial();
+    store.handler()({ data: page(5, 2) });
+    store.authState.set('authenticated');
+    const arrival = store.readFriendsOnArrival();
+    answer.resolve(page(3, 1));
+
+    expect(await arrival).toBe(false);
+    await started;
+    await flush();
+    expect(asked(store.service)).toEqual([1, 1, 1]);
+    expect(held(store)).toEqual({ friends: 0, incoming: 0, loaded: false, error: failure });
+    expect(store.toast).not.toHaveBeenCalled();
+  });
+
+  it('that failed is the screen’s notice already: the screen arriving meanwhile reads nothing more', async () => {
+    const store = await starting();
+    const failure = new Error('timeout');
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(store.service.friends).mockReturnValueOnce(answer.promise as never);
+
+    const started = store.initSocial();
+    store.authState.set('authenticated');
+    const arrival = store.readFriendsOnArrival();
+    answer.reject(failure);
+
+    expect(await arrival).toBe(false);
+    await started;
+    await flush();
+    expect(asked(store.service)).toEqual([1, 0, 1]);
+    expect(held(store)).toEqual({ friends: 0, incoming: 0, loaded: false, error: failure });
+  });
+
   it('is not the read of a screen that arrives after it answered: that one reads as on any arrival', async () => {
     const store = await starting();
     vi.mocked(store.service.friends).mockResolvedValueOnce(page(2, 0) as never).mockResolvedValueOnce(page(3, 0) as never);
