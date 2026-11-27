@@ -91,6 +91,17 @@ describe('leaving with typed text in the header editor', () => {
     expect(get(route).name).toBe('catalog');
   });
 
+  it('typed, then Cancel: the closed editor asks nothing when the page is left', async () => {
+    const { user } = await headerEditor();
+    await user.type(about(), 'Hi');
+    await user.click(button(msg('common.cancel')));
+
+    navigate('catalog');
+
+    expect(get(leaveRequest)).toBeNull();
+    expect(get(route).name).toBe('catalog');
+  });
+
   it('with nothing typed it lets the page go without a question', async () => {
     await headerEditor();
 

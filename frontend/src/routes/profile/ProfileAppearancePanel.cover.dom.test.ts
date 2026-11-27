@@ -210,6 +210,36 @@ describe("the cover's Upload through a still picture: read, crop, upload", () =>
   });
 });
 
+describe('while a second cover uploads', () => {
+  // A Remove confirmed meanwhile would be undone by the upload's answer, and a second crop would be a
+  // second upload: both are held until the answer.
+  it('Remove cover and Adjust crop open nothing, and only the one upload is sent', async () => {
+    vi.mocked(uploadProfileCover).mockResolvedValueOnce('https://cdn.example/one.webp');
+    const { user, input } = await editor();
+    await user.click(uploadButton());
+    chosen(input, new File(['png'], 'one.png', { type: 'image/png' }));
+    await user.click(within(await cropReady()).getByRole('button', { name: msg('profile.applyCrop') }));
+    const recrop = await screen.findByRole('button', { name: msg('profile.editCrop') });
+    const remove = button(msg('profile.removeCover'));
+
+    const answer = pending<string>();
+    vi.mocked(uploadProfileCover).mockReturnValueOnce(answer.promise);
+    await user.click(uploadButton());
+    chosen(input, new File(['png'], 'two.png', { type: 'image/png' }));
+    await user.click(within(await cropReady()).getByRole('button', { name: msg('profile.applyCrop') }));
+    await waitFor(() => expect(uploadProfileCover).toHaveBeenCalledTimes(2));
+
+    await user.click(remove);
+    await user.click(recrop);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(uploadProfileCover).toHaveBeenCalledTimes(2);
+    answer.resolve('https://cdn.example/two.webp');
+    await waitFor(() => expect(uploadButton().getAttribute('aria-busy')).toBeNull());
+    expect(uploadProfileCover).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("the cover's Upload through a GIF: read, upload", () => {
   it('keeps focus, busy, until the answer; a second press opens no picker and sends nothing more', async () => {
     const answer = pending<string>();
