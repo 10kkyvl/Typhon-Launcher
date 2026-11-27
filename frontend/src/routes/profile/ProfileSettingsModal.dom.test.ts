@@ -80,6 +80,11 @@ describe('the privacy dialog', () => {
     expect(save.getAttribute('aria-busy')).toBe('true');
     expect(updateProfile).toHaveBeenCalledTimes(1);
     expect(vi.mocked(updateProfile).mock.calls[0][0].profile?.showOnline).toBe(false);
+    // Cancel is refused meanwhile, reachable and saying why: never natively disabled, which would
+    // drop a focus it holds in Chromium.
+    const cancel = inDialog(msg('common.cancel'));
+    expect({ ariaDisabled: cancel.getAttribute('aria-disabled'), disabled: cancel.matches(':disabled') }).toEqual({ ariaDisabled: 'true', disabled: false });
+    expect(description(cancel)).toBe(msg('social.saving'));
 
     answer.resolve(me);
 

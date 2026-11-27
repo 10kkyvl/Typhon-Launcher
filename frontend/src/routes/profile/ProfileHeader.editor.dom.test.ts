@@ -33,6 +33,11 @@ const me: CurrentUser = player();
 const button = (name: string) => screen.getByRole('button', { name });
 const field = (name: string) => screen.getByRole('textbox', { name });
 const opener = () => button(msg('social.moreLabel'));
+// The three fields refuse edits by being read-only, never disabled: a field that turns disabled drops
+// the focus it holds in Chromium (jsdom keeps it, so the attributes are read).
+const fields = () => [msg('social.displayNameLabel'), msg('social.usernameLabel'), msg('social.aboutTitle')].map((name) => field(name) as HTMLInputElement);
+const refusing = () => fields().map((input) => ({ readOnly: input.readOnly, disabled: input.matches(':disabled') }));
+const REFUSING = Array(3).fill({ readOnly: true, disabled: false });
 
 async function headerEditor() {
   const view = renderDom(Profile);
@@ -80,6 +85,17 @@ describe("the header's editor on the base fields", () => {
     expect(about.closest('.text-area')?.querySelector('.counter')?.textContent).toBe(msg('profile.bioCounter', { count: 2, max: 150 }));
   });
 
+  it('counts a character outside the basic plane as two, as the field\'s maxlength does', async () => {
+    const { user } = await headerEditor();
+    const about = field(msg('social.aboutTitle'));
+
+    await user.type(about, '🎮');
+
+    // The browser's maxlength counts UTF-16 units and refuses at the same count the counter shows; the
+    // server counts runes and would accept more, so the field is the stricter of the two.
+    expect(about.closest('.text-area')?.querySelector('.counter')?.textContent).toBe(msg('profile.bioCounter', { count: 2, max: 150 }));
+  });
+
   it('describes the username by how others will see it, following what is typed', async () => {
     const { user } = await headerEditor();
     const username = field(msg('social.usernameLabel'));
@@ -105,6 +121,7 @@ describe('Save and Cancel', () => {
     expect(document.activeElement).toBe(save);
     expect(save.getAttribute('aria-busy')).toBe('true');
     expect(updateProfile).toHaveBeenCalledTimes(1);
+    expect(refusing()).toEqual(REFUSING);
 
     answer.resolve({ ...me, bio: 'Hi' });
 
@@ -149,6 +166,8 @@ describe('the connection going while the player edits', () => {
     expect((field(msg('social.aboutTitle')) as HTMLTextAreaElement).value).toBe('Hi');
     expect(document.activeElement).toBe(about);
     const save = button(msg('common.save'));
-    expect(save.getAttribute('aria-disabled') === 'true' || (save as HTMLButtonElement).disabled).toBe(true);
+    expect({ ariaDisabled: save.getAttribute('aria-disabled'), disabled: save.matches(':disabled') }).toEqual({ ariaDisabled: 'true', disabled: false });
+    expect(description(save)).toBe(msg('social.editRequiresConnection'));
+    expect(refusing()).toEqual(REFUSING);
   });
 });

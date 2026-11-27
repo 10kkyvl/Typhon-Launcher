@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../../lib/i18n';
 import { AccountError, updateProfile, type CurrentUser, type ProfileAppearance } from '../../lib/services/account';
@@ -216,6 +216,25 @@ describe("the appearance panel's controls", () => {
 
     expect(angle.getAttribute('aria-valuenow')).toBe('91');
     expect(dim.getAttribute('aria-valuenow')).toBe('39');
+  });
+
+  it('a drag along the angle slider changes the draft at each step, before the release', async () => {
+    await editor(still({ theme: 'custom', customAngle: 90 }));
+    const angle = screen.getByRole('slider', { name: msg('profileStyle.angle') });
+    const box = angle.closest('.slider') as HTMLElement;
+    const bar = box.querySelector('.bar') as HTMLElement;
+    // jsdom lays out nothing: a track 360 px wide from x = 0, one pixel a degree.
+    (box.querySelector('.track') as HTMLElement).getBoundingClientRect = () => ({ left: 0, width: 360, right: 360, top: 0, bottom: 4, height: 4, x: 0, y: 0, toJSON: () => ({}) });
+    bar.setPointerCapture = () => {};
+    const swatch = () => (screen.getByRole('radio', { name: msg('profileStyle.themeCustom') }).querySelector('.theme-swatch') as HTMLElement).style.background;
+
+    await fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: 120 });
+    await fireEvent.pointerMove(bar, { pointerId: 1, clientX: 200 });
+
+    expect(angle.getAttribute('aria-valuetext')).toBe('200°');
+    expect(swatch()).toContain('200deg');
+    await fireEvent.pointerUp(bar, { pointerId: 1, clientX: 200 });
+    expect(angle.getAttribute('aria-valuetext')).toBe('200°');
   });
 
   it('removing the cover hands focus to Upload cover, as the remove button goes', async () => {

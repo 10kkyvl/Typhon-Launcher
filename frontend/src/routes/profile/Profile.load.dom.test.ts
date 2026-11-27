@@ -10,7 +10,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import Profile from './Profile.svelte';
-import { player, SNAPSHOT } from './profileFixtures';
+import { player, ref, SNAPSHOT } from './profileFixtures';
 import { pending } from './profileTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -34,6 +34,8 @@ const loading = () => screen.queryAllByRole('status').some((status) => status.te
 // The figures drawn anywhere on the page: the header's tiles, the stats block's and the fingerprint's.
 const values = () => [...document.querySelectorAll('.tile .value, .facts .num')].map((value) => value.textContent?.trim());
 const retry = () => screen.getByRole('button', { name: msg('common.retry') });
+// The header's mark that holds the figures' place while they load.
+const headerSpinner = () => document.querySelector('.profile-header .stats .spinner');
 
 function signIn(me: CurrentUser = withBlocks('stats', 'fingerprint', 'about')) {
   authState.set('authenticated');
@@ -72,6 +74,7 @@ describe('the first read of the profile', () => {
 
     expect(loading()).toBeTruthy();
     expect(values()).toEqual([]);
+    expect(headerSpinner()).not.toBeNull();
 
     answer.resolve(SNAPSHOT);
 
@@ -98,6 +101,7 @@ describe('the first read of the profile', () => {
     expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
     expect(loading()).toBeFalsy();
     expect(values()).toEqual([]);
+    expect(headerSpinner()).toBeNull();
 
     await user.click(retry());
 
@@ -170,6 +174,62 @@ describe('the preview of the showcase', () => {
     await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
 
     await waitFor(() => expect(screen.queryByText(msg('profile.previewLoadFailed'))).toBeNull());
+  });
+
+  // The answers below land after the editor closed: the read they answer was replaced by the closing.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  const shelf = (title: string): ProfileSnapshot => ({ ...SNAPSHOT, showcase: [{ kind: 'most_played', games: [ref('g9', title)] }] });
+
+  it('a preview Retry that fails after the editor closed leaves no notice on the closed page', async () => {
+    const late = pending<ProfileSnapshot>();
+    vi.mocked(getProfilePreview).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(late.promise);
+    const { user } = await editing();
+    const notice = (await screen.findByText(msg('profile.previewLoadFailed'))).closest('[data-tone="danger"]') as HTMLElement;
+
+    await user.click(within(notice).getByRole('button', { name: msg('common.retry') }));
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    await waitFor(() => expect(screen.queryByText(msg('profile.previewLoadFailed'))).toBeNull());
+
+    late.reject(new Error('offline'));
+    await settle();
+
+    expect(screen.queryByText(msg('profile.previewLoadFailed'))).toBeNull();
+  });
+
+  it('the first preview read failing after the editor closed leaves no notice either', async () => {
+    const late = pending<ProfileSnapshot>();
+    vi.mocked(getProfilePreview).mockReturnValueOnce(late.promise);
+    const { user } = await editing();
+
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    late.reject(new Error('offline'));
+    await settle();
+
+    expect(screen.queryByText(msg('profile.previewLoadFailed'))).toBeNull();
+  });
+
+  it('a preview Retry answered after the editor closed is not painted when the editor opens again', async () => {
+    const late = pending<ProfileSnapshot>();
+    const next = pending<ProfileSnapshot>();
+    vi.mocked(getProfilePreview).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(late.promise).mockReturnValueOnce(next.promise);
+    vi.mocked(getProfileSnapshot).mockResolvedValue(SNAPSHOT);
+    signIn(player({ layout: { version: 1, blocks: [{ id: 'b-most', type: 'collection', width: 'full', config: { source: 'most_played' } }] } }));
+    const { user } = renderDom(Profile);
+    await user.click(await screen.findByRole('button', { name: msg('profileStyle.edit') }));
+    const notice = (await screen.findByText(msg('profile.previewLoadFailed'))).closest('[data-tone="danger"]') as HTMLElement;
+
+    await user.click(within(notice).getByRole('button', { name: msg('common.retry') }));
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    late.resolve(shelf('Stale Game'));
+    await settle();
+    expect(screen.queryByText('Stale Game')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: msg('profileStyle.edit') }));
+    await settle();
+    expect(screen.queryByText('Stale Game')).toBeNull();
+
+    next.resolve(shelf('Fresh Game'));
+    expect(await screen.findByText('Fresh Game')).toBeTruthy();
   });
 
   it('a failure clears when the preview is read again on the next opening of the editor', async () => {
