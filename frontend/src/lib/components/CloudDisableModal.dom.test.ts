@@ -278,6 +278,22 @@ describe('CloudDisableModal on the settings page', () => {
     await vi.waitFor(() => expect(get(toasts).map(({ message, kind }) => [message, kind])).toEqual([[msg('cloudsaves.forgetDone'), 'success']]));
   });
 
+  it.each([
+    ['fails', 'typhon:cloud.network: down'],
+    ['fails part-way', 'typhon:cloud.network: g1: down\ng2: down'],
+  ])('says a deletion that %s, offers Retry, and never says the copies were deleted', async (_case, failure) => {
+    saved();
+    vi.mocked(cloudForget).mockRejectedValueOnce(new Error(failure));
+    const { keys, toggle } = openSettings();
+    await keys.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+
+    await screen.findByRole('button', { name: msg('cloudsaves.retryForget') });
+    expect(get(toasts).map(({ message, kind }) => [message, kind])).toEqual([[msg('cloud.network'), 'danger']]);
+    expect(cloudForget).toHaveBeenCalledTimes(1);
+  });
+
   it('says nothing deleted after Keep', async () => {
     saved();
     const { keys, toggle } = openSettings();
