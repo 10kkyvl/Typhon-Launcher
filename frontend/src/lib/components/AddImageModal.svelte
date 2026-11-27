@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import PathField from './PathField.svelte';
   import Select from './Select.svelte';
+  import TextField from './TextField.svelte';
   import Toggle from './Toggle.svelte';
-  import { msg } from '../i18n';
+  import { errorCode, hasMessage, msg } from '../i18n';
   import {
     consoleForImage,
     consolesForImage,
@@ -36,7 +38,19 @@
   let title = $state('');
   let findCover = $state(false);
   let adding = $state(false);
+  // A refused add, said where it belongs: at the image or the title it concerns, else in the notice.
   let failure = $state('');
+  let imageRefused = $state('');
+  let titleRefused = $state('');
+  let imageInput = $state<HTMLInputElement>();
+  let titleInput = $state<HTMLInputElement>();
+  // The path the console lookups last ran for: typing and Browse both go through pick().
+  let picked = '';
+  // A dialog gone with its screen hears nothing: Go's answer is said once in a toast naming the game.
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
   // fitting is the answer of the disk for the current image; lookup drops a late
   // answer for a path that was typed over in the meantime.
   let fitting = $state<string[]>([]);
@@ -68,6 +82,8 @@
       suggested = '';
       findCover = false;
       failure = '';
+      imageRefused = '';
+      titleRefused = '';
       fitting = [];
       loadFailed = false;
     });
@@ -105,18 +121,28 @@
 
   async function browse() {
     let path = '';
+    failure = '';
     try {
       path = await selectImageFile(msg('emul.addImageDialog'), null);
     } catch (err) {
-      toast(libraryErrorText(err, msg('games.installedOpenDialogError')), 'danger');
+      if (alive) failure = libraryErrorText(err, msg('games.installedOpenDialogError'));
       return;
     }
-    if (path) pick(path);
+    if (path && alive) pick(path);
   }
 
+  $effect(() => {
+    const path = image;
+    untrack(() => {
+      if (path !== picked) pick(path);
+    });
+  });
+
   function pick(path: string) {
+    picked = path;
     image = path;
     failure = '';
+    imageRefused = '';
     fitting = [];
     platform = consoleForImage(platforms, path);
     const mine = ++lookup;
@@ -134,56 +160,81 @@
     );
   }
 
+  // The dialog has closed by then: a failed look-up is said in a toast naming the game.
   async function lookUpCover(game: LibraryGame) {
     try {
       await findEmulatedCover(game.id);
     } catch (err) {
-      toast(libraryErrorText(err, msg('emul.coverFailed')));
+      const code = errorCode(err);
+      const title = game.title;
+      toast(hasMessage(code) ? msg('emul.coverFailedForReason', { title, reason: msg(code) }) : msg('emul.coverFailedFor', { title }));
     }
   }
 
+  // Go's refusals of a path or a file, said at the image field; an empty title at the title field.
+  const IMAGE_CODES = /^emulators\.(image_|pkg_invalid|sfo_|title_id_invalid|vpk_invalid)/;
+
   async function submit() {
     if (!canAdd) return;
+    const name = title.trim();
+    const cover = findCover;
     adding = true;
     failure = '';
+    imageRefused = '';
+    titleRefused = '';
+    let game: LibraryGame;
     try {
-      const game = await addEmulatedGame(image.trim(), platform, title.trim());
-      toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
+      game = await addEmulatedGame(image.trim(), platform, name);
+    } catch (err) {
+      const code = errorCode(err);
+      if (!alive) {
+        toast(hasMessage(code) ? msg('emul.addFailedForReason', { title: name, reason: msg(code) }) : msg('emul.addFailedFor', { title: name }), 'danger');
+        return;
+      }
+      adding = false;
+      const text = libraryErrorText(err, msg('emul.addFailed'));
+      if (IMAGE_CODES.test(code)) {
+        imageRefused = text;
+        await tick();
+        imageInput?.focus();
+      } else if (code === 'emulators.title_empty') {
+        titleRefused = text;
+        await tick();
+        titleInput?.focus();
+      } else {
+        failure = text;
+      }
+      return;
+    }
+    toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
+    if (alive) {
+      adding = false;
       open = false;
       onadded?.(game);
-      if (findCover) await lookUpCover(game);
-    } catch (err) {
-      failure = libraryErrorText(err, msg('emul.addFailed'));
-    } finally {
-      adding = false;
     }
+    if (cover) await lookUpCover(game);
   }
+
+  const noConsoleText = $derived(
+    unmatched ? msg('emul.addNoConsole', { ext, list: [...imageExtensions(platforms), ...imageNames(platforms)].join(' ') }) : '',
+  );
+  const held = $derived(adding ? msg('modals.actionRunning') : '');
 </script>
 
 <Modal dismissible={!adding} bind:open title={msg('emul.addTitle')}>
   <div class="form">
-    <div class="field">
-      <label class="field-label" for="{uid}-image">{msg('emul.addImageLabel')}</label>
-      <div class="field-row">
-        <input
-          id="{uid}-image"
-          class="input"
-          type="text"
-          placeholder={msg('emul.addImagePlaceholder')}
-          aria-invalid={unmatched ? 'true' : undefined}
-          aria-describedby={[unmatched ? `${uid}-image-error` : '', hasGameFiles ? `${uid}-image-hint` : ''].filter(Boolean).join(' ') || undefined}
-          value={image}
-          oninput={(e) => pick(e.currentTarget.value)}
-        />
-        <Button onclick={browse}>{msg('games.installedBrowseButton')}</Button>
-      </div>
-      {#if hasGameFiles}<span class="form-hint" id="{uid}-image-hint">{msg('emul.addGameFileHint')}</span>{/if}
-      {#if unmatched}
-        <p class="failure" id="{uid}-image-error" role="alert">
-          {msg('emul.addNoConsole', { ext, list: [...imageExtensions(platforms), ...imageNames(platforms)].join(' ') })}
-        </p>
-      {/if}
-    </div>
+    <PathField
+      editable
+      label={msg('emul.addImageLabel')}
+      bind:value={image}
+      bind:input={imageInput}
+      placeholder={msg('emul.addImagePlaceholder')}
+      browseLabel={msg('games.installedBrowseButton')}
+      onbrowse={browse}
+      hint={hasGameFiles ? msg('emul.addGameFileHint') : undefined}
+      error={imageRefused || noConsoleText}
+      disabledReason={held || undefined}
+    />
     {#if loadFailed}
       <Notice tone="danger" compact>{msg('emul.addConsolesFailed')}</Notice>
     {:else if !noConsole && image}
@@ -195,18 +246,16 @@
         {/if}
       </div>
     {/if}
-    <div class="field">
-      <label class="field-label" for="{uid}-title">{msg('games.installedTitleFieldLabel')}</label>
-      <input
-        id="{uid}-title"
-        class="input"
-        type="text"
-        placeholder={msg('games.installedTitlePlaceholder')}
-        aria-describedby="{uid}-title-hint"
-        bind:value={title}
-      />
-      <span class="form-hint" id="{uid}-title-hint">{msg('emul.addTitleHint')}</span>
-    </div>
+    <TextField
+      label={msg('games.installedTitleFieldLabel')}
+      bind:value={title}
+      bind:input={titleInput}
+      placeholder={msg('games.installedTitlePlaceholder')}
+      hint={msg('emul.addTitleHint')}
+      error={titleRefused}
+      readonly={adding}
+      oninput={() => (titleRefused = '')}
+    />
     <div class="toggle-row">
       <div class="field">
         <span class="field-label" id="{uid}-add-find-cover-label">{msg('emul.addFindCover')}</span>
@@ -217,7 +266,7 @@
     {#if failure}<Notice tone="danger" compact>{failure}</Notice>{/if}
   </div>
   {#snippet footer()}
-    <Button disabled={adding} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button disabled={adding} reason={held} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!ready} busy={adding} onclick={submit}>
       {adding ? msg('games.installedAddingLabel') : msg('common.add')}
     </Button>
@@ -250,20 +299,10 @@
     gap: var(--space-4);
   }
 
-  .field-row {
-    display: flex;
-    gap: 0.8rem;
-  }
-
   .form-hint {
     margin: 0;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
 
-  .failure {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--danger);
-  }
 </style>

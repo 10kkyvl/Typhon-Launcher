@@ -5,9 +5,11 @@ import { imageTitle, listPlatforms, type PlatformStatus } from '../services/emul
 import { addEmulatedGame, type LibraryGame } from '../services/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import AddImageModal from './AddImageModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/emulators', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/emulators')>()),
@@ -44,10 +46,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   toasts.set([]);
   vi.clearAllMocks();
   vi.restoreAllMocks();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 describe('AddImageModal', () => {
@@ -111,7 +116,9 @@ describe('AddImageModal: while it adds', () => {
 
     await keys.keyboard('{Escape}');
     expect(dialog.isConnected).toBe(true);
-    expect(within(dialog).getByRole('button', { name: msg('common.cancel') })).toHaveProperty('disabled', true);
+    const cancel = within(dialog).getByRole('button', { name: msg('common.cancel') });
+    expect(cancel).toHaveProperty('disabled', false);
+    expect(cancel.getAttribute('aria-disabled')).toBe('true');
 
     adding.reject(new Error('exists'));
     expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emul.addFailed'));
