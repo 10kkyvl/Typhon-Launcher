@@ -800,6 +800,37 @@ describe('the account boundary: what each change of the sign-in state does to th
     expect(get(store.incomingCount)).toBe(2);
   });
 
+  it('a request count of A that Go sends after A went guest is not the guest’s badge or notification', async () => {
+    const store = await signedIn();
+    const { Events } = await import('@wailsio/runtime');
+    const { friendRequestNotification } = await import('../social/view');
+    const requests = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:requests')?.[1] as (event: { data: unknown }) => void;
+    store.handler({ data: page(1, 2) });
+    store.authState.set('unauthenticated');
+    store.authState.set('guest');
+
+    requests({ data: { incoming: 2 } });
+
+    const count = get(store.incomingCount);
+    expect({ count, notification: friendRequestNotification(count, get(store.incomingPeak)) }).toEqual({
+      count: 0,
+      notification: null,
+    });
+  });
+
+  it('a request count Go sends while signed out is dropped at once, not kept until the next sign-in', async () => {
+    const store = await signedIn();
+    const { Events } = await import('@wailsio/runtime');
+    const requests = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:requests')?.[1] as (event: { data: unknown }) => void;
+    store.authState.set('unauthenticated');
+
+    requests({ data: { incoming: 3 } });
+    const during = get(store.incomingCount);
+    store.authState.set('authenticated');
+
+    expect({ during, after: get(store.incomingCount) }).toEqual({ during: 0, after: 0 });
+  });
+
   it.each([
     ['authenticated', 'unauthenticated'],
     ['authenticated', 'guest'],

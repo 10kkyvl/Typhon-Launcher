@@ -232,6 +232,8 @@ export async function initSocial(): Promise<void> {
     received(toFriendsPage(event.data));
   });
   Events.On('social:requests', (event) => {
+    // As with the page: a count Go sends after a sign-out is the account that left.
+    if (get(authState) !== 'authenticated') return;
     const signal = event.data as RequestsSignal | null;
     requestsSignal.set(signal ? signal.incoming : 0);
   });
