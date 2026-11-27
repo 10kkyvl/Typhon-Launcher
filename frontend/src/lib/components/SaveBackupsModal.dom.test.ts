@@ -232,6 +232,7 @@ describe('SaveBackupsModal: the dialog around the saves', () => {
     made.resolve(snapshot());
   });
 
+  // Closed between the two games: the saves view is mounted again, so this pins the remount, not a guard.
   it('shows the backups of the game it is open for, not a late answer for the game before', async () => {
     const first = held<Snapshot[]>();
     libraryGames.set([{ id: 'g1', title: 'Hades', canonicalGameId: 'igdb:1' } as LibraryGame, { id: 'g2', title: 'Celeste', canonicalGameId: 'igdb:2' } as LibraryGame]);
@@ -247,5 +248,23 @@ describe('SaveBackupsModal: the dialog around the saves', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(within(celeste).getByText(msg('saves.empty'))).toBeTruthy();
+  });
+
+  // Turned to another game while open: the saves view stays mounted and only its own turn keeps the
+  // late list out.
+  it('turned to another game while open, shows that game\'s backups, not a late list for the game before', async () => {
+    const first = held<Snapshot[]>();
+    libraryGames.set([{ id: 'g1', title: 'Hades', canonicalGameId: 'igdb:1' } as LibraryGame, { id: 'g2', title: 'Celeste', canonicalGameId: 'igdb:2' } as LibraryGame]);
+    vi.mocked(listBackups).mockImplementation(async (id: string) => (id === 'g1' ? first.promise : []));
+    const dialog = await openDialog();
+
+    openSaveBackups('g2');
+    await screen.findByRole('dialog', { name: msg('saves.title', { title: 'Celeste' }) });
+    expect(dialog.isConnected).toBe(true);
+    await within(dialog).findByText(msg('saves.empty'));
+    first.resolve([snapshot({ id: 's1', gameId: 'g1' })]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).getByText(msg('saves.empty'))).toBeTruthy();
   });
 });

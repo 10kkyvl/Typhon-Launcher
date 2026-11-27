@@ -372,3 +372,65 @@ describe('MetadataMatchModal: a match applied for one game, answered after the d
     expect(celesteRow.closest('[role="radiogroup"]')?.getAttribute('aria-disabled')).not.toBe('true');
   });
 });
+
+describe('MetadataMatchModal: turned to another game, an earlier game\'s state and answers stay behind', () => {
+  it('a failed look-up for the game before, answered after the new game\'s candidates, says nothing', async () => {
+    const first = held<MetadataCandidate[]>();
+    vi.mocked(findMetadataCandidates).mockImplementation((id: string) => (id === 'g1' ? first.promise : Promise.resolve([celeste])));
+    const { dialog, rerender } = openDialog();
+    await rerender({ open: true, gameId: 'g2', gameTitle: 'Celeste' });
+    const row = await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+
+    first.reject(new Error('typhon:metadata.rate_limited: 429'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(row.isConnected).toBe(true);
+  });
+
+  it('a failed search for the game before, answered after the new game\'s candidates, says nothing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const late = held<MetadataCandidate[]>();
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'g2' ? [hadesTwo] : []));
+    vi.mocked(searchMetadataCandidates).mockReturnValueOnce(late.promise);
+    const { dialog, rerender } = openDialog();
+    const keys = user();
+    await keys.type(within(dialog).getByRole('textbox', { name: msg('modals.metadataMatchManualSearch') }), 'Celeste');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(searchMetadataCandidates).toHaveBeenCalledTimes(1);
+
+    await rerender({ open: true, gameId: 'g2', gameTitle: 'Hades II' });
+    await within(dialog).findByRole('radio', { name: /^Hades II \(2024\)/ });
+    late.reject(new Error('typhon:metadata.not_configured: no key'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+
+  it('in change mode, does not ask the new game about the match picked for the game before', async () => {
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'g1' ? [hades] : [celeste]));
+    const { dialog, rerender } = openDialog({ mode: 'change' });
+    await user().click(await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ }));
+    expect(within(dialog).getByRole('button', { name: msg('modals.metadataMatchReplace') })).toBeTruthy();
+
+    await rerender({ open: true, gameId: 'g2', gameTitle: 'Celeste', mode: 'change' });
+
+    await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+    expect(within(dialog).queryByRole('button', { name: msg('modals.metadataMatchReplace') })).toBeNull();
+    expect(dialog.querySelector('.confirm')).toBeNull();
+    expect(applyMetadataMatch).not.toHaveBeenCalled();
+  });
+
+  it('does not say the game before\'s refusal for the new game', async () => {
+    vi.mocked(findMetadataCandidates).mockImplementation(async (id: string) => (id === 'g1' ? [hades] : [celeste]));
+    vi.mocked(applyMetadataMatch).mockRejectedValueOnce(new Error('typhon:metadata.busy: already running'));
+    const { dialog, rerender } = openDialog();
+    await user().click(await within(dialog).findByRole('radio', { name: /^Hades \(2020\)/ }));
+    await within(dialog).findByRole('alert');
+
+    await rerender({ open: true, gameId: 'g2', gameTitle: 'Celeste' });
+
+    await within(dialog).findByRole('radio', { name: /^Celeste \(2018\)/ });
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+});

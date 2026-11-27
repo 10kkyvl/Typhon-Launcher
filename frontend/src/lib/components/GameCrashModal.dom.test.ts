@@ -172,3 +172,34 @@ describe('GameCrashModal: while a report is collected', () => {
     expect(get(toasts)).toEqual([]);
   });
 });
+
+describe('GameCrashModal: the same game crashes again while the dialog is open', () => {
+  const again = (): CrashRecord => ({ ...unknown('g1'), at: 100, sessionSeconds: 9 });
+
+  it('drops the failed report of the crash before', async () => {
+    vi.mocked(exportLogs).mockRejectedValueOnce(new Error('zip failed'));
+    const dialog = await openDialog();
+    await user().click(within(dialog).getByRole('button', { name: msg('redist.crashReport') }));
+    await within(dialog).findByRole('alert');
+
+    crashTarget.set(again());
+    await vi.waitFor(() => expect(dialog.textContent).toContain(msg('redist.crashGame', { title: 'Hades', seconds: 9 })));
+
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+
+  it('says nothing of a report for the crash before that fails after the new one is shown', async () => {
+    const collected = held<LogBundle>();
+    vi.mocked(exportLogs).mockReturnValueOnce(collected.promise);
+    const dialog = await openDialog();
+    await user().click(within(dialog).getByRole('button', { name: msg('redist.crashReport') }));
+
+    crashTarget.set(again());
+    await vi.waitFor(() => expect(dialog.textContent).toContain(msg('redist.crashGame', { title: 'Hades', seconds: 9 })));
+    collected.reject(new Error('zip failed'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(screen.getByRole('dialog')).queryByRole('alert')).toBeNull();
+    expect(get(toasts)).toEqual([]);
+  });
+});
