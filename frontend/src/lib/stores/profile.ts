@@ -16,6 +16,16 @@ export interface ProfileDraft {
 
 export const profileDraft = writable<ProfileDraft | null>(null);
 
+/** The header editor's typed text, kept when the page went while the player was still on it. */
+export interface HeaderDraft {
+  owner: string;
+  displayName: string;
+  username: string;
+  bio: string;
+}
+
+export const profileHeaderDraft = writable<HeaderDraft | null>(null);
+
 let started = false;
 let seq = 0;
 let newest: Promise<boolean> = Promise.resolve(true);

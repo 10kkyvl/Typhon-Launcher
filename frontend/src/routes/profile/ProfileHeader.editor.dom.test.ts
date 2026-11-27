@@ -4,7 +4,7 @@ import { locale, msg } from '../../lib/i18n';
 import { AccountError, updateProfile, type CurrentUser } from '../../lib/services/account';
 import { accountErrorText } from '../../lib/services/accountMessages';
 import { EMPTY_SNAPSHOT, getProfileSnapshot } from '../../lib/services/profile';
-import { profileSnapshot } from '../../lib/stores/profile';
+import { profileHeaderDraft, profileSnapshot } from '../../lib/stores/profile';
 import { get } from 'svelte/store';
 import { leaveRequest, navigate, resetHistory, route, stayHere } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
@@ -68,6 +68,8 @@ afterEach(() => {
   // A save a failed test left waiting would hold the next test's buttons.
   savingProfile.set(false);
   profileSnapshot.set(EMPTY_SNAPSHOT);
+  // The page unmounted on the profile route keeps the header's typed text for the next opening.
+  profileHeaderDraft.set(null);
   toasts.set([]);
   document.body.replaceChildren();
 });

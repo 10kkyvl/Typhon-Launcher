@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
   import { Calendar, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
@@ -26,6 +26,8 @@
   import { joinDate } from '../../lib/social/view';
   import { statusDot } from '../../lib/social/presence';
   import { shownPresence } from '../../lib/stores/presence';
+  import { profileHeaderDraft } from '../../lib/stores/profile';
+  import { route } from '../../lib/stores/router';
   import { friendsLoaded, friendsPage } from '../../lib/stores/social';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -82,6 +84,8 @@
   };
 
   let editing = $state(false);
+  // The account whose values the editor was opened with: its typed text is kept for that account only.
+  let editor = '';
   let draft = $state({ displayName: '', username: '', bio: '' });
   let fieldErrors = $state<{ displayName?: string; username?: string; bio?: string; general?: string }>({});
   let busy = $state(false);
@@ -128,6 +132,26 @@
   let alive = true;
   onDestroy(() => {
     alive = false;
+    keepTyped();
+  });
+
+  // The page went while its route stayed on the profile (Big Picture took the desktop shell): nothing
+  // asked the player, so the typed text is kept for the next opening. Left through the router, the
+  // player was asked and chose to lose it; a save on its way says its own outcome.
+  function keepTyped() {
+    const user = get(currentUser);
+    if (!editing || sending || !user || user.id !== editor || get(route).name !== 'profile') return;
+    if (draft.displayName === user.displayName && draft.username === user.username && draft.bio === user.bio) return;
+    profileHeaderDraft.set({ owner: user.id, ...$state.snapshot(draft) });
+  }
+
+  onMount(() => {
+    const kept = get(profileHeaderDraft);
+    if (!kept || kept.owner !== get(currentUser)?.id || get(isOffline)) return;
+    profileHeaderDraft.set(null);
+    editor = kept.owner;
+    draft = { displayName: kept.displayName, username: kept.username, bio: kept.bio };
+    editing = true;
   });
 
   const menuItems = $derived<MenuItem[]>([
@@ -142,6 +166,7 @@
   async function startEditing() {
     if (!editing) {
       if (!$currentUser || $isOffline) return;
+      editor = $currentUser.id;
       draft = { displayName: $currentUser.displayName, username: $currentUser.username, bio: $currentUser.bio };
       fieldErrors = {};
       editing = true;

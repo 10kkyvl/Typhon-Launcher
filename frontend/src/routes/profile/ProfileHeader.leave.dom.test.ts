@@ -5,7 +5,7 @@ import { locale, msg } from '../../lib/i18n';
 import { AccountError, updateProfile, type CurrentUser, type ProfileAppearance } from '../../lib/services/account';
 import { accountErrorText } from '../../lib/services/accountMessages';
 import { EMPTY_SNAPSHOT, getProfilePreview, getProfileSnapshot } from '../../lib/services/profile';
-import { profileDraft, profileSnapshot } from '../../lib/stores/profile';
+import { profileDraft, profileHeaderDraft, profileSnapshot } from '../../lib/stores/profile';
 import { confirmLeave, leaveRequest, navigate, resetHistory, route, stayHere } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { authState, currentUser, savingProfile } from '../../lib/stores/user';
@@ -64,6 +64,7 @@ afterEach(() => {
   savingProfile.set(false);
   profileSnapshot.set(EMPTY_SNAPSHOT);
   profileDraft.set(null);
+  profileHeaderDraft.set(null);
   toasts.set([]);
   document.body.replaceChildren();
 });
@@ -230,5 +231,63 @@ describe('a failed header save on the page', () => {
 
     expect(await screen.findByText(accountErrorText(new AccountError('network_error'), msg('social.saveFailed')))).toBeTruthy();
     expect(said().filter(([kind]) => kind === 'danger')).toEqual([]);
+  });
+});
+
+// Big Picture takes the desktop shell away while the route stays on the profile: no leave question is
+// asked, so the typed text is kept and the editor opens with it when the page is next shown.
+describe('the page taken away while the player is still on it (Big Picture)', () => {
+  it('keeps the typed text, and the next opening of the page shows the editor with it', async () => {
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+
+    unmount();
+    renderDom(Profile);
+
+    expect(about().value).toBe('Hi');
+    expect(updateProfile).not.toHaveBeenCalled();
+    navigate('catalog');
+    expect(get(leaveRequest)?.prompt().text).toBe(msg('profile.leaveHeaderText'));
+  });
+
+  it('keeps it for that account only', async () => {
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+    unmount();
+
+    currentUser.set(other);
+    const second = renderDom(Profile);
+
+    expect(screen.queryByRole('textbox', { name: msg('social.aboutTitle') })).toBeNull();
+    second.unmount();
+    currentUser.set(me);
+    renderDom(Profile);
+    expect(about().value).toBe('Hi');
+  });
+
+  it('keeps nothing once the player left through the question', async () => {
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+    navigate('catalog');
+    confirmLeave();
+    unmount();
+
+    navigate('profile');
+    renderDom(Profile);
+
+    expect(screen.queryByRole('textbox', { name: msg('social.aboutTitle') })).toBeNull();
+  });
+
+  it('keeps nothing while its save is on its way', async () => {
+    vi.mocked(updateProfile).mockReturnValue(pending<CurrentUser>().promise);
+    const { user, unmount } = await headerEditor();
+    await user.type(about(), 'Hi');
+    await user.click(button(msg('common.save')));
+
+    unmount();
+    savingProfile.set(false);
+    renderDom(Profile);
+
+    expect(screen.queryByRole('textbox', { name: msg('social.aboutTitle') })).toBeNull();
   });
 });
