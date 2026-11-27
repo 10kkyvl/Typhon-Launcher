@@ -296,7 +296,9 @@
         else if (placed) toast(msg('tickets.requestNotSentNewer', { subject }), 'danger', copyAction(`${subject}\n\n${sent.body.trim()}`));
         return;
       }
-      if (started) returnShown(sent, me, who);
+      // The failed text is what the form shows: it is the draft, whatever was kept as one meanwhile.
+      const dropped = started ? returnShown(sent, me, who) : null;
+      if (dropped) sayDropped(dropped);
       sending = false;
       await showError(err);
     } finally {

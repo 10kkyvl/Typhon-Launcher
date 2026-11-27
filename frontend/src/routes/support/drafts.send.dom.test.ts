@@ -11,7 +11,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { held, LIMITS, message, thread, ticket, words } from '../../lib/testing/supportTesting';
-import { keptReply, keptRequest } from './drafts';
+import { keptReply, keptRequest, spareRequest } from './drafts';
 import NewTicket from './NewTicket.svelte';
 import Support from './Support.svelte';
 import TicketView from './TicketView.svelte';
@@ -491,6 +491,72 @@ describe('a new request on its way', () => {
         subject: 'Another matter',
       },
       later: SENT,
+    });
+  });
+
+  it('that fails on screen after another came back beside it is the draft again, the other offered, with no key pressed', async () => {
+    const { first } = await requestOnItsWay();
+    cleanup();
+    const second = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(second.promise);
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Another matter');
+    await user.type(bodyField(), 'Also broken.');
+    if (logsSwitch().getAttribute('aria-checked') === 'true') await user.click(logsSwitch());
+    await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(2));
+    first.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    second.reject(new AccountError('network_error'));
+    await screen.findByRole('alert');
+    const here = { subject: subjectField().value, kept: keptRequest()?.subject, spare: spareRequest()?.subject };
+    cleanup();
+    await newRequest();
+    expect({ here, later: { subject: subjectField().value, offered: offer() } }).toEqual({
+      here: { subject: 'Another matter', kept: 'Another matter', spare: 'Cannot sign in' },
+      later: {
+        subject: 'Another matter',
+        offered: `${msg('tickets.draftKept', { subject: 'Cannot sign in' })} ${msg('tickets.draftSwapNote')} ${msg('tickets.draftRestore')}`,
+      },
+    });
+  });
+
+  it('that fails on screen with both other places taken names the older spare it pushes out and copies it', async () => {
+    const x = held<ReturnType<typeof ticket>>();
+    const y = held<ReturnType<typeof ticket>>();
+    const t = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValueOnce(x.promise).mockReturnValueOnce(y.promise).mockReturnValueOnce(t.promise);
+    for (const [subject, sends] of [['Older matter', 1], ['Newer matter', 2]] as const) {
+      const { user } = await newRequest();
+      await user.type(subjectField(), subject);
+      await user.type(bodyField(), `Text of ${subject}.`);
+      if (logsSwitch().getAttribute('aria-checked') === 'true') await user.click(logsSwitch());
+      await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+      await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(sends));
+      cleanup();
+    }
+    const { user } = await newRequest();
+    await user.type(subjectField(), 'Shown matter');
+    await user.type(bodyField(), 'Text on screen.');
+    if (logsSwitch().getAttribute('aria-checked') === 'true') await user.click(logsSwitch());
+    x.reject(new AccountError('network_error'));
+    await vi.waitFor(() => expect(spareRequest()?.subject).toBe('Older matter'));
+    await user.click(screen.getByRole('button', { name: msg('tickets.submit') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledTimes(3));
+    y.reject(new AccountError('network_error'));
+    await settled();
+    await settled();
+    toasts.set([]);
+    t.reject(new AccountError('network_error'));
+    await screen.findByRole('alert');
+    const here = { kept: keptRequest()?.subject, spare: spareRequest()?.subject, said: said(), actions: actions() };
+    expect({ ...here, written: await copyFromToast(0) }).toEqual({
+      kept: 'Shown matter',
+      spare: 'Newer matter',
+      said: [['danger', msg('tickets.draftDropped', { subject: 'Older matter' })]],
+      actions: [msg('tickets.copyText')],
+      written: ['Older matter\n\nText of Older matter.'],
     });
   });
 

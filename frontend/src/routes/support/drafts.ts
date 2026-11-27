@@ -290,14 +290,23 @@ export function returnRequest(draft: RequestDraft, by: Writer, from: string | nu
 
 /**
  * A send of `draft` from `by` failed with its form on screen: the form still shows it, so it is the
- * draft again when nothing else was kept as the draft meanwhile. Nothing is kept under another account.
+ * draft again. A text kept as the draft meanwhile (one that came back beside the send) moves to the
+ * spare; an older spare then has no place left and is answered, to be named and offered for copying.
+ * Nothing is kept under another account.
  */
-export function returnShown(draft: RequestDraft, by: Writer, from: string | null): void {
-  if (!from || owner() !== from) return;
+export function returnShown(draft: RequestDraft, by: Writer, from: string | null): RequestDraft | null {
+  if (!from || owner() !== from) return null;
   const into = writable();
-  if (!into || into.request) return;
+  if (!into) return null;
+  let dropped: RequestDraft | null = null;
+  const other = into.request && into.request.by !== by ? into.request : null;
+  if (other) {
+    if (into.spare) dropped = copy(into.spare.draft);
+    into.spare = { draft: other.draft, id: other.id };
+  }
   into.request = { ...slot(draft), by };
   changed();
+  return dropped;
 }
 
 /** Keeps the reply typed in a request; an empty one keeps nothing. */
