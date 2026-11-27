@@ -10,9 +10,11 @@ import { get } from 'svelte/store';
 import { within } from '@testing-library/svelte';
 import { libraryGames } from '../stores/library';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import GamePropertiesModal from './GamePropertiesModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/wrappers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/wrappers')>()),
@@ -33,14 +35,17 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeGameProperties();
   libraryGames.set([]);
   toasts.set([]);
   app.remove();
+  expect(sent).toEqual([]);
 });
 
 describe('GamePropertiesModal while compatibility mode downloads', () => {
-  it('can be closed mid-download (nothing to cancel, it may take minutes); reopened, it shows the work still running and starts nothing new', async () => {
+  it('cannot be closed mid-download; closed and opened again from outside, it shows the work still running and starts nothing new', async () => {
     let finish!: () => void;
     vi.mocked(enableWrapper).mockReturnValueOnce(new Promise<void>((resolve) => (finish = resolve)));
     render(GamePropertiesModal, { target: app });
@@ -52,16 +57,18 @@ describe('GamePropertiesModal while compatibility mode downloads', () => {
     expect(vi.mocked(enableWrapper)).toHaveBeenCalledTimes(1);
 
     await keys.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeTruthy();
 
+    closeGameProperties();
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     openGameProperties('g1');
     const again = await screen.findByRole('switch', { name: msg('modals.compatToggle') });
-    expect(again).toHaveProperty('disabled', true);
+    expect(again.getAttribute('aria-disabled')).toBe('true');
     await keys.click(again);
     expect(vi.mocked(enableWrapper)).toHaveBeenCalledTimes(1);
 
     finish();
-    await vi.waitFor(() => expect(screen.getByRole('switch', { name: msg('modals.compatToggle') })).toHaveProperty('disabled', false));
+    await vi.waitFor(() => expect(screen.getByRole('switch', { name: msg('modals.compatToggle') }).getAttribute('aria-disabled')).toBeNull());
   });
 });
 
@@ -111,26 +118,26 @@ describe('GamePropertiesModal reports a failed switch wherever the user is', () 
 
   const toastTexts = () => get(toasts).map((item) => item.message);
 
-  it('closed mid-enable: the failure arrives as a toast', async () => {
-    const { keys, fail } = await startEnable();
-    await keys.keyboard('{Escape}');
+  it('closed from outside mid-enable: the failure arrives as one toast naming the game', async () => {
+    const { fail } = await startEnable();
+    closeGameProperties();
 
     fail(failure);
 
     await vi.waitFor(() => expect(toastTexts()).toHaveLength(1));
     expect(get(toasts)[0].kind).toBe('danger');
-    expect(toastTexts()[0]).toBe(failText());
+    expect(toastTexts()[0]).toBe(msg('modals.propertiesLateFailed', { title: 'Hades', reason: failText() }));
   });
 
-  it("open for another game: a toast, and that game's dialog is left alone", async () => {
-    const { keys, fail } = await startEnable();
-    await keys.keyboard('{Escape}');
+  it("open for another game: a toast naming the first, and that game's dialog is left alone", async () => {
+    const { fail } = await startEnable();
+    closeGameProperties();
     openGameProperties('g2');
     const other = await screen.findByRole('dialog', { name: msg('modals.propertiesTitle', { title: 'Celeste' }) });
 
     fail(failure);
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([failText()]));
+    await vi.waitFor(() => expect(toastTexts()).toEqual([msg('modals.propertiesLateFailed', { title: 'Hades', reason: failText() })]));
     expect(within(other).queryByText(failText())).toBeNull();
   });
 

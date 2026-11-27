@@ -124,16 +124,15 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   // The parts of GamePropertiesModal. A failed load (the candidates, the launch arguments), a wrapper
-  // problem and the offer to keep a changed game announce; a failed change of a setting is said by its
-  // toast and only kept on screen by the setting.
+  // problem, the offer to keep a changed game and a refused change of a setting just happened: each is
+  // said only here, no toast says it, so each announces.
   'lib/components/PropertiesExecutable.svelte': [
     ['danger', true],
-    ['danger', false],
+    ['danger', true],
   ],
   'lib/components/PropertiesLaunch.svelte': [
     ['danger', true],
-    ['danger', false],
-    ['danger', false],
+    ['danger', true],
   ],
   'lib/components/PropertiesCompat.svelte': [
     ['danger', true],
@@ -142,10 +141,10 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'lib/components/PropertiesPlaying.svelte': [
-    ['danger', false],
-    ['danger', false],
+    ['danger', true],
+    ['danger', true],
   ],
-  'lib/components/PropertiesSaves.svelte': [['danger', false]],
+  'lib/components/PropertiesSaves.svelte': [['danger', true]],
   // An install's stored warning and what deleting seeded files does are read with the dialog; too little
   // space and a stopped install just happened.
   'lib/components/InstallModal.svelte': [

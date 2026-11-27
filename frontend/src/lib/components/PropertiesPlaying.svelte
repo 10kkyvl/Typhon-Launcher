@@ -31,6 +31,7 @@
     onpresence: (on: boolean) => void;
   } = $props();
   const uid = $props.id();
+  const held = $derived(msg('modals.actionRunning'));
 </script>
 
 {#if gameModeShown}
@@ -50,19 +51,30 @@
     {/each}
     <p class="hint">{msg('modals.propertiesGameModeHint')}</p>
     {#if gameModeError}
-      <Notice tone="danger" compact announce={false}>{gameModeError}</Notice>
+      <Notice tone="danger" compact>{gameModeError}</Notice>
     {/if}
   </section>
 {/if}
 
 <section class="section">
   <div class="row spread">
-    <h4 id="{uid}-properties-presence-label">{msg('modals.propertiesPresenceTitle')}</h4>
-    <Toggle checked={presence} labelledby="{uid}-properties-presence-label" disabled={presenceBusy} onchange={onpresence} />
+    <div class="title">
+      <h4 id="{uid}-properties-presence-label">{msg('modals.propertiesPresenceTitle')}</h4>
+      {#if presenceBusy}
+        <p class="hint" id="{uid}-presence-held">{held}</p>
+      {/if}
+    </div>
+    <Toggle
+      checked={presence}
+      labelledby="{uid}-properties-presence-label"
+      describedby={presenceBusy ? `${uid}-presence-held` : undefined}
+      aria-disabled={presenceBusy ? 'true' : undefined}
+      onchange={onpresence}
+    />
   </div>
   <p class="hint">{msg('modals.propertiesPresenceHint')}</p>
   {#if presenceError}
-    <Notice tone="danger" compact announce={false}>{presenceError}</Notice>
+    <Notice tone="danger" compact>{presenceError}</Notice>
   {/if}
 </section>
 
@@ -98,5 +110,12 @@
 
   .spread {
     justify-content: space-between;
+  }
+
+  /* A switch's row: its heading, and the reason it is held while its change runs. */
+  .title {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
   }
 </style>

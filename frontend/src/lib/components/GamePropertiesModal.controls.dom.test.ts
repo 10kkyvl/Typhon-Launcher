@@ -9,9 +9,11 @@ import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { get } from 'svelte/store';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import GamePropertiesModal from './GamePropertiesModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/install', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/install')>()),
@@ -61,6 +63,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   closeGameProperties();
   libraryGames.set([]);
   toasts.set([]);
@@ -70,6 +74,7 @@ afterEach(() => {
   vi.mocked(setExecutable).mockReset();
   vi.mocked(inspectWrapper).mockReset();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 async function openDialog() {
@@ -79,15 +84,15 @@ async function openDialog() {
 }
 
 describe('GamePropertiesModal: the found executables', () => {
-  it('say which one is current, and the pressed one keeps the focus while it is set', async () => {
+  it('say which one is current by its whole path, and the pressed one keeps the focus while it is set', async () => {
     const saved = deferred<LibraryGame>();
     vi.mocked(setExecutable).mockReturnValueOnce(saved.promise);
     const dialog = await openDialog();
     const keys = user();
-    const current = await within(dialog).findByRole('button', { name: '/games/hades/Hades.exe' });
-    const other = within(dialog).getByRole('button', { name: '/games/hades/x64/Hades.exe' });
-    expect(current.getAttribute('aria-current')).toBe('true');
-    expect(other.getAttribute('aria-current')).toBeNull();
+    const current = await within(dialog).findByRole('radio', { name: '/games/hades/Hades.exe' });
+    const other = within(dialog).getByRole('radio', { name: '/games/hades/x64/Hades.exe' });
+    expect(current.getAttribute('aria-checked')).toBe('true');
+    expect(other.getAttribute('aria-checked')).toBe('false');
     other.focus();
 
     await keys.keyboard('{Enter}');
@@ -110,7 +115,7 @@ describe('GamePropertiesModal: the found executables', () => {
 });
 
 describe('GamePropertiesModal: the launch arguments', () => {
-  it('are a field named by their heading; a failed save says so in a danger notice, the save button stays focused and busy while it runs', async () => {
+  it('are a field named by their heading; a failed save is said at the field, the save button stays focused and busy while it runs', async () => {
     const saved = deferred<LibraryGame>();
     vi.mocked(setLaunchArgsLine).mockReturnValueOnce(saved.promise);
     const dialog = await openDialog();
@@ -127,11 +132,11 @@ describe('GamePropertiesModal: the launch arguments', () => {
     expect(document.activeElement).toBe(save);
 
     saved.reject(new Error('disk'));
-    const text = await within(dialog).findByText(msg('modals.propertiesArgsSaveFailed'), { selector: '[data-tone] *' });
-    expect(text.closest('[data-tone="danger"]')).not.toBeNull();
-    // The toast says it once; the notice by the field stays on screen without saying it again.
-    expect(text.closest('[role="alert"]')).toBeNull();
-    expect(get(toasts).map((item) => item.message)).toContain(msg('modals.propertiesArgsSaveFailed'));
+    const text = await within(dialog).findByRole('alert');
+    expect(text.textContent?.trim()).toBe(msg('modals.propertiesArgsSaveFailed'));
+    expect((field.getAttribute('aria-describedby') ?? '').split(' ')).toContain(text.id);
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(get(toasts).map((item) => item.message)).not.toContain(msg('modals.propertiesArgsSaveFailed'));
   });
 });
 

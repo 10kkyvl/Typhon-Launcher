@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
+  import ConfirmModal from './ConfirmModal.svelte';
   import Modal from './Modal.svelte';
   import GameProfiles from './GameProfiles.svelte';
   import PropertiesCompat from './PropertiesCompat.svelte';
@@ -126,16 +127,40 @@
 
   let savesBusy = $state<'' | 'browse' | 'reset'>('');
   let savesError = $state('');
+  // The game whose saves folder the open question would reset: the one it was asked for.
+  let resetAsk = $state<{ id: string; title: string; path: string } | null>(null);
 
   let loadedFor = '';
   let seq = 0;
+  // One per opening, and per game shown: a write answered after its opening has passed paints
+  // nothing and is said once in a toast naming its game. A destroyed dialog hears nothing either.
+  let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   const argsDirty = $derived(argsLine !== argsSaved);
 
+  // Go's library and emulator reasons are lower-case clauses: said after the action that failed.
+  // The other domains' messages are whole sentences.
   function errorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
+    if (/^(library|emulators)\./.test(code) && hasMessage(code)) return msg('modals.propertiesFailedReason', { action: fallback, reason: msg(code) });
     if (hasMessage(code)) return msg(code);
     return installErrorText(err, fallback);
+  }
+
+  /** A write answered after its opening passed: said once, in a toast naming its game. */
+  function sayLate(title: string, failure?: string) {
+    if (failure === undefined) toast(msg('modals.propertiesLateSaved', { title }), 'success');
+    else toast(msg('modals.propertiesLateFailed', { title, reason: failure }), 'danger');
+  }
+
+  /** Taken at a press: whether the opening it was pressed in still hears its answer, and its game. */
+  function pressedNow() {
+    const at = opening;
+    return { heard: () => alive && at === opening, title: game?.title ?? '' };
   }
 
   $effect(() => {
@@ -144,10 +169,21 @@
       if (!current) {
         loadedFor = '';
         seq++;
+        opening++;
+        resetAsk = null;
         return;
       }
       if (loadedFor === current.gameId) return;
       loadedFor = current.gameId;
+      opening++;
+      resetAsk = null;
+      exeBusy = '';
+      argsBusy = false;
+      adminBusy = false;
+      presenceBusy = false;
+      gameModeBusy = false;
+      savesBusy = '';
+      compatAction = '';
       candidates = [];
       candidatesError = '';
       exeError = '';
@@ -247,37 +283,39 @@
   async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '') {
     if (!game || compatBusy) return;
     const id = game.id;
+    const { heard, title } = pressedNow();
     compatBusyFor = [...compatBusyFor, id];
     compatAction = action;
     compatError = '';
     compatKeepOffer = false;
     compatProgress = null;
-    // The dialog may have closed, or opened for another game, while this ran: a failure shows inline
-    // where it is still shown, else as a toast, so the outcome is never lost.
+    // The dialog cannot be closed while this runs, yet it may be turned to another game or closed from
+    // outside (the game removed). The switch stays known as running by game, across openings; its
+    // outcome is said in the opening it was pressed in, else in a toast naming the game.
     const shown = () => target?.gameId === id;
     // A problem's action goes with its notice once it worked: focus it held goes to the compatibility
     // switch, which then says the outcome, else to the control that followed the notice.
     const hand = action ? focusHandOff() : null;
     const after = action ? controlAfterNotice() : null;
+    let failure: string | undefined;
     try {
       if (on) await enableWrapper(id, compatWrapper, compatPreset);
       else if (keepChanged) await disableWrapperKeepChanged(id);
       else await disableWrapper(id);
     } catch (err) {
-      const text = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
-      if (shown()) {
+      failure = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
+      if (heard()) {
         compatKeepOffer = !on && errorCode(err) === 'wrappers.tampered';
-        compatError = text;
-      } else {
-        toast(text, 'danger');
+        compatError = failure;
       }
     } finally {
       compatBusyFor = compatBusyFor.filter((busy) => busy !== id);
-      compatAction = '';
+      if (heard()) compatAction = '';
       if (shown()) compatProgress = null;
     }
+    if (!heard()) sayLate(title, failure);
     if (shown()) await loadCompat(id);
-    await hand?.(() => compatSection?.querySelector<HTMLElement>('[role="switch"]') ?? (after?.isConnected ? after : null));
+    if (heard()) await hand?.(() => compatSection?.querySelector<HTMLElement>('[role="switch"]') ?? (after?.isConnected ? after : null));
   }
 
   let propsEl = $state<HTMLElement>();
@@ -293,134 +331,192 @@
 
   async function pickCandidate(path: string) {
     if (!game || exeBusy) return;
+    const id = game.id;
+    const { heard, title } = pressedNow();
     exeBusy = 'pick';
     exeError = '';
+    let failure: string | undefined;
     try {
-      await setExecutable(game.id, path);
+      await setExecutable(id, path);
     } catch (err) {
-      exeError = errorText(err, msg('modals.propertiesExeSaveFailed'));
-      toast(exeError, 'danger');
-    } finally {
-      exeBusy = '';
+      failure = errorText(err, msg('modals.propertiesExeSaveFailed'));
     }
+    if (!heard()) return sayLate(title, failure);
+    exeBusy = '';
+    exeError = failure ?? '';
   }
 
   async function browseExecutable() {
     if (!game || exeBusy) return;
+    const current = game;
+    const { heard, title } = pressedNow();
     exeBusy = 'browse';
     exeError = '';
+    let failure: string | undefined;
+    let changed = false;
     try {
-      const title = msg('modals.propertiesExeDialog', { title: game.title });
+      const dialogTitle = msg('modals.propertiesExeDialog', { title: current.title });
       const path = emulated
-        ? await selectImageFile(title, [emulationPlatform(game)])
-        : await selectGameExecutable(title, game.installDir, game.executable);
-      if (path) await setExecutable(game.id, path);
+        ? await selectImageFile(dialogTitle, [emulationPlatform(current)])
+        : await selectGameExecutable(dialogTitle, current.installDir, current.executable);
+      if (path) {
+        changed = true;
+        await setExecutable(current.id, path);
+      }
     } catch (err) {
-      exeError = errorText(err, msg('modals.propertiesExeSaveFailed'));
-      toast(exeError, 'danger');
-    } finally {
-      exeBusy = '';
+      failure = errorText(err, msg('modals.propertiesExeSaveFailed'));
     }
+    if (!heard()) {
+      if (changed || failure !== undefined) sayLate(title, failure);
+      return;
+    }
+    exeBusy = '';
+    exeError = failure ?? '';
   }
 
   async function saveArgs(event?: MouseEvent) {
     if (!game || argsBusy) return;
+    const id = game.id;
+    const line = argsLine;
+    const { heard, title } = pressedNow();
     // Saved, Save has nothing left to do and stays but turns disabled: focus still on it then counts
     // as fallen, and goes back to the field, what the user would change next.
     const save = event?.currentTarget instanceof HTMLButtonElement ? event.currentTarget : null;
     const hand = focusHandOff(() => (save?.disabled ? save : null));
     argsBusy = true;
     argsError = '';
+    let failure: string | undefined;
     try {
-      await setLaunchArgsLine(game.id, argsLine);
-      argsSaved = argsLine;
+      await setLaunchArgsLine(id, line);
+    } catch (err) {
+      failure = errorText(err, msg('modals.propertiesArgsSaveFailed'));
+    }
+    if (!heard()) return sayLate(title, failure);
+    argsBusy = false;
+    if (failure === undefined) {
+      argsSaved = line;
       argsLoadError = '';
       toast(msg('modals.propertiesArgsSaved'), 'success');
-    } catch (err) {
-      argsError = errorText(err, msg('modals.propertiesArgsSaveFailed'));
-      toast(argsError, 'danger');
-    } finally {
-      argsBusy = false;
+    } else {
+      argsError = failure;
     }
     await hand(() => argsInput);
   }
 
   async function changeAdmin(on: boolean) {
     if (!game || adminBusy) return;
+    const id = game.id;
+    const { heard, title } = pressedNow();
+    admin = on;
     adminBusy = true;
     adminError = '';
+    let failure: string | undefined;
     try {
-      await setRunAsAdmin(game.id, on);
+      await setRunAsAdmin(id, on);
     } catch (err) {
+      failure = errorText(err, msg('modals.propertiesAdminFailed'));
+    }
+    if (!heard()) return sayLate(title, failure);
+    adminBusy = false;
+    if (failure !== undefined) {
       admin = !on;
-      adminError = errorText(err, msg('modals.propertiesAdminFailed'));
-      toast(adminError, 'danger');
-    } finally {
-      adminBusy = false;
+      adminError = failure;
     }
   }
 
   async function changeGameMode(key: GameModeKey, state: OverrideState) {
     if (!game || gameModeBusy) return;
+    const id = game.id;
+    const { heard, title } = pressedNow();
     gameModeBusy = true;
     gameModeError = '';
+    let failure: string | undefined;
     try {
-      await setGameModeOverride(game.id, withOverride(game.gameMode, key, state));
+      await setGameModeOverride(id, withOverride(game.gameMode, key, state));
     } catch (err) {
-      gameModeError = errorText(err, msg('modals.propertiesGameModeFailed'));
-      toast(gameModeError, 'danger');
-    } finally {
-      gameModeBusy = false;
+      failure = errorText(err, msg('modals.propertiesGameModeFailed'));
     }
+    if (!heard()) return sayLate(title, failure);
+    gameModeBusy = false;
+    gameModeError = failure ?? '';
   }
 
   async function changePresence(on: boolean) {
     if (!game || presenceBusy) return;
+    const id = game.id;
+    const { heard, title } = pressedNow();
+    presence = on;
     presenceBusy = true;
     presenceError = '';
+    let failure: string | undefined;
     try {
-      await setHidePresence(game.id, !on);
+      await setHidePresence(id, !on);
     } catch (err) {
+      failure = errorText(err, msg('modals.propertiesPresenceFailed'));
+    }
+    if (!heard()) return sayLate(title, failure);
+    presenceBusy = false;
+    if (failure !== undefined) {
       presence = !on;
-      presenceError = errorText(err, msg('modals.propertiesPresenceFailed'));
-      toast(presenceError, 'danger');
-    } finally {
-      presenceBusy = false;
+      presenceError = failure;
     }
   }
 
   async function browseSaves() {
     if (!game || savesBusy) return;
+    const { heard, title } = pressedNow();
     savesBusy = 'browse';
     savesError = '';
+    let failure: string | undefined;
+    let dir = '';
     try {
-      await chooseSavesDir(game.id, game.title);
+      dir = await chooseSavesDir(game.id, game.title);
     } catch (err) {
-      savesError = errorText(err, msg('modals.propertiesSavesFailed'));
-      toast(savesError, 'danger');
-    } finally {
-      savesBusy = '';
+      failure = errorText(err, msg('modals.propertiesSavesFailed'));
     }
+    if (!heard()) {
+      if (dir || failure !== undefined) sayLate(title, failure);
+      return;
+    }
+    savesBusy = '';
+    savesError = failure ?? '';
   }
 
-  async function resetSaves() {
-    if (!game || savesBusy) return;
-    savesBusy = 'reset';
+  function askResetSaves() {
+    if (!game || savesBusy || !game.savesDir) return;
     savesError = '';
+    resetAsk = { id: game.id, title: game.title, path: game.savesDir };
+  }
+
+  // Go's ClearSavesDir forgets the chosen folder and deletes no file: the question says so. A refusal
+  // stays in the question; one that comes after the dialog moved on is said in a toast.
+  async function resetSaves(ask: { id: string; title: string }) {
+    const { heard } = pressedNow();
+    savesBusy = 'reset';
     try {
-      await clearSavesDir(game.id);
+      await clearSavesDir(ask.id);
     } catch (err) {
-      savesError = errorText(err, msg('modals.propertiesSavesFailed'));
-      toast(savesError, 'danger');
-    } finally {
-      savesBusy = '';
+      if (heard()) {
+        savesBusy = '';
+        throw err;
+      }
+      return sayLate(ask.title, errorText(err, msg('modals.propertiesSavesFailed')));
     }
+    if (!heard()) return sayLate(ask.title);
+    savesBusy = '';
+  }
+
+  function closeResetAsk(ask: object) {
+    if (resetAsk === ask) resetAsk = null;
   }
 </script>
 
-<!-- dismissible while compatBusy: the wrapper download has no cancel and may take minutes; it goes on with the dialog closed, and reopening shows it still running. -->
+<!-- Not dismissible while a wrapper change runs (it rewrites the game's files and has no cancel) or
+     the saves folder is reset: the outcome is said in the dialog. -->
 <Modal
   open={Boolean(target && game)}
+  dismissible={!compatBusy && savesBusy !== 'reset'}
+  busy={compatBusy || savesBusy === 'reset'}
   title={game ? msg('modals.propertiesTitle', { title: game.title }) : msg('games.actionProperties')}
   width="56rem"
   onclose={closeGameProperties}
@@ -453,10 +549,7 @@
         {admin}
         {adminBusy}
         {adminError}
-        onadmin={(on) => {
-          admin = on;
-          void changeAdmin(on);
-        }}
+        onadmin={(on) => void changeAdmin(on)}
       />
 
       {#if !emulated}
@@ -481,6 +574,7 @@
           keepOffer={compatKeepOffer}
           bind:section={compatSection}
           onswitch={(on) => {
+            if (compatBusy) return;
             compatOn = on;
             void changeCompat(on);
           }}
@@ -503,18 +597,32 @@
         {presence}
         {presenceBusy}
         {presenceError}
-        onpresence={(on) => {
-          presence = on;
-          void changePresence(on);
-        }}
+        onpresence={(on) => void changePresence(on)}
       />
 
       {#if !emulated && (game.installDir || game.savesDir)}
-        <PropertiesSaves {game} {savesBusy} {savesError} onbrowse={browseSaves} onreset={resetSaves} />
+        <PropertiesSaves {game} {savesBusy} {savesError} onbrowse={browseSaves} onreset={askResetSaves} />
       {/if}
     </div>
   {/if}
 </Modal>
+
+{#if resetAsk}
+  {@const ask = resetAsk}
+  <ConfirmModal
+    prompt={{
+      title: msg('modals.propertiesSavesResetTitle'),
+      text: msg('modals.propertiesSavesResetText', { path: ask.path, title: ask.title }),
+      note: msg('modals.propertiesSavesResetNote'),
+      confirm: msg('modals.propertiesSavesResetConfirm'),
+      busy: msg('modals.propertiesSavesResetting'),
+    }}
+    onconfirm={() => resetSaves(ask)}
+    onclose={() => closeResetAsk(ask)}
+    errorText={(err) => errorText(err, msg('modals.propertiesSavesFailed'))}
+    returnFocus={() => propsEl?.querySelector<HTMLElement>('[data-saves-browse]')}
+  />
+{/if}
 
 <style>
   .props {

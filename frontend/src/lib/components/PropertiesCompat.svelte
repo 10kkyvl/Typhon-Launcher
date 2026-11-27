@@ -73,8 +73,21 @@
 {:else if visible && compat}
   <section class="section" bind:this={section}>
     <div class="row spread">
-      <h4>{msg('modals.compatTitle')}</h4>
-      <Toggle checked={on} label={msg('modals.compatToggle')} disabled={busy || running || (locked && !compat.active)} onchange={onswitch} />
+      <div class="title">
+        <h4>{msg('modals.compatTitle')}</h4>
+        {#if busy}
+          <p class="hint" id="{uid}-held">{msg('modals.actionRunning')}</p>
+        {/if}
+      </div>
+      <!-- Held, not disabled, while its own switch runs: the pressed switch keeps the focus. -->
+      <Toggle
+        checked={on}
+        label={msg('modals.compatToggle')}
+        disabled={!busy && (running || (locked && !compat.active))}
+        aria-disabled={busy ? 'true' : undefined}
+        describedby={busy ? `${uid}-held` : undefined}
+        onchange={onswitch}
+      />
     </div>
     {#if compat.active}
       <p class="path">
@@ -225,5 +238,12 @@
 
   .spread {
     justify-content: space-between;
+  }
+
+  /* A switch's row: its heading, and the reason it is held while its change runs. */
+  .title {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
   }
 </style>
