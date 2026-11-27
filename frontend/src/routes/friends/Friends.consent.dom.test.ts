@@ -5,7 +5,7 @@ import { msg } from '../../lib/i18n';
 import { saveSettingsPatch, type Settings } from '../../lib/services/settings';
 import { blocks, friends, refresh, type FriendsPage } from '../../lib/services/social';
 import { settings } from '../../lib/stores/settings';
-import { friendsLoaded, friendsPage } from '../../lib/stores/social';
+import { friendsLoaded, friendsPage, loadFriends } from '../../lib/stores/social';
 import { toast } from '../../lib/stores/toasts';
 import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
@@ -121,5 +121,18 @@ describe('Friends: the sync consent given on the screen', () => {
     await vi.waitFor(() => expect(screen.getByRole('heading', { name: msg('social.friendsConsentTitle') })).toBeTruthy());
     expect(dialog.isConnected).toBe(true);
     expect([refresh, friends, blocks].map((call) => vi.mocked(call).mock.calls.length)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('Friends: the hold on the store’s toast', () => {
+  it('R5 is released when the screen goes: a consent read that fails elsewhere then is said once in a toast', async () => {
+    const shown = render(Friends, { target: document.getElementById('app') as HTMLElement, props: {} });
+    await tick();
+    shown.unmount();
+    vi.mocked(friends).mockRejectedValueOnce(new Error('timeout'));
+
+    await loadFriends();
+
+    expect(vi.mocked(toast).mock.calls).toEqual([[msg('state.socialLoadFriendsFailed'), 'danger']]);
   });
 });

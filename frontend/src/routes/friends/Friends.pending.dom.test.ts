@@ -249,4 +249,23 @@ describe('Friends: the reads after actions', () => {
     expect(screen.queryByText('Petr')).toBeNull();
     expect(vi.mocked(unblock).mock.calls).toEqual([['b-oleg'], ['b-petr']]);
   });
+
+  it('R6 an older blocked list that fails after a newer one answered says nothing', async () => {
+    const keys = await mount({ friends: [ANA], incoming: [], outgoing: [] }, { tab: 'blocked' }, [OLEG, PETR]);
+    const older = deferred<UserCard[]>();
+    vi.mocked(blocks).mockReturnValueOnce(older.promise).mockResolvedValueOnce([]);
+
+    await keys.click(unblockOf('Oleg'));
+    await vi.waitFor(() => expect(blocks).toHaveBeenCalledTimes(2));
+    await keys.click(unblockOf('Petr'));
+    await vi.waitFor(() => expect(blocks).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(screen.getByRole('heading', { name: msg('social.friendsEmptyBlockedTitle') })).toBeTruthy());
+
+    older.reject(new Error('timeout'));
+    await tick();
+    await tick();
+
+    expect(toast).not.toHaveBeenCalledWith(msg('social.friendsBlockedLoadFailed'), 'danger');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

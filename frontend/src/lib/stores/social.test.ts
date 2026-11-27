@@ -451,6 +451,72 @@ describe('the read after the sync consent (loadFriends)', () => {
     expect(get(friendsLoadError)).toBeInstanceOf(AccountError);
     expect(toast).not.toHaveBeenCalled();
   });
+
+  it('R3 gives way to a page Go sent while it waited: the older answer is dropped', async () => {
+    const { Events } = await import('@wailsio/runtime');
+    const { friendsPage, loadFriends, service } = await signedIn();
+    const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'social:friends')?.[1] as (event: { data: unknown }) => void;
+    const answer = deferred<ReturnType<typeof page>>();
+    vi.mocked(service.friends).mockReturnValueOnce(answer.promise as never);
+    const reading = loadFriends();
+
+    handler({ data: page(3, 0) });
+    answer.resolve(page(2, 0));
+    await reading;
+
+    expect(get(friendsPage).friends.length).toBe(3);
+  });
+});
+
+describe('the follow-up read (reads asked while one runs)', () => {
+  async function signedIn() {
+    const store = await load();
+    const service = await import('../services/social');
+    vi.mocked(service.friends).mockReset();
+    vi.mocked(service.refresh).mockReset();
+    return { ...store, service };
+  }
+
+  it('R7 asks made while the follow-up runs make one more read after it: two waves, three reads', async () => {
+    const { reloadFriends, service } = await signedIn();
+    const first = deferred<void>();
+    const second = deferred<void>();
+    vi.mocked(service.refresh).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockResolvedValue(undefined);
+
+    const running = reloadFriends();
+    const firstWave = [reloadFriends(), reloadFriends()];
+    first.resolve();
+    await running;
+    await vi.waitFor(() => expect(service.refresh).toHaveBeenCalledTimes(2));
+    const secondWave = [reloadFriends(), reloadFriends()];
+    second.resolve();
+
+    expect(await Promise.all([...firstWave, ...secondWave])).toEqual([true, true, true, true]);
+    expect(service.refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it('R7 an action answered while the follow-up runs gets a read that started after it', async () => {
+    const { friendsPage, reloadFriends, service } = await signedIn();
+    const first = deferred<void>();
+    const followUp = deferred<void>();
+    vi.mocked(service.refresh).mockReturnValueOnce(first.promise).mockReturnValueOnce(followUp.promise).mockResolvedValue(undefined);
+    vi.mocked(service.friends)
+      .mockResolvedValueOnce(page(1, 0) as never)
+      .mockResolvedValueOnce(page(1, 0) as never)
+      .mockResolvedValueOnce(page(2, 0) as never);
+
+    const running = reloadFriends();
+    void reloadFriends();
+    first.resolve();
+    await running;
+    await vi.waitFor(() => expect(service.refresh).toHaveBeenCalledTimes(2));
+    const afterAction = reloadFriends();
+    followUp.resolve();
+
+    expect(await afterAction).toBe(true);
+    expect(service.refresh).toHaveBeenCalledTimes(3);
+    expect(get(friendsPage).friends.length).toBe(2);
+  });
 });
 
 describe('the read of a start (the stored session checked behind the splash)', () => {
