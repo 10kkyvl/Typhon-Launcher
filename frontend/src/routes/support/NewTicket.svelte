@@ -177,8 +177,9 @@
     });
   });
 
-  // From the first content the player gives it this form's content is the draft. What it offers stays
-  // offered: an edit never drops it.
+  // From the first content the player gives it this form's content is the draft. A draft another form
+  // wrote moves to the spare and stays offered; with the spare taken it has no place left, so the first
+  // edit drops that line of the notice and the toast names the draft and offers to copy it.
   function edit() {
     owns = true;
   }
