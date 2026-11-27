@@ -127,7 +127,7 @@ describe('Sources: removing a source', () => {
 
     await pick(keys, 'Main feed', msg('transfers.sourcesRemoveAction'));
 
-    expect(within(removeDialog()).getByText(msg('transfers.sourcesConfirmRemove', { name: 'Main feed' }))).toBeTruthy();
+    expect(within(removeDialog()).getByText(msg('modals.sourceDetailsRemoveText', { name: 'Main feed' }))).toBeTruthy();
     await keys.click(within(removeDialog()).getByRole('button', { name: msg('common.cancel') }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(removeSource).not.toHaveBeenCalled();

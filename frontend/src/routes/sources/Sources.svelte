@@ -132,7 +132,11 @@
     } else if (action === 'details') {
       openDetails(source.id);
     } else if (action === 'remove') {
-      pending = { prompt: removeSourcePrompt(source.name), run: () => remove(source.id), place: placeOf(document.activeElement) };
+      pending = {
+        prompt: { ...removeSourcePrompt(source.name), text: msg('modals.sourceDetailsRemoveText', { name: source.name }) },
+        run: () => remove(source.id),
+        place: placeOf(document.activeElement),
+      };
     }
   }
 </script>
