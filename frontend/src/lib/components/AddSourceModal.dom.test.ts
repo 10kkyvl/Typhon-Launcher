@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { addSource, addSourceFile, listSources, selectFeedFile, testSource, testSourceFile, type Source, type SourcePreview } from '../services/sources';
+import { sources } from '../stores/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import { resetBindings } from '../testing/fakeBinding';
@@ -54,6 +55,7 @@ afterEach(() => {
   const sent = sentToGo();
   resetBindings();
   toasts.set([]);
+  sources.set([]);
   vi.useRealTimers();
   vi.resetAllMocks();
   document.body.replaceChildren();
@@ -267,6 +269,58 @@ describe('AddSourceModal: adding', () => {
 
     expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([[msg('errSources.srcFeedChallenge'), 'danger']]);
     expect(goText()).toBe(false);
+  });
+});
+
+// Go's AddSource saves the source, then answers its first refresh's error.
+describe('AddSourceModal: a source saved whose first refresh failed', () => {
+  const saved = { id: 'n', name: 'feed.test', type: 'url', url: FEED, status: 'error' } as Source;
+  const told = () => [msg('modals.addSourceAddedRefreshFailed', { name: 'feed.test', reason: msg('errSources.srcFeedHttpStatus', { status: '503' }) }), 'warning'];
+
+  it('says it was added with why the refresh failed, in one warning toast, and closes with the focus back on the opener', async () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Add source';
+    app.append(opener);
+    opener.focus();
+    vi.mocked(addSource).mockImplementationOnce(async () => {
+      vi.mocked(listSources).mockResolvedValue([saved]);
+      throw goError('sources.feed_bad_status: status 503');
+    });
+    const { dialog, keys } = await checked(async () => preview());
+
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.add') }));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([told()]);
+    expect(vi.mocked(addSource).mock.calls).toEqual([[FEED]]);
+    expect(get(sources).map((item) => item.id)).toEqual(['n']);
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(goText()).toBe(false);
+  });
+
+  it('says the same once the dialog was minimised', async () => {
+    const adding = held<Source>();
+    vi.mocked(addSource).mockReturnValueOnce(adding.promise);
+    const { dialog, keys } = await checked(async () => preview());
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.add') }));
+    await keys.click(within(dialog).getByRole('button', { name: msg('modals.addSourceMinimize') }));
+
+    vi.mocked(listSources).mockResolvedValue([saved]);
+    adding.reject(goError('sources.feed_bad_status: status 503'));
+
+    await vi.waitFor(() => expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([told()]));
+  });
+
+  it('keeps a refusal that saved nothing at the field, the URL there, sent once', async () => {
+    vi.mocked(addSource).mockRejectedValueOnce(goError('sources.feed_invalid_url'));
+    const { dialog, keys } = await checked(async () => preview());
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.add') }));
+
+    const field = await within(dialog).findByRole('textbox', { name: msg('modals.addSourceUrlLabel') });
+    expect((field as HTMLInputElement).value).toBe(FEED);
+    await vi.waitFor(() => expect(describedBy(field)).toContain(msg('errSources.srcFeedInvalidUrl')));
+    expect(vi.mocked(addSource).mock.calls).toEqual([[FEED]]);
+    expect(get(toasts)).toEqual([]);
   });
 });
 

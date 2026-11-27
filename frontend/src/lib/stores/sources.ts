@@ -10,8 +10,10 @@ import {
   removeSource as removeSourceRequest,
   setSourceEnabled,
   type Source,
+  type SourceType,
 } from '../services/sources';
 import { sourceErrorText } from '../sources/sourceErrors';
+import { errorCode } from '../i18n/errors';
 import { errorMessage } from '../utils/errors';
 import { msg } from '../i18n';
 import { toast } from './toasts';
@@ -55,6 +57,12 @@ export function toastUnannounced(err: unknown, since: number) {
   if (announced.some((item) => item.seq > since && item.message !== '' && raw.includes(item.message))) return;
   toast(sourceErrorText(err), 'danger');
 }
+
+// Where the adds still waiting for Go's answer point: the error of a first refresh there is said by
+// the add, once, not by the event as well.
+const addingAt = new Map<string, number>();
+const placeOf = (kind: SourceType, location: string) => `${kind}:${location.trim().toLowerCase()}`;
+const placeOfSource = (item: Source) => placeOf(item.type, item.type === 'file' ? (item.path ?? '') : item.url);
 
 function upsert(item: Source) {
   sources.update((list) => {
@@ -129,9 +137,11 @@ export async function initSources(): Promise<void> {
     upsert(item);
   });
   on('source:error', (event) => {
-    const { name, message, scheduled } = event.data as SourceErrorEvent;
+    const { sourceId, name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
     announce(message);
+    const item = get(sources).find((s) => s.id === sourceId);
+    if (item && addingAt.has(placeOfSource(item))) return;
     toast(msg('state.sourcesErrorToast', { name, message: sourceErrorText(new Error(message)) }), 'danger');
   });
   on('source:degraded', (event) => {
@@ -190,14 +200,54 @@ export async function remove(id: string) {
   sources.update((list) => list.filter((s) => s.id !== id));
 }
 
-export async function add(url: string) {
-  const source = await addSourceRequest(url);
-  await reload();
-  return source;
+/** What an add did: the source Go saved and, when its first refresh failed, why. */
+export interface AddResult {
+  source: Source;
+  failure?: unknown;
 }
 
-export async function addFile(path: string) {
-  const source = await addSourceFileRequest(path);
-  await reload();
-  return source;
+/**
+ * Go's add saves the source and then answers its first refresh's error: an error does not say that
+ * nothing was saved. The list read again tells: a source at that place that was not there before is
+ * this add's, saved, with the failure; otherwise the add was refused and rejects.
+ */
+async function addAt(kind: SourceType, location: string, send: () => Promise<Source>): Promise<AddResult> {
+  const place = placeOf(kind, location);
+  const before = new Set(get(sources).map((s) => s.id));
+  addingAt.set(place, (addingAt.get(place) ?? 0) + 1);
+  try {
+    let source: Source;
+    try {
+      source = await send();
+    } catch (err) {
+      const saved = await savedBy(place, before, err);
+      if (!saved) throw err;
+      return { source: saved, failure: err };
+    }
+    await reload();
+    return { source };
+  } finally {
+    const left = (addingAt.get(place) ?? 1) - 1;
+    if (left > 0) addingAt.set(place, left);
+    else addingAt.delete(place);
+  }
+}
+
+async function savedBy(place: string, before: Set<string>, err: unknown): Promise<Source | undefined> {
+  if (errorCode(err) === 'sources.source_exists') return undefined;
+  try {
+    await reload();
+  } catch {
+    // The list could not be read: nothing shows the source was saved, so the add's own reason stands.
+    return undefined;
+  }
+  return get(sources).find((s) => !before.has(s.id) && placeOfSource(s) === place);
+}
+
+export function add(url: string): Promise<AddResult> {
+  return addAt('url', url, () => addSourceRequest(url));
+}
+
+export function addFile(path: string): Promise<AddResult> {
+  return addAt('file', path, () => addSourceFileRequest(path));
 }

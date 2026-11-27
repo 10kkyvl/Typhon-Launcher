@@ -118,8 +118,10 @@
     const mark = errorMark();
     adding = true;
     try {
-      const source = mode === 'file' ? await addSourceFile(value) : await addSource(value);
-      toast(msg('modals.addSourceAdded', { name: source.name }), 'success');
+      const { source, failure } = mode === 'file' ? await addSourceFile(value) : await addSource(value);
+      // Saved with its first refresh failed: the list shows it with that error and its own Refresh.
+      if (failure !== undefined) toast(msg('modals.addSourceAddedRefreshFailed', { name: source.name, reason: sourceErrorText(failure) }), 'warning');
+      else toast(msg('modals.addSourceAdded', { name: source.name }), 'success');
       if (token === run) open = false;
     } catch (err) {
       if (token === run && open) {

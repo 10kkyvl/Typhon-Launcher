@@ -261,8 +261,99 @@ describe('source actions', () => {
 
     const added = await store.addFile('C:\\feeds\\mine.json');
 
-    expect(added.id).toBe('f');
+    expect(added.source.id).toBe('f');
     expect(get(store.sources).map((item) => item.id)).toEqual(['f']);
+  });
+});
+
+// Go's AddSource saves the source and then returns its first refresh's error: the store reads the list
+// again to tell a saved source from a refusal that saved nothing.
+describe('an add whose first refresh failed', () => {
+  const FEED = 'https://feed.example/feed.json';
+  const saved = (patch: Partial<Source> = {}) => ({ id: 'n', name: 'feed.example', type: 'url', url: FEED, status: 'error', ...patch }) as Source;
+  const refreshFailed = new Error('typhon:sources.feed_bad_status: GET https://feed.example/feed.json: status 503');
+
+  it('answers the saved source with the failure, from the list read again, and sends the add once', async () => {
+    const { store } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [saved()];
+      throw refreshFailed;
+    });
+
+    const result = await store.add(`  ${FEED}  `);
+
+    expect(api.addSource.mock.calls).toEqual([[`  ${FEED}  `]]);
+    expect(result.source.id).toBe('n');
+    expect(result.failure).toBe(refreshFailed);
+    expect(get(store.sources).map((item) => item.id)).toEqual(['n']);
+  });
+
+  it('finds a file source by its path, and a URL whatever the case of its scheme and host', async () => {
+    const { store } = await load();
+    api.addSourceFile.mockImplementationOnce(async () => {
+      seeded = [saved({ id: 'f', type: 'file', url: '', path: 'C:\\Feeds\\mine.json' })];
+      throw refreshFailed;
+    });
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [...seeded, saved({ id: 'u', url: 'https://feed.example/Feed.json' })];
+      throw refreshFailed;
+    });
+
+    expect((await store.addFile('C:\\Feeds\\mine.json')).source.id).toBe('f');
+    expect((await store.add('HTTPS://FEED.EXAMPLE/Feed.json')).source.id).toBe('u');
+  });
+
+  it('rejects a refusal that saved nothing, after reading the list again', async () => {
+    const { store } = await load();
+    const reads = api.listSources.mock.calls.length;
+    api.addSource.mockRejectedValueOnce(new Error('typhon:sources.feed_invalid_url: bad'));
+
+    await expect(store.add('nonsense')).rejects.toThrow('sources.feed_invalid_url');
+    expect(api.listSources.mock.calls.length).toBe(reads + 1);
+    expect(api.addSource).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects "already added": the source in the list at that place is not this add’s', async () => {
+    seeded = [saved({ id: 'old', status: 'active' })];
+    const { store } = await load();
+    api.addSource.mockRejectedValueOnce(new Error('typhon:sources.source_exists: GO'));
+
+    await expect(store.add(FEED)).rejects.toThrow('sources.source_exists');
+  });
+
+  it('rejects "already added" also when the list was never read before the add', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+    const { store } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [saved({ id: 'old', status: 'active' })];
+      throw new Error('typhon:sources.source_exists: GO');
+    });
+
+    await expect(store.add(FEED)).rejects.toThrow('sources.source_exists');
+  });
+
+  it('rejects with the add’s own reason when the list cannot be read again', async () => {
+    const { store } = await load();
+    api.addSource.mockRejectedValueOnce(refreshFailed);
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+
+    await expect(store.add(FEED)).rejects.toBe(refreshFailed);
+  });
+
+  it('leaves the first refresh’s error to the add, so the player is told once', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      handlers['source:updated']({ data: saved({ status: 'updating' }) });
+      handlers['source:error']({ data: { sourceId: 'n', name: 'feed.example', message: refreshFailed.message, scheduled: false } });
+      seeded = [saved()];
+      throw refreshFailed;
+    });
+
+    await store.add(FEED);
+    expect(toast).not.toHaveBeenCalled();
+
+    handlers['source:error']({ data: { sourceId: 'n', name: 'feed.example', message: refreshFailed.message, scheduled: false } });
+    expect(toast).toHaveBeenCalledTimes(1);
   });
 });
 
