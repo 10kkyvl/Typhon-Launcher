@@ -224,7 +224,7 @@ describe('selecting text', () => {
   // Text that must stay selectable inside a control says so itself; nothing else needs to. In the
   // stylesheets only global.css switches it on: for text fields and for messages.
   it('is switched back on only inside controls, and in the overlay chat', () => {
-    const KEPT = ['lib/components/InstallModal.svelte', 'overlay/OverlayChat.svelte', 'routes/friends/FriendCodeCard.svelte'];
+    const KEPT = ['lib/components/InstallChooseStep.svelte', 'overlay/OverlayChat.svelte', 'routes/friends/FriendCodeCard.svelte'];
     const found = Object.entries(frontendSources)
       .filter(([path, text]) => path.endsWith('.svelte') && /user-select:\s*text/.test(text))
       .map(([path]) => path)

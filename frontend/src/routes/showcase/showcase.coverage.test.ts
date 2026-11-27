@@ -74,6 +74,7 @@ const NOT_BASE: Record<string, string> = {
   CloudDisableModal: 'a dialog of the cloud saves flow, built on Modal',
   ColorPalette: "the accent picker's swatches in settings and the profile",
   GameHero: "the game page's hero",
+  InstallChooseStep: "the install dialog's choice of the game's executable",
   LogoArcs: 'the logo in vector, drawn by the sidebar logo and the update show while its arcs fly',
   MaskedEmail: "the profile's e-mail and its reveal",
   MenuList: 'the body of DropdownMenu and ContextMenu, shown through them',

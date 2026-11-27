@@ -1,7 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
-  import { FileSearch, FolderOpen, Gamepad2 } from '@lucide/svelte';
   import { addGame, launchGame, selectExecutable } from '../services/library';
   import { libraryErrorText } from '../library/errors';
   import {
@@ -22,35 +21,26 @@
   import { canRetryInstall, installErrorText, needsInteractiveInstall } from '../install/installErrors';
   import { createSpacePlanner } from '../install/spacePlanner';
   import { adviseDestination, type DestinationHint, type DestinationOrigin } from '../install/destinationAdvice';
-  import { installIndeterminate, installTotalUnknown } from '../install/progress';
   import { libraryFolders, openGameFolder, selectFolder, type LibraryFolder } from '../services/settings';
   import { destinationInRoot, rootOfDestination } from '../library/folders';
   import { downloadsById } from '../stores/downloads';
   import type { Download } from '../services/downloads';
-  import { platformBadge } from '../library/emulation';
   import {
     installActive,
-    installStatusLabels,
-    installTypeLabels,
     installations,
     installationsByDownload,
     upsertInstallation,
   } from '../stores/install';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
-  import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import Button from './Button.svelte';
-  import ConsoleTag from './ConsoleTag.svelte';
-  import EmulatorHint from './EmulatorHint.svelte';
   import Modal from './Modal.svelte';
-  import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
-  import Select from './Select.svelte';
-  import ProgressBar from './ProgressBar.svelte';
-  import SegmentedControl from './SegmentedControl.svelte';
-  import SystemRequirements from './SystemRequirements.svelte';
+  import InstallChooseStep from './InstallChooseStep.svelte';
+  import InstallOutcome from './InstallOutcome.svelte';
+  import InstallPlanStep from './InstallPlanStep.svelte';
+  import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
-  import { nextIndex } from '../utils/roving';
 
   let { open = $bindable(false), downloadId }: { open?: boolean; downloadId: string | null } = $props();
   const uid = $props.id();
@@ -292,11 +282,6 @@
     });
   });
 
-  function basename(path: string) {
-    const parts = path.split(/[\\/]/);
-    return parts[parts.length - 1] || path;
-  }
-
   async function browseDestination() {
     try {
       const path = await selectFolder(msg('modals.installChooseFolder'));
@@ -330,19 +315,6 @@
 
   const own = (by: string) => busy && actor === by;
   const other = (by: string) => busy && actor !== by;
-
-  let candidateGroup = $state<HTMLElement>();
-
-  // The found executables are a radio group: the arrows move the choice and the focus together.
-  function moveChoice(event: KeyboardEvent) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const radios = [...(candidateGroup?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
-    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), candidatePaths.length, event.key, { orientation: 'vertical' });
-    if (next === null) return;
-    event.preventDefault();
-    chosen = candidatePaths[next];
-    radios[next]?.focus();
-  }
 
   function start() {
     const current = info;
@@ -488,246 +460,52 @@
       <span class="loading-text">{msg('modals.installAnalyzing')}</span>
     </div>
   {:else if phase === 'plan' && info && plan}
-    <div class="block">
-      <div class="pkg">
-        <span class="pkg-name">{info.name}</span>
-        <span class="pkg-type">{installTypeLabels(plan.type)}</span>
-      </div>
-
-      <div class="rows">
-        <div class="row">
-          <span class="key">{msg('modals.installSource')}</span>
-          <span class="value">{truncateMiddle(plan.sourcePath, 48)}</span>
-        </div>
-        {#if space}
-          <div class="row">
-            <span class="key">{msg('modals.installRequiredSpace')}</span>
-            <span class="value" class:danger={notEnoughSpace} class:stale={spacePending}>{bytesSize(space.requiredBytes)}</span>
-          </div>
-          <div class="row">
-            <span class="key">{msg('modals.installFreeSpace')}</span>
-            <span class="value" class:danger={notEnoughSpace} class:stale={spacePending}>{bytesSize(space.freeBytes)}</span>
-          </div>
-        {/if}
-      </div>
-
-      {#if spacePending}
-        <Spinner size="sm" label={msg('modals.installRecalculating')} />
-      {:else if notEnoughSpace}
-        <Notice tone="danger" compact>{msg('modals.installNotEnoughSpace')}</Notice>
-      {/if}
-
-      {#if requirementsGameId}
-        <SystemRequirements gameId={requirementsGameId} installPath={destination} heading={false} />
-      {/if}
-
-      {#if (controlled || silent) && roots.length > 1}
-        <div class="field">
-          <span class="field-label" id="{uid}-root-label">{msg('modals.installRootLabel')}</span>
-          <Select width="100%" options={rootOptions} labelledby="{uid}-root-label" bind:value={() => rootChoice, pickRoot} />
-        </div>
-      {/if}
-
-      {#if controlled || silent}
-        <div class="field">
-          <span class="field-label" id="{uid}-destination-label">{msg('modals.installDestinationFolder')}</span>
-          <div class="field-controls">
-            <input
-              class="input sm"
-              type="text"
-              aria-labelledby="{uid}-destination-label"
-              aria-invalid={spaceError && !spacePending ? 'true' : undefined}
-              aria-describedby={spaceError && !spacePending ? `${uid}-destination-error` : undefined}
-              value={destination}
-              oninput={onDestinationInput}
-            />
-            <Button size="sm" onclick={browseDestination}>{msg('modals.installBrowse')}</Button>
-          </div>
-          {#if spaceError && !spacePending}
-            <p class="note danger" id="{uid}-destination-error" role="alert">{spaceError}</p>
-          {:else if hint && !spacePending}
-            <div class="hint">
-              <p class="note">
-                {#if hint.kind === 'adjusted'}
-                  {msg('modals.installDestinationAdjusted', { path: hint.path })}
-                {:else if hint.kind === 'suggest'}
-                  {msg('modals.installDestinationBusy', { path: hint.path })}
-                {:else}
-                  {msg('modals.installDestinationReusable')}
-                {/if}
-              </p>
-              {#if hint.kind === 'suggest'}
-                <Button size="sm" onclick={useSuggested}>{msg('modals.installUseSuggested')}</Button>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if portable}
-        {#if info.seeding}
-          <p class="note">{msg('modals.installSeedingCopyNote')}</p>
-        {:else}
-          <div class="field">
-            <span class="field-label" id="{uid}-mode-label">{msg('modals.installModeLabel')}</span>
-            <SegmentedControl options={modeOptions} labelledby="{uid}-mode-label" bind:value={() => mode, setMode} />
-          </div>
-        {/if}
-        {#if movesInPlace}
-          <p class="note">{msg('modals.installSameVolumeNote')}</p>
-        {/if}
-      {/if}
-
-      {#if external}
-        {#if silent}
-          <p class="note">{msg('modals.installSilentNote')}</p>
-        {:else}
-          <p class="note">{msg('modals.installExternalWindowNote')}</p>
-        {/if}
-      {/if}
-
-      {#if plan.type === 'unknown'}
-        <div class="choices">
-          <p class="note">{msg('modals.installUnknownTypeNote')}</p>
-          <Button onclick={openSource}>
-            <FolderOpen size="1.6rem" strokeWidth={1.8} />
-            {msg('modals.installOpenDownloadFolder')}
-          </Button>
-          <Button onclick={pickInstaller}>
-            <FileSearch size="1.6rem" strokeWidth={1.8} />
-            {msg('modals.installPickInstallerButton')}
-          </Button>
-          <Button onclick={pickGameExecutable}>
-            <Gamepad2 size="1.6rem" strokeWidth={1.8} />
-            {msg('modals.installPickExecutableButton')}
-          </Button>
-        </div>
-      {/if}
-    </div>
-  {:else if phase === 'image' && imageDownload}
-    <div class="block">
-      <div class="pkg">
-        <span class="pkg-name">{imageTitle}</span>
-        <ConsoleTag platform={imagePlatform} />
-      </div>
-      <div class="rows">
-        <div class="row">
-          <span class="key">{msg('emul.downloadName')}</span>
-          <span class="value">{truncateMiddle(imageDownload.name, 48)}</span>
-        </div>
-        <div class="row">
-          <span class="key">{msg('emul.downloadSize')}</span>
-          <span class="value">{bytesSize(imageDownload.total)}</span>
-        </div>
-      </div>
-      <p class="note">{msg('emul.installLead')}</p>
-      <p class="note">{msg('emul.downloadNote')}</p>
-      <EmulatorHint platform={imagePlatform} />
-    </div>
-  {:else if phase === 'progress' && installation}
-    <div class="block">
-      <div class="pkg">
-        <span class="pkg-name">{installation.name}</span>
-        {#if installation.platform}<ConsoleTag platform={installation.platform} />{/if}
-        <span class="pkg-type">{installStatusLabels(installation.status)}</span>
-      </div>
-      {#if externalWait}
-        <p class="note">{msg('modals.installWaitingExternal')}</p>
-      {:else}
-        <ProgressBar value={installation.progress * 100} indeterminate={installIndeterminate(installation)} label={installation.name} />
-        {#if installTotalUnknown(installation)}
-        <div class="progress-foot">
-          <span class="size">{msg('modals.installWritten', { size: bytesSize(installation.bytesDone) })}</span>
-        </div>
-        {:else if installation.status !== 'verifying'}
-        <div class="progress-foot">
-          <span class="size">{bytesSize(installation.bytesDone)} / {bytesSize(installation.bytesTotal)}</span>
-          <span class="pct">{progressPercent(installation.progress)}%</span>
-        </div>
-        {/if}
-        {#if installation.currentFile}
-          <span class="current-file">{truncateMiddle(installation.currentFile, 56)}</span>
-        {/if}
-      {/if}
-    </div>
+    <InstallPlanStep
+      {info}
+      {plan}
+      {space}
+      {spacePending}
+      {spaceError}
+      {notEnoughSpace}
+      {requirementsGameId}
+      {destination}
+      {hint}
+      {roots}
+      {rootOptions}
+      {rootChoice}
+      {pickRoot}
+      {controlled}
+      {silent}
+      {portable}
+      {external}
+      {modeOptions}
+      {mode}
+      {setMode}
+      {movesInPlace}
+      ondestinationinput={onDestinationInput}
+      onbrowse={browseDestination}
+      onusesuggested={useSuggested}
+      onopensource={openSource}
+      onpickinstaller={pickInstaller}
+      onpickexecutable={pickGameExecutable}
+    />
   {:else if phase === 'choose' && installation}
-    <div class="block">
-      <span class="lead">{msg('modals.installChooseGameExecutable')}</span>
-      <div class="cand-list" role="radiogroup" aria-label={msg('modals.installExecutablesAriaLabel')} bind:this={candidateGroup}>
-        {#each candidatePaths as path, index (path)}
-          <button
-            type="button"
-            class="cand"
-            role="radio"
-            aria-checked={chosen === path}
-            tabindex={chosen === path || (!candidatePaths.includes(chosen) && index === 0) ? 0 : -1}
-            onclick={() => (chosen = path)}
-            onkeydown={moveChoice}
-          >
-            <span class="radio" class:on={chosen === path} aria-hidden="true"></span>
-            <span class="cand-text">
-              <span class="cand-name">{basename(path)}</span>
-              <span class="cand-path" title={path}>{path}</span>
-            </span>
-          </button>
-        {/each}
-      </div>
-      <Button size="sm" onclick={pickManual}>{msg('modals.installPickManually')}</Button>
-    </div>
-  {:else if phase === 'done' && installation}
-    <div class="block">
-      <div class="rows">
-        <div class="row">
-          <span class="key">{msg('modals.installGameLabel')}</span>
-          <span class="value">{installation.name}</span>
-        </div>
-        <div class="row">
-          <span class="key">{msg('modals.installFolderLabel')}</span>
-          <span class="value">{truncateMiddle(installation.destination, 44)}</span>
-        </div>
-        {#if installation.platform}
-          <div class="row">
-            <span class="key">{msg('emul.addConsoleLabel')}</span>
-            <span class="value">{platformBadge(installation.platform)}</span>
-          </div>
-        {:else}
-          <div class="row">
-            <span class="key">{msg('modals.installVersionLabel')}</span>
-            <span class="value">{installation.detectedVersion || msg('modals.installUnknownVersion')}</span>
-          </div>
-        {/if}
-      </div>
-      {#if installation.platform}
-        <p class="note">{msg('emul.installDone')}</p>
-        <EmulatorHint platform={installation.platform} />
-      {/if}
-      {#if installation.warning}
-        <Notice tone="warning" compact announce={false}>{installation.warning}</Notice>
-      {/if}
-      {#if askCleanup && !cleanupResolved}
-        <div class="field">
-          <span class="field-label">{msg('modals.installDownloadedFilesLabel')}</span>
-          {#if seedingNow}
-            <Notice tone="warning" compact announce={false}>{msg('modals.installSeedingDeleteWarning')}</Notice>
-          {/if}
-          <div class="cleanup-actions">
-            <Button size="sm" variant="danger" disabled={other('delete')} busy={own('delete')} onclick={deleteData}>
-              {msg('modals.installDeleteDownloadedFiles')}
-            </Button>
-            <Button size="sm" onclick={() => (cleanupResolved = true)}>{msg('modals.installKeep')}</Button>
-          </div>
-        </div>
-      {/if}
-    </div>
-  {:else if phase === 'problem' && installation}
-    <div class="block">
-      <div class="pkg">
-        <span class="pkg-name">{installation.name}</span>
-        {#if installation.platform}<ConsoleTag platform={installation.platform} />{/if}
-        <span class="pkg-type">{installStatusLabels(installation.status)}</span>
-      </div>
-      <Notice tone="danger" compact>{installation.error ? installErrorText(installation.error) : msg('modals.installNotCompleted')}</Notice>
-    </div>
+    <InstallChooseStep {candidatePaths} bind:chosen onpickmanual={pickManual} />
+  {:else if phase === 'image' || phase === 'progress' || phase === 'done' || phase === 'problem'}
+    <InstallOutcome
+      {phase}
+      {installation}
+      {imageDownload}
+      {imageTitle}
+      {imagePlatform}
+      {externalWait}
+      {askCleanup}
+      bind:cleanupResolved
+      {seedingNow}
+      {own}
+      {other}
+      ondelete={deleteData}
+    />
   {/if}
 
   {#snippet footer()}
@@ -779,12 +557,6 @@
 </Modal>
 
 <style>
-  .block {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
   .loading {
     display: flex;
     flex-direction: column;
@@ -796,224 +568,5 @@
   .loading-text {
     font-size: var(--font-md);
     font-weight: 500;
-  }
-
-  .pkg {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .pkg-name {
-    font-size: var(--font-lg);
-    font-weight: 600;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .pkg-type {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
-
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: 0.8rem 0;
-    font-size: var(--font-sm);
-  }
-
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .key {
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
-
-  .value {
-    min-width: 0;
-    text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .value.danger {
-    color: var(--danger);
-  }
-
-  .value.stale {
-    opacity: 0.6;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    align-items: flex-start;
-  }
-
-  .field-label {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .field-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    width: 100%;
-  }
-
-  .field-controls .input {
-    flex: 1;
-  }
-
-  .note {
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--text-3);
-  }
-
-  .hint {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-  }
-
-  .note.danger {
-    color: var(--danger);
-  }
-
-  .choices {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.8rem;
-    padding-top: var(--space-2);
-    border-top: 1px solid var(--border);
-  }
-
-  .progress-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .pct {
-    color: var(--text-2);
-    font-weight: 500;
-  }
-
-  .current-file {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lead {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .cand-list {
-    display: flex;
-    flex-direction: column;
-    max-height: 26rem;
-    overflow-y: auto;
-    padding: var(--space-1);
-    background: var(--surface);
-    border-radius: var(--radius-md);
-  }
-
-  .cand {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    width: 100%;
-    padding: 0.8rem;
-    border-radius: var(--radius-sm);
-    text-align: left;
-    transition: background var(--dur-fast) var(--ease);
-  }
-
-  .cand:hover {
-    background: var(--hover);
-  }
-
-  .cand[aria-checked='true'] {
-    background: var(--hover-strong);
-  }
-
-  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
-  .cand:focus-visible {
-    outline-offset: -2px;
-  }
-
-  .radio {
-    width: 1.6rem;
-    height: 1.6rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-    transition:
-      background var(--dur-fast) var(--ease),
-      border-color var(--dur-fast) var(--ease),
-      box-shadow var(--dur-fast) var(--ease);
-  }
-
-  .radio.on {
-    background: var(--accent-bright);
-    border-color: var(--accent-bright);
-    box-shadow: inset 0 0 0 3px var(--surface-2);
-  }
-
-  .cand-text {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-  }
-
-  .cand-name {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .cand-path {
-    font-size: 1.2rem;
-    color: var(--text-3);
-    white-space: normal;
-    overflow-wrap: anywhere;
-    user-select: text;
-  }
-
-  .cleanup-actions {
-    display: flex;
-    gap: 0.8rem;
   }
 </style>
