@@ -7,11 +7,13 @@ import { askForBios, biosPrompt } from '../stores/biosPrompt';
 import { askToCloseEmulator, emulatorBusyPrompt } from '../stores/emulatorBusyPrompt';
 import { askForEmulator, emulatorPrompt } from '../stores/emulatorPrompt';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import BiosNeededModal from './BiosNeededModal.svelte';
 import EmulatorBusyModal from './EmulatorBusyModal.svelte';
 import EmulatorNeededModal from './EmulatorNeededModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/emulators', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/emulators')>()),
@@ -47,6 +49,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   get(emulatorBusyPrompt)?.settle(false);
   get(biosPrompt)?.settle(false);
   get(emulatorPrompt)?.settle(false);
@@ -57,6 +61,7 @@ afterEach(() => {
   vi.mocked(setEmulatorPath).mockReset();
   vi.restoreAllMocks();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 describe('EmulatorBusyModal', () => {
