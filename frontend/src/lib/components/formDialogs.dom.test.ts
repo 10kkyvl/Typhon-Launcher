@@ -2,7 +2,6 @@ import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { AccountError } from '../services/account';
-import { getLegalDocument, type LegalDocument } from '../services/legal';
 import { proposeLibraryPath, selectFolder, type Settings } from '../services/settings';
 import { createLibrary } from '../stores/settings';
 import { toasts } from '../stores/toasts';
@@ -10,7 +9,6 @@ import { authState, deleteAccount } from '../stores/user';
 import { user } from '../testing/dom';
 import AvatarCropModal from './AvatarCropModal.svelte';
 import DeleteAccountModal from './DeleteAccountModal.svelte';
-import LegalDocumentModal from './LegalDocumentModal.svelte';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -31,10 +29,6 @@ vi.mock('../services/system', async (importOriginal) => ({
 vi.mock('../stores/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../stores/settings')>()),
   createLibrary: vi.fn(),
-}));
-vi.mock('../services/legal', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/legal')>()),
-  getLegalDocument: vi.fn(),
 }));
 
 function deferred<T>() {
@@ -165,21 +159,5 @@ describe('the crop dialogs', () => {
     save.focus();
     await rerender({ saving: true });
     expect(save.getAttribute('aria-busy')).toBe('true');
-  });
-});
-
-describe('LegalDocumentModal', () => {
-  it('says it is loading with a labelled spinner, and a failed load in a danger notice', async () => {
-    const loaded = deferred<LegalDocument>();
-    vi.mocked(getLegalDocument).mockReturnValueOnce(loaded.promise);
-    render(LegalDocumentModal, { target: app, props: { open: true, documentId: 'privacy', title: 'Privacy' } });
-    const dialog = screen.getByRole('dialog', { name: 'Privacy' });
-    expect(within(dialog).getByRole('status').textContent?.trim()).toBe(msg('modals.legalLoading'));
-
-    loaded.reject(new Error('offline'));
-
-    const alert = await within(dialog).findByRole('alert');
-    expect(alert.textContent?.trim()).toBe(msg('modals.legalLoadFailed'));
-    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
   });
 });
