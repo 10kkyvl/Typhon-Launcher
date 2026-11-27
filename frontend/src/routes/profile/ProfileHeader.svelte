@@ -121,7 +121,8 @@
     $savingProfile ? '' : $isOffline ? msg('social.editRequiresConnection') : !dirty ? msg('state.accountErrorNoChanges') : '',
   );
 
-  // The header's own save is on its way: leaving asks nothing about it, a late failure is said in a toast.
+  // The header's own save is on its way: leaving asks nothing about it; a late failure keeps the typed
+  // text for the editor's next opening and says so in a toast.
   let sending = $state(false);
 
   $effect(() => {
@@ -217,6 +218,7 @@
     if (!$currentUser || !dirty || $savingProfile || $isOffline) return;
     const handOff = focusHandOff();
     const presser = $currentUser.id;
+    const typed = $state.snapshot(draft);
     fieldErrors = {};
     const patch: { displayName?: string; username?: string; bio?: string } = {};
     if (draft.displayName !== $currentUser.displayName) patch.displayName = draft.displayName;
@@ -231,11 +233,16 @@
       close(handOff);
       toast(msg('social.profileUpdated'), 'success');
     } catch (err) {
-      // The answer belongs to the account that pressed Save: under another one it says nothing, and the
-      // store reports a save the server accepted as `unauthenticated` once the account has changed.
+      // The answer belongs to the account that pressed Save: under another one it says nothing and keeps
+      // nothing, and the store reports a save the server accepted as `unauthenticated` once the account
+      // has changed. With the page gone, the typed text waits for the editor's next opening.
       if (get(currentUser)?.id !== presser) return;
-      if (alive) await refuse(err);
-      else toast(msg('profile.headerNotSaved', { reason: accountErrorText(err) }), 'danger');
+      if (alive) {
+        await refuse(err);
+        return;
+      }
+      profileHeaderDraft.set({ owner: presser, ...typed });
+      toast(msg('profile.headerNotSavedKept', { reason: accountErrorText(err) }), 'danger');
     }
   }
 

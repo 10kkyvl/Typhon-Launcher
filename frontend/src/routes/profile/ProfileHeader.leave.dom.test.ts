@@ -147,11 +147,70 @@ describe('a header save still on its way when the page is left', () => {
     unmount();
     answer.reject(new AccountError('network_error'));
 
-    const failed = msg('profile.headerNotSaved', { reason: accountErrorText(new AccountError('network_error')) });
+    const failed = msg('profile.headerNotSavedKept', { reason: accountErrorText(new AccountError('network_error')) });
     await waitFor(() => expect(said()).toContainEqual(['danger', failed]));
     expect(said().filter(([, message]) => message === failed)).toHaveLength(1);
     expect(said().filter(([kind]) => kind === 'danger')).toHaveLength(1);
   });
+
+  it('refused, keeps the typed text: the toast says where, and the next opening of the page shows it', async () => {
+    const answer = pending<CurrentUser>();
+    vi.mocked(updateProfile).mockReturnValue(answer.promise);
+    const { user, unmount } = await headerEditor();
+    const username = screen.getByRole('textbox', { name: msg('social.usernameLabel') });
+    await user.clear(username);
+    await user.type(username, 'neo');
+    await user.click(button(msg('common.save')));
+
+    navigate('catalog');
+    expect(get(leaveRequest)).toBeNull();
+    unmount();
+    answer.reject(new AccountError('username_taken'));
+
+    const refused = msg('profile.headerNotSavedKept', { reason: accountErrorText(new AccountError('username_taken')) });
+    await waitFor(() => expect(said()).toEqual([['danger', refused]]));
+    navigate('profile');
+    renderDom(Profile);
+    expect((screen.getByRole('textbox', { name: msg('social.usernameLabel') }) as HTMLInputElement).value).toBe('neo');
+    expect(headerSave().getAttribute('aria-disabled')).toBeNull();
+    navigate('catalog');
+    expect(get(leaveRequest)?.prompt().text).toBe(msg('profile.leaveHeaderText'));
+  });
+
+  // The page opened again before the late refusal came, and the player settled newer text there.
+  for (const settle of ['saved', 'cancelled'] as const) {
+    it(`refused while the page is open again, then the newer text ${settle}: the next opening shows no older text`, async () => {
+      const late = pending<CurrentUser>();
+      vi.mocked(updateProfile).mockReturnValueOnce(late.promise).mockResolvedValueOnce({ ...me, bio: 'Hello' });
+      const first = await headerEditor();
+      await first.user.type(about(), 'Hi');
+      await first.user.click(button(msg('common.save')));
+      navigate('catalog');
+      first.unmount();
+      navigate('profile');
+      const second = renderDom(Profile);
+      await second.user.click(button(msg('social.moreLabel')));
+      await second.user.click(screen.getByRole('menuitem', { name: msg('social.editProfileLabel') }));
+      late.reject(new AccountError('network_error'));
+      await waitFor(() => expect(get(savingProfile)).toBe(false));
+      await waitFor(() => expect(about().readOnly).toBe(false));
+      await second.user.type(about(), 'Hello');
+
+      if (settle === 'saved') {
+        await second.user.click(headerSave());
+        await waitFor(() => expect(get(currentUser)?.bio).toBe('Hello'));
+      } else {
+        await second.user.click(button(msg('common.cancel')));
+      }
+      await waitFor(() => expect(aboutOrNull()).toBeNull());
+      navigate('catalog');
+      second.unmount();
+      navigate('profile');
+      renderDom(Profile);
+
+      expect(aboutOrNull()).toBeNull();
+    });
+  }
 
   it('answering, says the profile was updated and nothing failed', async () => {
     const answer = pending<CurrentUser>();
@@ -217,10 +276,14 @@ describe('a header save answered after another account signed in', () => {
     expect(said()).toEqual([]);
   });
 
-  it('failed, says nothing about the first account to the other one', async () => {
+  it('failed, says nothing about the first account to the other one, and keeps nothing', async () => {
     await answeredUnderAnother((late) => late.reject(new AccountError('network_error')));
 
     expect(said()).toEqual([]);
+    currentUser.set(me);
+    navigate('profile');
+    renderDom(Profile);
+    expect(aboutOrNull()).toBeNull();
   });
 });
 
