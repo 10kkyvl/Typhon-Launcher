@@ -28,7 +28,7 @@ type Check = readonly [what: string, holds: (source: string) => boolean];
 export const ANY_RUNTIME = /\bvi\.(?:mock|doMock|unmock|doUnmock)\(\s*['"`]@wailsio\/runtime['"`]/g;
 export const REAL_MODULE = (source: string) => !/\bimportActual\b/.test(source) && !/\bvi\.(?:unmock|doUnmock)\(/.test(source);
 
-const PLAIN = /\(await import\(['"`](?:\.\.?\/)+(?:lib\/)?testing\/dom['"`]\)\)\.wailsRuntime\(\)/;
+export const PLAIN = /\(await import\(['"`](?:\.\.?\/)+(?:lib\/)?testing\/dom['"`]\)\)\.wailsRuntime\(\)/;
 
 export const PLAIN_RUNTIME: Check = ['the runtime of lib/testing/dom.ts, once', (source) => PLAIN.test(source) && (source.match(ANY_RUNTIME) ?? []).length === 1];
 export const NO_BROWSER_OR_CLIPBOARD: Check = ['no Browser or Clipboard given to it', (source) => !/\b(?:Browser|Clipboard)\b/.test(source)];

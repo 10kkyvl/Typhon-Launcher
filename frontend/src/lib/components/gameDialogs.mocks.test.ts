@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { wailsRuntime } from '../testing/dom';
-import { ANY_RUNTIME, NEEDED_PLAIN, REAL_MODULE, gaps, importOf, wrappers } from '../testing/mounts';
+import { ANY_RUNTIME, NEEDED_PLAIN, PLAIN, REAL_MODULE, gaps, importOf, wrappers } from '../testing/mounts';
 
 /**
  * The game and library dialogs reach Go through calls that act: `library.PlayGame` starts a real game
@@ -88,7 +88,9 @@ const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source))
 const missingPlain = (source: string) => gaps(NEEDED_PLAIN, source);
 
 const mounting = Object.entries(tests).filter(([path, source]) => MOUNTS.test(source) || HELD.includes(path));
-const wrapping = Object.entries(tests).filter(([path, source]) => !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
+// A guard quotes import lines in its own self-tests: it mounts nothing.
+const GUARD = /\.mocks\.test\.ts$/;
+const wrapping = Object.entries(tests).filter(([path, source]) => !GUARD.test(path) && !MOUNTS.test(source) && !HELD.includes(path) && WRAPS.test(source));
 
 const SOUND = [
   "import GameTagsModal from './GameTagsModal.svelte';",
