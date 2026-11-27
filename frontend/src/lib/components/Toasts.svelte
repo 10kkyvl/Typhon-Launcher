@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from '@lucide/svelte';
   import { msg } from '../i18n';
   import { modalOpen } from '../layers';
@@ -31,6 +31,8 @@
   const polite = $derived(list.filter((item) => !URGENT.includes(item.kind)));
 
   $effect(() => holdToasts($modalOpen));
+  // The shell can go with its dialog still open (the sign-out confirmation): nobody would release the hold.
+  onDestroy(() => holdToasts(false));
 
   const watch = createToastWatch<HTMLElement>();
   let stack = $state<HTMLElement>();

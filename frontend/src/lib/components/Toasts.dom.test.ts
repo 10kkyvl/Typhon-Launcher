@@ -489,6 +489,22 @@ describe('Toasts: while a dialog is open', () => {
     expect(shown()).toEqual([]);
   });
 
+  it('stops holding the toast when the shell goes with its dialog still open', async () => {
+    const view = render(ToastsHarness, { target: app, props: { dialog: true } });
+    await tick();
+    toast('Install failed', 'danger', { label: 'Retry', run: () => {} });
+    vi.advanceTimersByTime(60_000);
+    await tick();
+    expect(get(toasts).map((item) => item.message)).toEqual(['Install failed']);
+
+    view.unmount();
+    await tick();
+    vi.advanceTimersByTime(ACTION_MS);
+    await tick();
+
+    expect(get(toasts)).toEqual([]);
+  });
+
   it('is outside the inert page and can still be pressed', async () => {
     const { keys, close, shown } = setup({ dialog: true });
     await tick();
