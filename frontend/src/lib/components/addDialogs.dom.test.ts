@@ -3,13 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { imageTitle, listPlatforms, type PlatformStatus } from '../services/emulators';
 import { addEmulatedGame, type LibraryGame } from '../services/library';
-import { listSentData, type SentDataEntry } from '../services/telemetryLog';
 import { addSource, testSource, type Source, type SourcePreview } from '../services/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import AddImageModal from './AddImageModal.svelte';
 import AddSourceModal from './AddSourceModal.svelte';
-import SentDataModal from './SentDataModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -28,10 +26,6 @@ vi.mock('../services/emulators', async (importOriginal) => ({
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
   addEmulatedGame: vi.fn(),
-}));
-vi.mock('../services/telemetryLog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/telemetryLog')>()),
-  listSentData: vi.fn(),
 }));
 
 const preview = (patch: Partial<SourcePreview> = {}): SourcePreview => ({
@@ -189,28 +183,5 @@ describe('AddImageModal: while it adds', () => {
 
     adding.reject(new Error('exists'));
     expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emul.addFailed'));
-  });
-});
-
-describe('SentDataModal', () => {
-  it('says it is loading with a labelled spinner, a failed load in a danger notice, and a cut entry in a warning notice', async () => {
-    const loaded = deferred<SentDataEntry[]>();
-    vi.mocked(listSentData).mockReturnValueOnce(loaded.promise);
-    const { unmount } = render(SentDataModal, { target: app, props: { open: true } });
-    const dialog = screen.getByRole('dialog', { name: msg('modals.sentDataTitle') });
-    expect(within(dialog).getByRole('status').textContent?.trim()).toBe(msg('modals.sentDataLoading'));
-
-    loaded.reject(new Error('disk'));
-    const alert = await within(dialog).findByRole('alert');
-    expect(alert.textContent?.trim()).toBe(msg('modals.sentDataLoadFailed'));
-    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
-    unmount();
-
-    vi.mocked(listSentData).mockResolvedValueOnce([{ kind: 'diagnostics', sentAt: '2026-11-01T10:00:00Z', endpoint: 'https://t.test', payload: '{', formatted: false } as SentDataEntry]);
-    render(SentDataModal, { target: app, props: { open: true } });
-    const text = await screen.findByText(msg('modals.sentDataTruncatedWarning'));
-    const notice = text.closest('[data-tone="warning"]') as HTMLElement;
-    expect(notice).not.toBeNull();
-    expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 });

@@ -17,6 +17,8 @@
   let entries = $state<SentDataEntry[]>([]);
   let loading = $state(false);
   let failed = $state(false);
+  let retrying = $state(false);
+  let list = $state<HTMLElement>();
 
   $effect(() => {
     if (open) load();
@@ -27,21 +29,29 @@
   // the newer list with a stale one.
   const latest = createLatest();
 
-  async function load() {
+  // True when the list came, false when it failed; undefined when a newer load has taken over.
+  async function fetchEntries(): Promise<boolean | undefined> {
     const isCurrent = latest.start();
-    loading = true;
-    failed = false;
     try {
       const next = await listSentData();
-      if (!isCurrent()) return;
+      if (!isCurrent()) return undefined;
       entries = next;
-    } catch {
-      if (!isCurrent()) return;
+      failed = false;
+      return true;
+    } catch (err) {
+      if (!isCurrent()) return undefined;
+      console.error('sent data', err);
       entries = [];
       failed = true;
-    } finally {
-      if (isCurrent()) loading = false;
+      return false;
     }
+  }
+
+  async function load() {
+    loading = true;
+    failed = false;
+    retrying = false;
+    if ((await fetchEntries()) !== undefined) loading = false;
   }
 
   function kindLabel(kind: string): string {
@@ -69,22 +79,24 @@
 <Modal bind:open title={msg('modals.sentDataTitle')} width="76rem">
   {#if loading}
     <div class="status"><Spinner label={msg('modals.sentDataLoading')} /></div>
-  {:else if failed}
-    <Notice tone="danger" compact>{msg('modals.sentDataLoadFailed')}</Notice>
+  {:else if failed || retrying}
+    <Notice tone="danger" compact bind:retrying retry={{ label: msg('common.retry'), run: fetchEntries, within: () => list }}>
+      {msg('modals.sentDataLoadFailed')}
+    </Notice>
   {:else if entries.length === 0}
     <EmptyState level={4}
       title={msg('modals.sentDataEmptyTitle')}
       description={msg('modals.sentDataEmptyDescription')}
     />
   {:else}
-    <div class="list">
+    <div class="list" bind:this={list}>
       {#each entries as entry, i (i)}
         <div class="entry">
           <div class="entry-head">
             <div class="entry-meta">
               <StatusBadge kind={entry.kind === 'diagnostics' ? 'accent' : 'neutral'} label={kindLabel(entry.kind)} />
               <span class="time">{timeLabel(entry.sentAt)}</span>
-              <span class="endpoint" title={entry.endpoint}>{entry.endpoint}</span>
+              <span class="endpoint">{entry.endpoint}</span>
             </div>
             <IconButton label={msg('modals.sentDataCopyLabel')} size="sm" onclick={() => copyPayload(entry)}>
               <Copy size="1.5rem" strokeWidth={1.8} />
@@ -131,6 +143,7 @@
 
   .entry-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-3);
     min-width: 0;
@@ -143,12 +156,12 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A long address wraps where it must: it is read whole, never cut. */
   .endpoint {
+    min-width: 0;
     font-size: var(--font-xs);
     color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .payload {
