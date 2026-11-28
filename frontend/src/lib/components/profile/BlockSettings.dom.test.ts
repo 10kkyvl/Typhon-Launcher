@@ -1,5 +1,5 @@
-import { screen, within } from '@testing-library/svelte';
-import type { ComponentProps } from 'svelte';
+import { fireEvent, screen, within } from '@testing-library/svelte';
+import { tick, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { libraryGames } from '../../stores/library';
 import { igdbIdsOf } from '../../services/profile';
@@ -309,5 +309,61 @@ describe('when the save starts while focus is in the settings', () => {
       expect([button.matches(':disabled'), button.getAttribute('aria-disabled')]).toEqual([false, 'true']);
       expect(document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent).toBe(msg('social.saving'));
     }
+  });
+});
+
+describe("focus in a collection's list of games", () => {
+  /** The settings of a manual collection whose page applies every change, as the profile page does. */
+  function live(ids: number[]) {
+    let target = block('collection', { source: 'manual', title: '', igdbIds: ids });
+    const view = mount(target, {
+      onconfig: (patch) => {
+        target = { ...target, config: { ...target.config, ...patch } };
+        void view.rerender({ block: target, layout: { version: 1, blocks: [target] } });
+      },
+    });
+    return view;
+  }
+
+  const button = (key: 'social.moveUp' | 'social.moveDown' | 'profile.collectionRemoveGame', title: string) =>
+    screen.getByRole('button', { name: msg(key, { title }) }) as HTMLButtonElement;
+  const games = () => [...document.querySelectorAll('.games > li .game')].map((item) => item.textContent);
+  const reasonOf = (control: HTMLElement) => document.getElementById(control.getAttribute('aria-describedby') ?? '')?.textContent;
+
+  it('stays on a move button that took its game to an end, held there with the reason', async () => {
+    const { user } = live([11, 12, 13]);
+
+    await user.click(button('social.moveUp', 'Beta'));
+    await vi.waitFor(() => expect(games()).toEqual(['Beta', 'Alpha', 'Gamma']));
+    const up = button('social.moveUp', 'Beta');
+    expect(document.activeElement).toBe(up);
+    expect([up.matches(':disabled'), up.getAttribute('aria-disabled'), reasonOf(up)]).toEqual([false, 'true', msg('profile.gameFirst')]);
+
+    await user.click(button('social.moveDown', 'Alpha'));
+    await user.click(button('social.moveDown', 'Alpha'));
+    const down = button('social.moveDown', 'Alpha');
+    expect(document.activeElement).toBe(down);
+    expect([down.matches(':disabled'), reasonOf(down)]).toEqual([false, msg('profile.gameLast')]);
+  });
+
+  it('a removed game hands focus to the remove button of the game now in its place, else the one above, else the search for a game', async () => {
+    const { user } = live([11, 12, 13]);
+
+    await user.click(button('profile.collectionRemoveGame', 'Beta'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('profile.collectionRemoveGame', 'Gamma')));
+    await user.click(button('profile.collectionRemoveGame', 'Gamma'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('profile.collectionRemoveGame', 'Alpha')));
+    await user.click(button('profile.collectionRemoveGame', 'Alpha'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: msg('profile.pickerSearch') })));
+  });
+
+  it('a removal pressed with no focus held leaves focus alone', async () => {
+    live([11, 12]);
+
+    // A pointer press in the macOS view focuses no button.
+    await fireEvent.click(button('profile.collectionRemoveGame', 'Alpha'));
+    await vi.waitFor(() => expect(games()).toHaveLength(1));
+    await tick();
+    expect(document.activeElement).toBe(document.body);
   });
 });

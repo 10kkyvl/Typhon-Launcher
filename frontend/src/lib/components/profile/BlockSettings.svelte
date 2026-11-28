@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { ArrowDown, ArrowUp, Trash2, X } from '@lucide/svelte';
   import Button from '../Button.svelte';
   import EmptyState from '../EmptyState.svelte';
@@ -22,6 +23,7 @@
   import type { GameRef } from '../../services/profile';
   import GamePicker from './GamePicker.svelte';
   import { blockLabel } from './blockLabels';
+  import { gameRows } from './rowFocus';
 
   let {
     block,
@@ -87,6 +89,13 @@
         ),
     ).map((item) => ({ id: item, label: item === 'manual' ? msg('profile.sourceManual') : showcaseTitle(item) })),
   );
+
+  // A game moved or removed while focus is on one of its buttons: focus stays on that button, or goes
+  // to the same button of the game now in its place.
+  $effect.pre(() => {
+    void ids;
+    untrack(gameRows.catchLeaving);
+  });
 
   function changeSource(next: string) {
     if (next === 'manual') onconfig({ source: next, title: '', igdbIds: [] });
@@ -168,15 +177,36 @@
             {:else}
               <ul class="games">
                 {#each ids as id, index (id)}
-                  <li>
+                  <li data-collection-game={id}>
                     <span class="game">{titleOf(id)}</span>
-                    <IconButton size="sm" label={msg('social.moveUp', { title: titleOf(id) })} disabled={index === 0 || disabled} reason={held} onclick={() => shift(index, -1)}>
+                    <IconButton
+                      size="sm"
+                      label={msg('social.moveUp', { title: titleOf(id) })}
+                      data-row-control="up"
+                      disabled={index === 0 || disabled}
+                      reason={held || (index === 0 ? msg('profile.gameFirst') : '')}
+                      onclick={() => shift(index, -1)}
+                    >
                       <ArrowUp size="1.4rem" />
                     </IconButton>
-                    <IconButton size="sm" label={msg('social.moveDown', { title: titleOf(id) })} disabled={index === ids.length - 1 || disabled} reason={held} onclick={() => shift(index, 1)}>
+                    <IconButton
+                      size="sm"
+                      label={msg('social.moveDown', { title: titleOf(id) })}
+                      data-row-control="down"
+                      disabled={index === ids.length - 1 || disabled}
+                      reason={held || (index === ids.length - 1 ? msg('profile.gameLast') : '')}
+                      onclick={() => shift(index, 1)}
+                    >
                       <ArrowDown size="1.4rem" />
                     </IconButton>
-                    <IconButton size="sm" label={msg('profile.collectionRemoveGame', { title: titleOf(id) })} {disabled} reason={held} onclick={() => onconfig({ igdbIds: ids.filter((item) => item !== id) })}>
+                    <IconButton
+                      size="sm"
+                      label={msg('profile.collectionRemoveGame', { title: titleOf(id) })}
+                      data-row-control="remove"
+                      {disabled}
+                      reason={held}
+                      onclick={() => onconfig({ igdbIds: ids.filter((item) => item !== id) })}
+                    >
                       <X size="1.4rem" />
                     </IconButton>
                   </li>
@@ -185,7 +215,7 @@
             {/if}
           </div>
           {#if ids.length < MAX_COLLECTION_GAMES}
-            <div class="field">
+            <div class="field" data-collection-add>
               <span class="field-label">{msg('profile.collectionAdd')}</span>
               <GamePicker chosen={ids} {disabled} onpick={pickCollection} />
             </div>
