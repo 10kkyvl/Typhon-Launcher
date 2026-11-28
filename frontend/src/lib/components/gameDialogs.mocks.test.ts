@@ -66,6 +66,7 @@ const DIALOGS = [
   'AddDownloadModal',
   'DownloadDetailsModal',
   'InstalledAddGame',
+  'LibrarySetupModal',
 ];
 
 const MOUNTS = importOf(DIALOGS);
@@ -197,6 +198,8 @@ describe('tests that mount a game or library dialog', () => {
         './AddDownloadModal.dom.test.ts',
         './DownloadDetailsModal.dom.test.ts',
         '../../routes/installed/InstalledAddGame.dom.test.ts',
+        './LibrarySetupModal.field.dom.test.ts',
+        './formDialogs.dom.test.ts',
         ...HELD,
       ]),
     );

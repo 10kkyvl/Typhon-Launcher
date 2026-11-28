@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { FolderPlus, HardDrive } from '@lucide/svelte';
   import { proposeLibraryPath, selectFolder, type Settings } from '../services/settings';
   import { getStorageInfoFor, type StorageInfo } from '../services/system';
   import { createLibrary } from '../stores/settings';
-  import { toast } from '../stores/toasts';
   import { bytesLabel } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
@@ -25,9 +24,19 @@
   let busy = $state(false);
   let failure = $state('');
 
+  // One per opening: a folder picked or a library made after the dialog closed is not this opening's.
+  // The settings store learns a library made late all the same; the dialog then closes and calls
+  // nothing.
+  let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
+
   $effect(() => {
     const isOpen = open;
     untrack(() => {
+      opening += 1;
       if (isOpen) return;
       parent = '';
       proposed = '';
@@ -43,20 +52,26 @@
   }
 
   async function pickFolder() {
+    const at = opening;
+    const heard = () => alive && at === opening;
     let picked = '';
     try {
       picked = await selectFolder(msg('modals.librarySetupChooseFolder'));
-    } catch {
-      toast(msg('modals.librarySetupFolderDialogFailed'), 'danger');
+    } catch (err) {
+      console.warn('library setup: folder picker', err);
+      if (heard()) failure = msg('modals.librarySetupFolderDialogFailed');
       return;
     }
-    if (!picked) return;
+    if (!picked || !heard()) return;
 
     failure = '';
     try {
-      proposed = await proposeLibraryPath(picked);
+      const path = await proposeLibraryPath(picked);
+      if (!heard()) return;
+      proposed = path;
       parent = picked;
     } catch (err) {
+      if (!heard()) return;
       proposed = '';
       parent = '';
       info = null;
@@ -64,8 +79,10 @@
       return;
     }
     try {
-      info = await getStorageInfoFor(picked);
+      const read = await getStorageInfoFor(picked);
+      if (heard()) info = read;
     } catch (err) {
+      if (!heard()) return;
       info = null;
       failure = message(err, msg('modals.librarySetupFreeSpaceUnknown'));
     }
@@ -73,17 +90,25 @@
 
   async function confirm() {
     if (!parent || busy) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
     busy = true;
     failure = '';
     try {
       const next = await createLibrary(parent);
+      if (!heard()) return;
+      busy = false;
       open = false;
       onready?.(next);
     } catch (err) {
+      if (!heard()) return;
+      busy = false;
       failure = message(err, msg('modals.librarySetupCreateFailed'));
     }
-    busy = false;
   }
+
+  const heldReason = $derived(busy ? msg('modals.actionRunning') : '');
+  const createReason = $derived(busy || proposed ? '' : msg('modals.librarySetupFolderPlaceholder'));
 </script>
 
 {#snippet disk()}
@@ -117,6 +142,7 @@
       onbrowse={pickFolder}
       value={proposed}
       facts={info ? disk : undefined}
+      disabledReason={heldReason || undefined}
     />
 
     {#if failure}
@@ -125,8 +151,8 @@
   </div>
 
   {#snippet footer()}
-    <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!proposed} {busy} onclick={confirm}>
+    <Button disabled={busy} reason={heldReason} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button variant="primary" disabled={!!createReason} reason={createReason} {busy} onclick={confirm}>
       <FolderPlus size="1.5rem" strokeWidth={1.8} />
       {msg('modals.librarySetupCreate')}
     </Button>

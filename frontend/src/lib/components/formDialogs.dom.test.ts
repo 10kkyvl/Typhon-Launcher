@@ -5,9 +5,11 @@ import { proposeLibraryPath, selectFolder, type Settings } from '../services/set
 import { createLibrary } from '../stores/settings';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import LibrarySetupModal from './LibrarySetupModal.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../services/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/settings')>()),
@@ -42,10 +44,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   toasts.set([]);
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 describe('LibrarySetupModal', () => {
@@ -66,7 +71,7 @@ describe('LibrarySetupModal', () => {
 
     await keys.click(browse);
     const create = within(dialog).getByRole('button', { name: msg('modals.librarySetupCreate') });
-    await vi.waitFor(() => expect(create).toHaveProperty('disabled', false));
+    await vi.waitFor(() => expect(create.getAttribute('aria-disabled')).toBeNull());
     create.focus();
     await keys.keyboard('{Enter}');
 
