@@ -95,7 +95,7 @@ describe('BiosNeededModal: the standing prompt', () => {
     expect(open.getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('says a refused open in the prompt by code', async () => {
+  it('says a refused open that is a whole sentence alone', async () => {
     vi.mocked(openBiosFolder).mockRejectedValueOnce(new Error('typhon:emulators.bios_dir_unknown: no'));
     render(BiosNeededModal, { target: app });
     const { dialog } = await ask();
@@ -106,6 +106,31 @@ describe('BiosNeededModal: the standing prompt', () => {
 
     expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emulators.bios_dir_unknown'));
     expect(toastTexts()).toEqual([]);
+  });
+
+  it('says a refused open by code, after what failed', async () => {
+    vi.mocked(openBiosFolder).mockRejectedValueOnce(new Error('typhon:emulators.not_configured: none'));
+    render(BiosNeededModal, { target: app });
+    const { dialog } = await ask();
+    const keys = user();
+    await within(dialog).findByText('/bios/ps2');
+
+    await keys.click(button(dialog, 'emul.biosOpenFolder'));
+
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(
+      msg('common.failedReason', { action: msg('emul.biosOpenFailed'), reason: msg('emulators.not_configured') }),
+    );
+  });
+
+  it('says a folder that could not be found by code, after what failed', async () => {
+    vi.mocked(biosFolder).mockRejectedValueOnce(new Error('typhon:emulators.unknown_platform: x'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(BiosNeededModal, { target: app });
+    const { dialog } = await ask();
+
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(
+      msg('common.failedReason', { action: msg('emul.biosOpenFailed'), reason: msg('emulators.unknown_platform') }),
+    );
   });
 });
 

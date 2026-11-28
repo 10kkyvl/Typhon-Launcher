@@ -154,7 +154,7 @@ describe('EmulatorNeededModal: the standing prompt', () => {
     expect(dialog.isConnected).toBe(true);
   });
 
-  it('says a refused file in the prompt by code', async () => {
+  it('says a refused file in the prompt by code, after what failed', async () => {
     vi.mocked(selectEmulatorFile).mockResolvedValueOnce('/apps/pcsx2');
     vi.mocked(setEmulatorPath).mockRejectedValueOnce(new Error('typhon:emulators.not_exe: no'));
     render(EmulatorNeededModal, { target: app });
@@ -163,8 +163,22 @@ describe('EmulatorNeededModal: the standing prompt', () => {
 
     await keys.click(button(dialog, 'emul.neededChoose'));
 
-    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emulators.not_exe'));
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(
+      msg('common.failedReason', { action: msg('emul.saveFailed'), reason: msg('emulators.not_exe') }),
+    );
     expect(toastTexts()).toEqual([]);
+  });
+
+  it('says a refusal that is a whole sentence alone', async () => {
+    vi.mocked(selectEmulatorFile).mockResolvedValueOnce('/apps/pcsx2');
+    vi.mocked(setEmulatorPath).mockRejectedValueOnce(new Error('typhon:emulators.already_running: open'));
+    render(EmulatorNeededModal, { target: app });
+    const { dialog } = await ask();
+    const keys = user();
+
+    await keys.click(button(dialog, 'emul.neededChoose'));
+
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emulators.already_running'));
   });
 });
 

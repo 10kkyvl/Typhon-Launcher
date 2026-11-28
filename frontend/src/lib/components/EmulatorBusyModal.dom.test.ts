@@ -118,7 +118,7 @@ describe('EmulatorBusyModal: the question', () => {
     await expect(answer).resolves.toBe(true);
   });
 
-  it('says a refusal in the question by code', async () => {
+  it('says a refusal in the question by code, after what failed', async () => {
     vi.mocked(closeEmulator).mockRejectedValueOnce(new Error('typhon:emulators.not_configured: none'));
     render(EmulatorBusyModal, { target: app });
     const { dialog } = await ask();
@@ -126,7 +126,9 @@ describe('EmulatorBusyModal: the question', () => {
 
     await keys.click(within(dialog).getByRole('button', { name: msg('emul.busyConfirm', { emulator: 'PCSX2' }) }));
 
-    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emulators.not_configured'));
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(
+      msg('common.failedReason', { action: msg('emul.busyCloseFailed', { emulator: 'PCSX2' }), reason: msg('emulators.not_configured') }),
+    );
     expect(toastTexts()).toEqual([]);
   });
 });

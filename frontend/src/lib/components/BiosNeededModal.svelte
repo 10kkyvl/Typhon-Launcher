@@ -5,7 +5,7 @@
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
   import { errorCode, hasMessage, msg } from '../i18n';
-  import { libraryErrorText } from '../library/errors';
+  import { actionErrorText } from '../library/errors';
   import { biosFolder, listPlatforms, openBiosFolder, type PlatformStatus } from '../services/emulators';
   import { biosPrompt } from '../stores/biosPrompt';
   import { toast } from '../stores/toasts';
@@ -56,7 +56,7 @@
         console.warn('bios folder', err);
         if (stale) return;
         folderFailed = true;
-        failure = libraryErrorText(err, msg('emul.biosOpenFailed'));
+        failure = actionErrorText(err, msg('emul.biosOpenFailed'));
       },
     );
     return () => {
@@ -76,7 +76,7 @@
       await openBiosFolder(current.platform);
     } catch (err) {
       if (heard()) {
-        failure = libraryErrorText(err, msg('emul.biosOpenFailed'));
+        failure = actionErrorText(err, msg('emul.biosOpenFailed'));
       } else {
         const code = errorCode(err);
         toast(hasMessage(code) ? msg('emul.lateFailed', { emulator, reason: msg(code) }) : msg('emul.biosOpenFailedFor', { emulator }), 'danger');

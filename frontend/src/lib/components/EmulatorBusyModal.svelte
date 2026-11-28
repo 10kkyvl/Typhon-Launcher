@@ -4,7 +4,7 @@
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
   import { errorCode, hasMessage, msg } from '../i18n';
-  import { libraryErrorText } from '../library/errors';
+  import { actionErrorText } from '../library/errors';
   import { closeEmulator, listPlatforms, type PlatformStatus } from '../services/emulators';
   import { emulatorBusyPrompt } from '../stores/emulatorBusyPrompt';
   import { toast } from '../stores/toasts';
@@ -61,7 +61,7 @@
         toast(hasMessage(code) ? msg('emul.lateFailed', { emulator: name, reason: msg(code) }) : msg('emul.busyCloseFailed', { emulator: name }), 'danger');
         return;
       }
-      failure = libraryErrorText(err, msg('emul.busyCloseFailed', { emulator: name }));
+      failure = actionErrorText(err, msg('emul.busyCloseFailed', { emulator: name }));
       closing = false;
       return;
     }

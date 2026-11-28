@@ -5,9 +5,19 @@ export function libraryErrorText(err: unknown, fallback: string): string {
   return hasMessage(code) ? msg(code) : fallback;
 }
 
+// The emulator reasons that are whole sentences (they say what to do); the rest of the two domains'
+// are lower-case clauses. errors.test.ts holds this list to the catalog's words.
+const SENTENCES = new Set([
+  'emulators.already_running',
+  'emulators.bios_dir_unknown',
+  'emulators.bios_missing',
+  'emulators.pkg_installing',
+  'emulators.pkg_invalid',
+]);
+
 /** Whether Go's reason for a code is a clause, which alone does not say what failed. */
 export function isClauseCode(code: string): boolean {
-  return /^(library|emulators)\./.test(code);
+  return /^(library|emulators)\./.test(code) && !SENTENCES.has(code);
 }
 
 /**
