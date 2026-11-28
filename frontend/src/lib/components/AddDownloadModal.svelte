@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { FileUp } from '@lucide/svelte';
   import {
@@ -30,7 +30,25 @@
   import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
+  import PathField from './PathField.svelte';
   import Spinner from './Spinner.svelte';
+  import TextField from './TextField.svelte';
+
+  /**
+   * Adds a download from a magnet link or a .torrent file: the files are fetched first (nothing is
+   * sent while the link is typed or pasted), then the chosen files start downloading into the folder.
+   * A refused Start is said at the folder when it is about the folder, else in the dialog, by code.
+   * The dialog is reopened and unmounted with its page: a Start answered after that closes nothing,
+   * and a refusal is said once in a toast naming the torrent (the downloads store says an added one).
+   */
+  // Codes of a Start refused because of the destination folder: said at the folder field.
+  const FOLDER_CODES = new Set([
+    'download.destination_permission',
+    'download.destination_unavailable',
+    'download.empty_destination',
+    'download.not_enough_space',
+    'download.no_free_space',
+  ]);
 
   let {
     open = $bindable(false),
@@ -64,6 +82,21 @@
   let refetchFailed = $state(false);
   let failedFrom = '';
   let retrying = $state(false);
+  // Why the torrent file could not be picked, why the folder could not be chosen or was refused, and
+  // why a Start was refused for another reason.
+  let sourceFailure = $state('');
+  let folderFailure = $state('');
+  let startFailure = $state('');
+  const startFailureId = `${uid}-start-failure`;
+  let folderBox = $state<HTMLElement>();
+
+  // One per opening: a Start, a picker or a fetch answered after the dialog closed or reopened is not
+  // this opening's. A destroyed dialog hears nothing either.
+  let opening = 0;
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
 
   const consolePlatform = $derived(origin?.platform ?? '');
   const libraryReady = $derived(Boolean($settings?.libraryPath));
@@ -108,6 +141,9 @@
     refetchFailed = false;
     failedFrom = '';
     retrying = false;
+    sourceFailure = '';
+    folderFailure = '';
+    startFailure = '';
   }
 
   $effect(() => {
@@ -115,6 +151,7 @@
     const preset = initialSource;
     const ready = libraryReady;
     untrack(() => {
+      opening += 1;
       reset();
       if (isOpen && ready) {
         const current = get(settings);
@@ -203,55 +240,88 @@
   }
 
   async function pickTorrent() {
+    const at = opening;
+    sourceFailure = '';
+    let path: string;
     try {
-      const path = await selectTorrentFile();
-      if (!path) return;
-      source = path;
-      await ask(path);
+      path = await selectTorrentFile();
     } catch (err) {
-      toast(installErrorText(err), 'danger');
+      if (alive && at === opening) sourceFailure = installErrorText(err);
+      return;
     }
+    if (!path || !alive || at !== opening) return;
+    source = path;
+    await ask(path);
   }
 
   async function browseDestination() {
+    const at = opening;
     try {
       const path = await selectFolder(msg('modals.addDownloadChooseFolder'));
-      if (path) destination = path;
-    } catch {
-      toast(msg('modals.addDownloadFolderDialogFailed'), 'danger');
+      if (path && alive && at === opening) {
+        destination = path;
+        folderFailure = '';
+      }
+    } catch (err) {
+      console.warn('add download: folder picker', err);
+      if (alive && at === opening) folderFailure = msg('modals.addDownloadFolderDialogFailed');
     }
   }
 
   async function start() {
-    if (!info) return;
+    if (!info || starting) return;
+    const at = opening;
+    const heard = () => alive && at === opening;
     const files = info.files;
+    const name = info.name;
+    const hash = info.infoHash;
     const indices = selected.map((on, i) => (on ? i : -1)).filter((i) => i >= 0);
+    const pressed = document.activeElement;
+    const hand = focusHandOff(() => pressed);
     restartNeeded = false;
+    folderFailure = '';
+    startFailure = '';
     starting = true;
+    // The torrent is the Start's while it runs: a reset meanwhile (the dialog closed or reopened by its
+    // page) must not discard what Go is starting.
+    pendingHash = '';
     try {
       await startDownloadFrom(
-        info.infoHash,
+        hash,
         destination,
         indices,
         consolePlatform
           ? { ...origin }
           : { ...(origin ?? {}), autoInstall, elevateAhead: autoInstall && canElevateAhead && elevateAhead },
       );
-      pendingHash = '';
+      if (!heard()) return;
+      starting = false;
       open = false;
     } catch (err) {
+      const code = errorCode(err);
+      if (!heard()) {
+        // Go still holds the fetched torrent unless it is the one it lost: nobody will press Start on it.
+        if (code !== 'download.metadata_required') drop(discardMetadata(hash), 'discard a torrent left by a late refusal');
+        toast(msg('modals.addDownloadRefusedFor', { title: name, reason: installErrorText(err) }), 'danger');
+        return;
+      }
       starting = false;
       // Go holds nothing for this torrent any more (its client went with a network change): one fetch
       // of the same source brings it back. Any other failure leaves it waiting for the next Start.
-      if (open && errorCode(err) === 'download.metadata_required') {
-        pendingHash = '';
+      if (open && code === 'download.metadata_required') {
         await fetchAgain(new Map(files.map((file, i) => [file.path, Boolean(selected[i])])));
         return;
       }
-      toast(installErrorText(err), 'danger');
+      pendingHash = hash;
+      const text = installErrorText(err);
+      if (FOLDER_CODES.has(code)) folderFailure = text;
+      else startFailure = text;
+      await hand(() => (folderFailure ? (folderBox?.querySelector<HTMLElement>('button') ?? null) : document.getElementById(startFailureId)));
     }
-    starting = false;
   }
+
+  const continueReason = $derived(canContinue ? '' : msg('modals.addDownloadNeedsMagnet'));
+  const heldReason = $derived(starting ? msg('modals.actionRunning') : '');
 </script>
 
 {#if !libraryReady}
@@ -285,10 +355,8 @@
   {/if}
   {#if step === 'source'}
     <div class="source">
-      <label class="field">
-        <span class="field-label">{msg('modals.addDownloadMagnetLabel')}</span>
-        <input class="input" type="text" placeholder="magnet:?xt=urn:btih:…" bind:value={source} />
-      </label>
+      <TextField label={msg('modals.addDownloadMagnetLabel')} placeholder="magnet:?xt=urn:btih:…" bind:value={source} error={sourceFailure} />
+
       <div class="or">
         <span class="line"></span>
         <span class="or-text">{msg('modals.addDownloadOr')}</span>
@@ -325,12 +393,15 @@
         <span class="torrent-name">{info.name}</span>
         <span class="torrent-size">{bytesSize(info.totalBytes)}</span>
       </div>
-      <div class="dest">
-        <span class="field-label" id="{uid}-destination-label">{msg('modals.addDownloadDestinationLabel')}</span>
-        <div class="dest-controls">
-          <input class="input sm" type="text" readonly aria-labelledby="{uid}-destination-label" value={destination} />
-          <Button size="sm" onclick={browseDestination}>{msg('modals.addDownloadBrowse')}</Button>
-        </div>
+      <div class="dest" bind:this={folderBox}>
+        <PathField
+          label={msg('modals.addDownloadDestinationLabel')}
+          value={destination}
+          browseLabel={msg('modals.addDownloadBrowse')}
+          onbrowse={browseDestination}
+          error={folderFailure}
+          disabledReason={heldReason || undefined}
+        />
       </div>
       <div class="file-list">
         {#each info.files as file, i (i)}
@@ -353,18 +424,21 @@
           </div>
         {/if}
       </div>
+      {#if startFailure}
+        <Notice tone="danger" compact id={startFailureId} tabindex={-1}>{startFailure}</Notice>
+      {/if}
     </div>
   {/if}
 
   {#snippet footer()}
     {#if step === 'source'}
       <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={!canContinue} onclick={() => ask(source.trim())}>{msg('common.continue')}</Button>
+      <Button variant="primary" disabled={!canContinue} reason={continueReason} onclick={() => ask(source.trim())}>{msg('common.continue')}</Button>
     {:else if step === 'files'}
       <span class="summary">
         {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
-      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button disabled={starting} reason={heldReason} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
       <Button id="{uid}-start" variant="primary" disabled={selectedCount === 0} busy={starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
     {/if}
   {/snippet}
@@ -380,17 +454,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-
-  .field-label {
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 
   .or {
@@ -445,9 +508,7 @@
     font-size: var(--font-lg);
     font-weight: 600;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .torrent-size {
@@ -479,16 +540,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-  }
-
-  .dest-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-  }
-
-  .dest-controls .input {
-    flex: 1;
   }
 
   .file-list {

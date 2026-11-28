@@ -55,6 +55,7 @@ const SITES: Record<string, Site[]> = {
   'lib/components/AddDownloadModal.svelte': [
     ['danger', true],
     ['info', true],
+    ['danger', true],
   ],
   'lib/components/AddImageModal.svelte': [
     ['danger', true],

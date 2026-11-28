@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 // What the dialog asks Go to drop (`discard` a fetched torrent, `cancel` a fetch), and the refusal Go
 // answers with, if any. The service functions are plain, not spies: a spy handles the promise it
@@ -53,6 +53,8 @@ import {
 import { selectFolder } from '../services/settings';
 import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
 import { description } from '../testing/hints';
 import AddDownloadModal from './AddDownloadModal.svelte';
 
@@ -71,7 +73,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 async function files() {
@@ -123,7 +128,9 @@ describe('AddDownloadModal files', () => {
     let started!: () => void;
     vi.mocked(startDownloadFrom).mockReturnValueOnce(new Promise((resolve) => (started = () => resolve({} as never))));
     const { user } = await files();
-    expect(screen.getByRole('textbox', { name: 'Destination folder' })).toHaveProperty('value', '/downloads');
+    const folder = screen.getByRole('group', { name: 'Destination folder' });
+    expect(within(folder).getByText('/downloads')).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Destination folder' })).toBeNull();
     const start = screen.getByRole('button', { name: 'Start download' });
     start.focus();
 
@@ -193,7 +200,7 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
     await view.user.click(fileBox('Celeste/readme.txt'));
     await view.user.click(screen.getByRole('button', { name: msg('modals.addDownloadBrowse') }));
-    await waitFor(() => expect(screen.getByRole('textbox', { name: msg('modals.addDownloadDestinationLabel') })).toHaveProperty('value', '/elsewhere'));
+    await waitFor(() => expect(within(screen.getByRole('group', { name: msg('modals.addDownloadDestinationLabel') })).getByText('/elsewhere')).toBeTruthy());
     await view.user.click(screen.getByRole('checkbox', { name: msg('modals.addDownloadAutoInstallLabel') }));
     return view;
   }
@@ -220,7 +227,7 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
     expect(fileBox('Celeste/setup.exe').getAttribute('aria-checked')).toBe('true');
     expect(fileBox('Celeste/readme.txt').getAttribute('aria-checked')).toBe('false');
-    expect(screen.getByRole('textbox', { name: msg('modals.addDownloadDestinationLabel') })).toHaveProperty('value', '/elsewhere');
+    expect(within(screen.getByRole('group', { name: msg('modals.addDownloadDestinationLabel') })).getByText('/elsewhere')).toBeTruthy();
     expect(screen.getByRole('checkbox', { name: msg('modals.addDownloadAutoInstallLabel') }).getAttribute('aria-checked')).toBe('true');
     const note = screen.getByText(msg('modals.addDownloadRestartNeeded'));
     expect(note.closest('.notice')).not.toBeNull();
@@ -318,7 +325,7 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
     expect(notice.isConnected).toBe(false);
     expect(fileBox('Celeste/readme.txt').getAttribute('aria-checked')).toBe('false');
-    expect(screen.getByRole('textbox', { name: msg('modals.addDownloadDestinationLabel') })).toHaveProperty('value', '/elsewhere');
+    expect(within(screen.getByRole('group', { name: msg('modals.addDownloadDestinationLabel') })).getByText('/elsewhere')).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(startButton()));
   });
 
@@ -485,7 +492,10 @@ describe('AddDownloadModal: any other Start failure', () => {
 
     await user.click(startButton());
 
-    await waitFor(() => expect(get(toasts).map((t) => t.message)).toContain(installErrorText(new Error('typhon:download.not_enough_space'))));
+    const folder = screen.getByRole('group', { name: msg('modals.addDownloadDestinationLabel') });
+    const alert = await within(folder).findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(installErrorText(new Error('typhon:download.not_enough_space')));
+    expect(get(toasts)).toEqual([]);
     expect(startButton()).toHaveProperty('disabled', false);
     expect(startButton().getAttribute('aria-busy')).not.toBe('true');
     expect(fetchMetadata).toHaveBeenCalledTimes(1);
@@ -623,5 +633,136 @@ describe('AddDownloadModal: closing and starting', () => {
     expect(cleanup.discard).not.toHaveBeenCalled();
     starting.resolve({} as Download);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('AddDownloadModal: the fields', () => {
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  const continueButton = () => screen.getByRole('button', { name: msg('common.continue') });
+
+  it('sends nothing while a link is typed or pasted, and fetches once on Continue', async () => {
+    const { user } = renderDom(AddDownloadModal, { open: true });
+    const field = screen.getByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') });
+
+    await user.click(field);
+    await user.paste('magnet:?xt=urn:btih:');
+    await user.type(field, 'abc');
+
+    expect(fetchMetadata).not.toHaveBeenCalled();
+    await user.click(continueButton());
+    await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
+    expect(vi.mocked(fetchMetadata).mock.calls).toEqual([[MAGNET]]);
+  });
+
+  it('holds Continue with a reason until the field holds a magnet link', async () => {
+    const { user } = renderDom(AddDownloadModal, { open: true });
+    const field = screen.getByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') });
+    expect(continueButton().getAttribute('aria-disabled')).toBe('true');
+    expect(description(continueButton())).toBe(msg('modals.addDownloadNeedsMagnet'));
+
+    await user.type(field, 'https://example.org/x.torrent');
+    await user.click(continueButton());
+    expect(fetchMetadata).not.toHaveBeenCalled();
+
+    await user.clear(field);
+    await user.type(field, MAGNET);
+    expect(continueButton().getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('shows the destination as text on the path field, read on Browse', async () => {
+    await files();
+    const browse = screen.getByRole('button', { name: msg('modals.addDownloadBrowse') });
+    expect(description(browse)).toContain('/downloads');
+  });
+
+  it('says a refusal that is not about the folder in the dialog, by its code', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error('typhon:download.duplicate_download: уже есть'));
+    const { user } = await files();
+    startButton().focus();
+    await user.keyboard('{Enter}');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('errInstall.downloadDuplicateDownload'));
+    await waitFor(() => expect(document.activeElement).toBe(alert.closest('[data-tone="danger"]')));
+    expect(get(toasts)).toEqual([]);
+
+    // The torrent still waits in Go for a Start: closing the dialog now discards it.
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    expect(cleanup.discard).toHaveBeenCalledWith('abc');
+  });
+
+  it('holds Cancel and Browse with a reason while the download starts', async () => {
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const { user } = await files();
+    await user.click(startButton());
+
+    for (const name of [msg('common.cancel'), msg('modals.addDownloadBrowse')]) {
+      const button = screen.getByRole('button', { name });
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(description(button)).toContain(msg('modals.actionRunning'));
+    }
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(cleanup.discard).not.toHaveBeenCalled();
+    starting.resolve({} as Download);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('AddDownloadModal: a Start answered after the dialog moved on', () => {
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  async function startThenReopen() {
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const view = await files();
+    await view.user.click(startButton());
+    await view.rerender({ open: false, initialSource: MAGNET });
+    vi.mocked(fetchMetadata).mockResolvedValueOnce({ ...TORRENT, infoHash: 'def', name: 'Hades', files: [file('Hades/setup.exe', 5)] });
+    await view.rerender({ open: true, initialSource: 'magnet:?xt=urn:btih:def' });
+    await screen.findByRole('checkbox', { name: 'Hades/setup.exe' });
+    // The torrent being started is the Start's: closing the dialog meanwhile does not discard it.
+    expect(cleanup.discard).not.toHaveBeenCalledWith('abc');
+    return { starting, view };
+  }
+
+  it('a late success leaves the new opening open, with its own torrent kept', async () => {
+    const { starting, view } = await startThenReopen();
+    cleanup.discard.mockClear();
+
+    starting.resolve({} as Download);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Hades/setup.exe' })).toBeTruthy();
+    await view.user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    await waitFor(() => expect(cleanup.discard).toHaveBeenCalledWith('def'));
+  });
+
+  it('a late refusal is said once in a toast naming the torrent, not in the new opening', async () => {
+    const { starting } = await startThenReopen();
+
+    starting.reject(new Error('typhon:download.destination_permission: нет доступа'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([
+      [msg('modals.addDownloadRefusedFor', { title: 'Celeste', reason: msg('errInstall.downloadDestinationPermission') }), 'danger'],
+    ]);
+    expect(cleanup.discard).toHaveBeenCalledWith('abc');
   });
 });
