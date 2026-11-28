@@ -822,6 +822,27 @@ describe('AddDownloadModal: what a running Start sent is what the files step sho
     freshMocks();
   });
 
+  it('keeps the folder it sent when a folder picked in Browse answers while the Start runs', async () => {
+    const picked = deferred<string>();
+    vi.mocked(selectFolder).mockReturnValueOnce(picked.promise);
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const view = await files();
+    const folder = screen.getByRole('group', { name: msg('modals.addDownloadDestinationLabel') });
+    await view.user.click(screen.getByRole('button', { name: msg('modals.addDownloadBrowse') }));
+    await view.user.click(startButton());
+
+    picked.resolve('E:/Elsewhere');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(vi.mocked(startDownloadFrom)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(startDownloadFrom).mock.calls[0][1]).toBe('/downloads');
+    expect(folder.textContent).not.toContain('E:/Elsewhere');
+    expect(folder.textContent).toContain('/downloads');
+    starting.reject(new Error('typhon:download.disk_full'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
   const shown = (box: HTMLElement) => box.getAttribute('aria-checked');
   const sentOptions = () =>
     vi.mocked(startDownloadFrom).mock.calls.map((call) => ({ files: call[2], ...(call[3] as { autoInstall?: boolean; elevateAhead?: boolean }) }));

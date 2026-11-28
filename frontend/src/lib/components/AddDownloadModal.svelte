@@ -263,7 +263,8 @@
     const at = opening;
     try {
       const path = await selectFolder(msg('modals.addDownloadChooseFolder'));
-      if (path && alive && at === opening) {
+      // A Start that is out was sent the folder shown: an answer of the picker must not change it under the player.
+      if (path && alive && at === opening && !starting) {
         destination = path;
         folderFailure = '';
       }
