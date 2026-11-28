@@ -13,6 +13,7 @@ import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import { resetBindings } from '../testing/fakeBinding';
 import { held, sentToGo } from '../testing/gameDialogsTesting';
+import { fileWrites } from '../game/fileWrites.svelte';
 import GamePropertiesModal from './GamePropertiesModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
@@ -80,6 +81,8 @@ beforeEach(() => {
 
 afterEach(() => {
   const sent = sentToGo();
+  // The file writes are the session's, shared by every mount: a test leaves none running.
+  const left = ['g1', 'g2'].filter((id) => fileWrites.of(id) !== null);
   resetBindings();
   closeGameProperties();
   libraryGames.set([]);
@@ -87,6 +90,7 @@ afterEach(() => {
   vi.clearAllMocks();
   document.body.replaceChildren();
   expect(sent).toEqual([]);
+  expect(left).toEqual([]);
 });
 
 const describedBy = (el: Element) =>
@@ -245,9 +249,194 @@ describe('GamePropertiesModal: a file write goes on across openings of its game'
     expect(vi.mocked(setExecutable)).not.toHaveBeenCalled();
   });
 
-  // A dialog torn down (the language changed, Big Picture turned on) and mounted again knows nothing of
-  // the write its predecessor began: the file picked then may land while the new one turns
-  // compatibility mode on, so it is not set, and that is said.
+  it("two games: one game's switch runs, the other's file dialog ends: the first game stays held", async () => {
+    const enabling = held<void>();
+    const picking = held<string>();
+    vi.mocked(enableWrapper).mockReturnValueOnce(enabling.promise);
+    vi.mocked(selectGameExecutable).mockReturnValueOnce(picking.promise);
+    render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.compat(first));
+    const other = await openDialog('g2', 'Celeste');
+    await keys.click(q.exeBrowse(other));
+    picking.resolve('');
+    await vi.waitFor(() => expect(q.exeBrowse(other).getAttribute('aria-busy')).toBeNull());
+
+    const dialog = await openDialog();
+
+    expectHeld(q.exeBrowse(dialog), 'modals.propertiesHeldCompat');
+    await keys.click(q.exeOther(dialog));
+    expect(vi.mocked(setExecutable)).not.toHaveBeenCalled();
+    enabling.resolve();
+    await vi.waitFor(() => expect(q.exeBrowse(dialog).getAttribute('aria-disabled')).toBeNull());
+  });
+});
+
+// A language switch ({#key $locale} in App), entering or leaving Big Picture, or a sign-out and
+// sign-in tear the dialog down and mount a new one while a write of the old one still runs.
+describe('GamePropertiesModal: a dialog mounted again knows the file writes its predecessor began', () => {
+  const saved = { kind: 'success', message: msg('modals.propertiesLateSaved', { title: 'Hades' }), count: 1 };
+  // Every answer's microtasks are done once a macrotask runs.
+  const settled = () => new Promise((done) => setTimeout(done, 0));
+
+  async function remounted(mounted: { unmount: () => void }) {
+    mounted.unmount();
+    render(GamePropertiesModal, { target: app });
+    return opened();
+  }
+
+  it('compatibility mode turning on: the executable and the switch are held with its reason, and the game is read again once it is done', async () => {
+    const enabling = held<void>();
+    vi.mocked(enableWrapper).mockReturnValueOnce(enabling.promise);
+    const mounted = render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.compat(first));
+    const dialog = await remounted(mounted);
+
+    expectHeld(q.compat(dialog), 'modals.propertiesHeldCompat');
+    expectHeld(q.exeBrowse(dialog), 'modals.propertiesHeldCompat');
+    expectHeld(within(dialog).getByRole('radiogroup'), 'modals.propertiesHeldCompat');
+    expectHeld(q.savesBrowse(dialog), 'modals.propertiesHeldCompat');
+    await keys.click(q.exeOther(dialog));
+    await keys.click(q.exeBrowse(dialog));
+    await keys.click(q.compat(dialog));
+    expect(vi.mocked(setExecutable)).not.toHaveBeenCalled();
+    expect(vi.mocked(selectGameExecutable)).not.toHaveBeenCalled();
+    expect(vi.mocked(enableWrapper)).toHaveBeenCalledTimes(1);
+    const reads = vi.mocked(inspectWrapper).mock.calls.length;
+    vi.mocked(inspectWrapper).mockResolvedValue(wrapper({ active: { wrapper: 'dgvoodoo', version: '2.8', preset: 'default', files: ['d3d9.dll'] } } as Partial<WrapperInfo>));
+
+    enabling.resolve();
+
+    await vi.waitFor(() => expect(q.compat(dialog).getAttribute('aria-checked')).toBe('true'));
+    expect(q.compat(dialog).getAttribute('aria-disabled')).toBeNull();
+    expect(q.exeBrowse(dialog).getAttribute('aria-disabled')).toBeNull();
+    await settled();
+    // Read by the dialog on screen; the torn-down one reads nothing.
+    expect(vi.mocked(inspectWrapper).mock.calls.slice(reads)).toEqual([['g1']]);
+    expect(toastList()).toEqual([saved]);
+    await keys.click(q.exeOther(dialog));
+    expect(vi.mocked(setExecutable).mock.calls).toEqual([['g1', '/games/hades/x64/Hades.exe']]);
+  });
+
+  it('a switch it did not begin does not keep it open: Escape closes it, and the outcome is said once', async () => {
+    const enabling = held<void>();
+    vi.mocked(enableWrapper).mockReturnValueOnce(enabling.promise);
+    const mounted = render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.compat(first));
+    const dialog = await remounted(mounted);
+
+    await keys.keyboard('{Escape}');
+
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    enabling.reject(new Error('typhon:wrappers.download_failed: offline'));
+    await vi.waitFor(() => expect(toastList()).toHaveLength(1));
+    await settled();
+    expect(toastList()).toHaveLength(1);
+    expect(toastList()[0].kind).toBe('danger');
+  });
+
+  it('the saves folder being chosen: compatibility mode is held with its reason, and the folder picked then is not set, which is said once', async () => {
+    const picking = held<string>();
+    vi.mocked(selectFolder).mockReturnValueOnce(picking.promise);
+    vi.mocked(enableWrapper).mockResolvedValueOnce(undefined);
+    const mounted = render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.savesBrowse(first));
+    const dialog = await remounted(mounted);
+
+    expectHeld(q.compat(dialog), 'modals.propertiesHeldSaves');
+    expectHeld(q.savesBrowse(dialog), 'modals.propertiesHeldSaves');
+    await keys.click(q.compat(dialog));
+    expect(vi.mocked(enableWrapper)).not.toHaveBeenCalled();
+
+    picking.resolve('/saves/elsewhere');
+
+    await vi.waitFor(() => expect(q.compat(dialog).getAttribute('aria-disabled')).toBeNull());
+    await settled();
+    expect(vi.mocked(setSavesDir)).not.toHaveBeenCalled();
+    expect(toastList()).toEqual([{ kind: 'warning', message: msg('modals.propertiesSavesLateDropped', { title: 'Hades' }), count: 1 }]);
+    expect(q.savesBrowse(dialog).getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('a found executable being set: compatibility mode is held with its reason until Go answers, then read again for the new file', async () => {
+    const setting = held<LibraryGame>();
+    vi.mocked(setExecutable).mockReturnValueOnce(setting.promise);
+    const mounted = render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.exeOther(first));
+    const dialog = await remounted(mounted);
+
+    expectHeld(q.compat(dialog), 'modals.propertiesHeldExe');
+    expectHeld(q.exeBrowse(dialog), 'modals.propertiesHeldExe');
+    await keys.click(q.compat(dialog));
+    expect(vi.mocked(enableWrapper)).not.toHaveBeenCalled();
+    const reads = vi.mocked(inspectWrapper).mock.calls.length;
+
+    setting.resolve(hades);
+
+    await vi.waitFor(() => expect(q.compat(dialog).getAttribute('aria-disabled')).toBeNull());
+    await settled();
+    expect(vi.mocked(inspectWrapper).mock.calls.slice(reads)).toEqual([['g1']]);
+    expect(toastList()).toEqual([saved]);
+  });
+
+  it('the saves folder being reset: the saves controls are held with its reason, Escape closes it, and the outcome is said once', async () => {
+    const resetting = held<LibraryGame>();
+    vi.mocked(clearSavesDir).mockReturnValueOnce(resetting.promise);
+    const mounted = render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.savesReset(first));
+    await keys.click(await screen.findByRole('button', { name: msg('modals.propertiesSavesResetConfirm') }));
+    expect(vi.mocked(clearSavesDir)).toHaveBeenCalledTimes(1);
+    const dialog = await remounted(mounted);
+
+    expectHeld(q.savesBrowse(dialog), 'modals.propertiesHeldSaves');
+    expectHeld(q.savesReset(dialog), 'modals.propertiesHeldSaves');
+    expectHeld(q.compat(dialog), 'modals.propertiesHeldSaves');
+    await keys.keyboard('{Escape}');
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    const again = await openDialog();
+    expectHeld(q.compat(again), 'modals.propertiesHeldSaves');
+
+    resetting.resolve(hades);
+
+    await vi.waitFor(() => expect(q.compat(again).getAttribute('aria-disabled')).toBeNull());
+    await settled();
+    expect(toastList()).toEqual([saved]);
+  });
+
+  // The other side of the rule: its own Reset or switch keeps the dialog that began it open.
+  it('its own reset still running when the dialog comes back to the game: Escape does not close it', async () => {
+    const resetting = held<LibraryGame>();
+    vi.mocked(clearSavesDir).mockReturnValueOnce(resetting.promise);
+    render(GamePropertiesModal, { target: app });
+    const keys = user();
+    const first = await openDialog();
+    await keys.click(q.savesReset(first));
+    await keys.click(await screen.findByRole('button', { name: msg('modals.propertiesSavesResetConfirm') }));
+    await openDialog('g2', 'Celeste');
+    const dialog = await openDialog();
+    expect(screen.queryByRole('button', { name: msg('modals.propertiesSavesResetConfirm') })).toBeNull();
+
+    await keys.keyboard('{Escape}');
+    await settled();
+
+    expect(dialog.isConnected).toBe(true);
+    resetting.resolve(hades);
+    await vi.waitFor(() => expect(q.savesBrowse(dialog).getAttribute('aria-disabled')).toBeNull());
+    await keys.keyboard('{Escape}');
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+  });
+
+  // A dialog torn down while its file dialog was open: the file picked then is not set, and that is said.
   it('a file picked after its dialog was torn down is not set, and that is said', async () => {
     const picking = held<string>();
     vi.mocked(selectGameExecutable).mockReturnValueOnce(picking.promise);

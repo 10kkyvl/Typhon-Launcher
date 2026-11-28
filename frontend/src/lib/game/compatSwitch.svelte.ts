@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { errorCode, msg } from '../i18n';
 import { isEmulated } from '../library/emulation';
 import type { LibraryGame } from '../services/library';
@@ -16,7 +17,7 @@ import { toast } from '../stores/toasts';
 import { focusableIn } from '../layers/focus';
 import { focusHandOff } from '../utils/focusHandOff';
 import { bytesSize } from '../utils/format';
-import type { createFileWrites } from './fileWrites.svelte';
+import type { createFileWrites, RunningWrite } from './fileWrites.svelte';
 import { defaultWrapper, describeImports, presetsFor, problemActions, problemText, progressView } from './compatMode';
 import { propertiesErrorText as errorText } from './propertiesErrors';
 
@@ -24,8 +25,8 @@ type Action = '' | 'revert' | 'keep';
 
 /**
  * The compatibility mode (wrappers) switch of the game properties dialog: what Go says of the game's
- * wrapper, the switch and its problem actions. Created once by the dialog, which outlives its
- * openings (App mounts it once): `reset()` starts an opening, `load(gameId)` reads the game's state.
+ * wrapper, the switch and its problem actions. Created by each mount of the dialog, which outlives
+ * its openings: `reset()` starts an opening, `load(gameId)` reads the game's state.
  */
 export function createCompatSwitch(deps: {
   target: () => GamePropertiesTarget | null;
@@ -37,8 +38,10 @@ export function createCompatSwitch(deps: {
   focus: { section: () => HTMLElement | undefined; props: () => HTMLElement | undefined };
   /** The dialog's read number: a read answered after a newer one began paints nothing. */
   seq: () => number;
-  /** The dialog's file writes by game: the switch takes its game for as long as it runs. */
+  /** The file writes by game: the switch takes its game for as long as it runs. */
   writes: ReturnType<typeof createFileWrites>;
+  /** The dialog, as the writes know who began each. */
+  me: object;
 }) {
   let compat = $state<WrapperInfo | null>(null);
   let loading = $state(false);
@@ -52,7 +55,8 @@ export function createCompatSwitch(deps: {
   // Which problem action was pressed: that button stays focused and busy while the switch runs.
   let action = $state<Action>('');
 
-  const busy = $derived(deps.writes.of(deps.game()?.id)?.kind === 'compat');
+  const write = $derived(deps.writes.of(deps.game()?.id));
+  const busy = $derived(write?.kind === 'compat' && write.by === deps.me);
   const visible = $derived(Boolean(compat && (compat.supported || compat.active || compat.problem)));
   const suggested = $derived(compat?.suggested ?? '');
   const locked = $derived(!compat?.active && suggested === '' && !force);
@@ -63,6 +67,21 @@ export function createCompatSwitch(deps: {
 
   $effect(() => {
     on = Boolean(compat?.active);
+  });
+
+  // A switch or an executable set another dialog began (one torn down since) is answered there: this
+  // one sees the game's slot go and reads again what it changed.
+  let foreign: { id: string; write: RunningWrite } | null = null;
+  $effect(() => {
+    const id = deps.game()?.id;
+    const now = write;
+    untrack(() => {
+      const was = foreign;
+      foreign = id && now && now.by !== deps.me ? { id, write: now } : null;
+      if (!was || was.id !== id || now === was.write || was.write.kind === 'saves' || deps.target()?.gameId !== id) return;
+      progress = null;
+      void load(id);
+    });
   });
 
   $effect(() => {
@@ -100,7 +119,7 @@ export function createCompatSwitch(deps: {
     const game = deps.game();
     if (!game || busy || deps.held()) return;
     const id = game.id;
-    const end = deps.writes.start(id, { kind: 'compat' });
+    const end = deps.writes.start(id, { kind: 'compat' }, deps.me);
     if (!end) return;
     const { heard, title } = deps.pressedNow();
     action = pressed;

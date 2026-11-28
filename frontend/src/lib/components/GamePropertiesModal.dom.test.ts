@@ -12,6 +12,7 @@ import { libraryGames } from '../stores/library';
 import { user } from '../testing/dom';
 import { resetBindings } from '../testing/fakeBinding';
 import { sentToGo } from '../testing/gameDialogsTesting';
+import { fileWrites } from '../game/fileWrites.svelte';
 import GamePropertiesModal from './GamePropertiesModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
@@ -36,12 +37,15 @@ beforeEach(() => {
 
 afterEach(() => {
   const sent = sentToGo();
+  // The file writes are the session's, shared by every mount: a test leaves none running.
+  const left = ['g1', 'g2'].filter((id) => fileWrites.of(id) !== null);
   resetBindings();
   closeGameProperties();
   libraryGames.set([]);
   toasts.set([]);
   app.remove();
   expect(sent).toEqual([]);
+  expect(left).toEqual([]);
 });
 
 describe('GamePropertiesModal while compatibility mode downloads', () => {
