@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
 import { getGames, type LibraryGame } from '../services/library';
+import { libraryGames } from '../stores/library';
 import { navigate, resetHistory } from '../stores/router';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
@@ -72,6 +73,7 @@ afterEach(() => {
   vi.mocked(inspectRemoval).mockReset();
   vi.mocked(removeGame).mockReset();
   vi.mocked(getGames).mockReset();
+  libraryGames.set([]);
   toasts.set([]);
   resetHistory();
   document.body.replaceChildren();
@@ -419,6 +421,20 @@ describe('RemoveGameModal: a refusal for a removal Go has made', () => {
       [unfinished('modals.removeGameRemovedFromLibraryUnfinished', msg('errInstall.downloadCleanupInUse')), 'warning'],
     ]);
     expect(vi.mocked(removeGame)).toHaveBeenCalledTimes(1);
+  });
+
+  it('a card that was uninstalled before the press: a refusal stays a refusal, nothing is said as removed', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades', uninstalled: true } as LibraryGame]);
+    vi.mocked(removeGame).mockRejectedValueOnce(coded('install.files_locked'));
+    vi.mocked(getGames).mockResolvedValue([{ id: 'g1', title: 'Hades', uninstalled: true } as LibraryGame]);
+    const onremoved = vi.fn();
+    const { dialog } = await openDialog({}, { mode: 'disk', onremoved });
+
+    await user().click(confirmButton(dialog, 'modals.removeGameModeDiskLabel'));
+
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('errInstall.installFilesLocked'));
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([]);
+    expect(onremoved).not.toHaveBeenCalled();
   });
 
   it('the card stays, uninstalled: says it was removed from this computer, and closes', async () => {
