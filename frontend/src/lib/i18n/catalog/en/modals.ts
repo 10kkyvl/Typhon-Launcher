@@ -101,6 +101,7 @@ export const modals: Record<ModalsKey, Message> = {
 
   // DownloadDetailsModal.svelte
   'modals.downloadDetailsFolderUnavailable': 'Folder unavailable',
+  'modals.downloadDetailsGone': 'This download is no longer in the list',
   'modals.downloadDetailsTitle': 'Download',
   'modals.downloadDetailsGeneral': 'General',
   'modals.downloadDetailsStatus': 'Status',

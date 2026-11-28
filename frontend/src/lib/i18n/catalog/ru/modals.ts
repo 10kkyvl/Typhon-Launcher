@@ -98,6 +98,7 @@ export const modals = {
 
   // DownloadDetailsModal.svelte
   'modals.downloadDetailsFolderUnavailable': 'Папка недоступна',
+  'modals.downloadDetailsGone': 'Этой загрузки больше нет в списке',
   'modals.downloadDetailsTitle': 'Загрузка',
   'modals.downloadDetailsGeneral': 'Общее',
   'modals.downloadDetailsStatus': 'Состояние',
