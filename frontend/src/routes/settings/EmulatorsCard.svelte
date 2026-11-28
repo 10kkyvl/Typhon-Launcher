@@ -10,7 +10,7 @@
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { hasMessage, msg } from '../../lib/i18n';
-  import { libraryErrorText } from '../../lib/library/errors';
+  import { actionErrorText, libraryErrorText } from '../../lib/library/errors';
   import { inWails } from '../../lib/services/backend';
   import {
     detectEmulators,
@@ -113,7 +113,7 @@
     try {
       await openOfficialPage(row.id);
     } catch (err) {
-      toast(libraryErrorText(err, msg('emul.openSiteFailed')), 'danger');
+      toast(actionErrorText(err, msg('emul.openSiteFailed')), 'danger');
     }
   }
 
@@ -123,7 +123,7 @@
     try {
       path = await selectEmulatorFile(msg('emul.pickDialog', { emulator: row.emulator }));
     } catch (err) {
-      toast(libraryErrorText(err, msg('emul.openDialogFailed')), 'danger');
+      toast(actionErrorText(err, msg('emul.openDialogFailed')), 'danger');
       return;
     }
     if (!path) return;
@@ -141,7 +141,7 @@
       replace(await setEmulatorPath(row.id, path));
       toast(done, 'success');
     } catch (err) {
-      toast(libraryErrorText(err, msg('emul.saveFailed')), 'danger');
+      toast(actionErrorText(err, msg('emul.saveFailed')), 'danger');
     } finally {
       busy = '';
     }
@@ -165,7 +165,7 @@
       applyFailures = [];
       foundOpen = true;
     } catch (err) {
-      toast(libraryErrorText(err, msg('emul.detectFailed')), 'danger');
+      toast(actionErrorText(err, msg('emul.detectFailed')), 'danger');
     } finally {
       detecting = false;
     }

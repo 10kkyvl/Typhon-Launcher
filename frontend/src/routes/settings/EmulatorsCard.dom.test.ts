@@ -130,6 +130,17 @@ describe('EmulatorsCard: a platform', () => {
     await waitFor(() => expect(toastTexts()).toContain(msg('emul.saveFailed')));
   });
 
+  it('says a path Go refused: what failed, then Go\'s reason by its code', async () => {
+    vi.mocked(selectEmulatorFile).mockResolvedValue('/apps/pcsx2');
+    vi.mocked(setEmulatorPath).mockRejectedValue(new Error('typhon:emulators.not_exe: /apps/readme.txt'));
+    const { user } = renderDom(EmulatorsCard, {});
+    await screen.findByText('PlayStation 2 · PCSX2');
+
+    await user.click(screen.getByRole('button', { name: msg('settings.emulatorsChooseFor', { platform: 'PlayStation 2' }) }));
+
+    await waitFor(() => expect(toastTexts()).toContain(msg('common.failedReason', { action: msg('emul.saveFailed'), reason: msg('emulators.not_exe') })));
+  });
+
   it('resets a set emulator', async () => {
     vi.mocked(setEmulatorPath).mockResolvedValue({ ...VITA, path: '', status: 'not_set', reason: '' });
     const { user } = renderDom(EmulatorsCard, {});
