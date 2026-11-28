@@ -223,6 +223,41 @@ describe('SourceDetailsModal: an old Retry answering after the dialog was opened
   });
 });
 
+// The search asks Go once the typing pauses. A dialog closed inside that pause asks nothing after.
+describe('SourceDetailsModal: the search after the typing pauses', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function typeInSearch() {
+    const dialog = await openDialog();
+    await vi.waitFor(() => expect(queryReleases).toHaveBeenCalledTimes(1));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const keys = user();
+    await keys.type(within(dialog).getByRole('textbox', { name: msg('modals.sourceDetailsSearchPlaceholder') }), 'Hades');
+    expect(queryReleases).toHaveBeenCalledTimes(1);
+    return keys;
+  }
+
+  it('asks Go for the typed words once the typing pauses', async () => {
+    await typeInSearch();
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(vi.mocked(queryReleases).mock.calls.map(([query]) => query.search)).toEqual(['', 'Hades']);
+  });
+
+  it('asks Go nothing when the dialog closed before the typing paused', async () => {
+    const keys = await typeInSearch();
+
+    await keys.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(vi.mocked(queryReleases).mock.calls.map(([query]) => query.search)).toEqual(['']);
+  });
+});
+
 describe('SourceDetailsModal: the rest of the dialog', () => {
   it('says the list is loading with a labelled spinner', async () => {
     const pending = deferred<Page>();
