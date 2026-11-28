@@ -71,10 +71,12 @@
     border-radius: calc(var(--radius-lg) - 1px);
   }
 
+  /* The words stand over the game's picture, whatever the theme: in the fixed art colours, on the
+     darkest art plate at the shade's foot, so they read over a white picture in a light preset too. */
   .shade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(transparent 35%, rgba(5, 8, 12, 0.88));
+    background: linear-gradient(transparent 35%, var(--art-control-hover));
     pointer-events: none;
   }
 
@@ -85,14 +87,14 @@
     bottom: var(--space-4);
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    color: #f1f4f8;
+    gap: var(--space-1);
+    color: var(--art-text);
+    text-shadow: var(--art-text-shadow);
   }
 
   .eyebrow {
     font-size: var(--font-xs);
     font-weight: 500;
-    color: rgba(241, 244, 248, 0.7);
   }
 
   .title {
@@ -105,7 +107,6 @@
 
   .meta {
     font-size: var(--font-xs);
-    color: rgba(241, 244, 248, 0.78);
     font-variant-numeric: tabular-nums;
   }
 

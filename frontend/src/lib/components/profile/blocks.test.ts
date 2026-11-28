@@ -73,6 +73,16 @@ describe('a block with no data', () => {
     expect(render(TextBlock, { props: { title: 'Notes', body: 'words' } }).body).toContain('Notes');
   });
 
+  it('the about block with no text says so under its heading, instead of an empty frame', () => {
+    for (const bio of ['', '  \n ']) {
+      const out = render(AboutBlock, { props: { bio } }).body;
+
+      expect(out).toContain(msg('profile.blockAbout'));
+      expect(out).toContain(msg('profile.aboutEmpty'));
+      expect(out).not.toContain('class="bio');
+    }
+  });
+
   it('the about block draws the text under its own heading', () => {
     const out = render(AboutBlock, { props: { bio: 'line one\nline two' } }).body;
 

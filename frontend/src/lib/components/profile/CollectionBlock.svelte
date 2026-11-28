@@ -56,7 +56,7 @@
   .tile {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--space-2);
     min-width: 0;
     padding: 0;
     border: 0;
@@ -83,28 +83,30 @@
     box-shadow: var(--shadow-lift);
   }
 
+  /* Marks over the cover, in the fixed art colours on the art plate: a theme's status colour would sink
+     into the dark plate in a light preset. */
   .heart {
     position: absolute;
-    left: 0.7rem;
-    bottom: 0.7rem;
+    left: var(--space-2);
+    bottom: var(--space-2);
     display: flex;
     align-items: center;
     justify-content: center;
     width: 2.6rem;
     height: 2.6rem;
-    border-radius: 50%;
-    background: rgba(5, 8, 12, 0.6);
-    color: var(--danger);
+    border-radius: var(--radius-round);
+    background: var(--art-control);
+    color: var(--art-text);
   }
 
   .mastered {
     position: absolute;
-    left: 0.7rem;
-    bottom: 0.7rem;
-    padding: 0.2rem 0.7rem;
+    left: var(--space-2);
+    bottom: var(--space-2);
+    padding: 0.2rem var(--space-2);
     border-radius: var(--radius-sm);
-    background: rgba(5, 8, 12, 0.6);
-    color: var(--success);
+    background: var(--art-control);
+    color: var(--art-text);
     font-size: var(--font-xs);
     font-weight: 700;
   }

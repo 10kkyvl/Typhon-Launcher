@@ -324,7 +324,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 0.4rem;
+    gap: var(--space-1);
     min-height: 9rem;
     padding: var(--space-5) var(--space-6);
     border: 1px dashed var(--border-strong);

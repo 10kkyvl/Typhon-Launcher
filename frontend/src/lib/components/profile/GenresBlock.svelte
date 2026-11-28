@@ -87,7 +87,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: var(--space-2);
   }
 
   .legend li {

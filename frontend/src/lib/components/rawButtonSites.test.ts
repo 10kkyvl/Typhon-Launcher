@@ -64,6 +64,8 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   // the Tab order held with its reason when it cannot be added: no radio choice, no menu of a trigger.
   'lib/components/profile/BlockGrid.svelte': { handle: 'drag handle' },
   'lib/components/profile/BlockPicker.svelte': { preset: 'list option' },
+  // A block's game opens through what the page hands it (BlockGame.open: the own library, or the
+  // catalog by IGDB id on another player's page); GameLink takes a route id and opens it itself.
   'lib/components/profile/CollectionBlock.svelte': { tile: 'row' },
   // A result of the game search adds the game it names (a collection takes several), so the kit's
   // OptionList, one checked choice of a radio group, would say a choice that is not there; the
