@@ -91,11 +91,16 @@
   let folderBox = $state<HTMLElement>();
 
   // One per opening: a Start, a picker or a fetch answered after the dialog closed or reopened is not
-  // this opening's. A destroyed dialog hears nothing either.
+  // this opening's. A destroyed dialog hears nothing either, and leaves nothing waiting in Go: Go keeps
+  // a fetched torrent until it is started or discarded.
   let opening = 0;
   let alive = true;
   onDestroy(() => {
     alive = false;
+    token++;
+    if (step === 'loading') drop(cancelFetchMetadata(fetching), 'cancel the metadata fetch');
+    if (pendingHash) drop(discardMetadata(pendingHash), 'discard the fetched torrent');
+    pendingHash = '';
   });
 
   const consolePlatform = $derived(origin?.platform ?? '');

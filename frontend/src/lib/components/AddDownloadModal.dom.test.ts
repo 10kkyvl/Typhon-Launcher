@@ -767,6 +767,56 @@ describe('AddDownloadModal: a Start answered after the dialog moved on', () => {
   });
 });
 
+describe('AddDownloadModal: unmounted with its page while it is open', () => {
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('on the files step: asks Go to drop the fetched torrent', async () => {
+    const view = await files();
+
+    view.unmount();
+    await settle();
+
+    expect(cleanup.discard.mock.calls).toEqual([['abc']]);
+  });
+
+  it('while the fetch runs: cancels it, and drops in Go what it brings later', async () => {
+    const fetching = deferred<TorrentInfo>();
+    vi.mocked(fetchMetadata).mockReturnValueOnce(fetching.promise);
+    const view = renderDom(AddDownloadModal, { open: true, initialSource: MAGNET });
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+
+    view.unmount();
+    expect(cleanup.cancel.mock.calls).toEqual([[MAGNET]]);
+    fetching.resolve(TORRENT);
+    await settle();
+
+    expect(cleanup.discard.mock.calls).toEqual([['abc']]);
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('while a Start runs: leaves the torrent to the Start, whatever it answers', async () => {
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const view = await files();
+    await view.user.click(startButton());
+
+    view.unmount();
+    starting.resolve({} as Download);
+    await settle();
+
+    expect(cleanup.discard).not.toHaveBeenCalled();
+    expect(cleanup.cancel).not.toHaveBeenCalled();
+  });
+});
+
 describe('AddDownloadModal: what a running Start sent is what the files step shows', () => {
   beforeEach(() => {
     freshMocks();
