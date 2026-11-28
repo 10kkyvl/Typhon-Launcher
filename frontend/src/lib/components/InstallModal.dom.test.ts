@@ -434,6 +434,29 @@ describe('InstallModal: what a running Start sent is what the plan shows', () =>
     await settle();
   });
 
+  it('holds "Use suggested" with a reason while the install starts, and a press changes nothing it shows', async () => {
+    vi.mocked(planSpace).mockImplementation(async () => ({ requiredBytes: 10, freeBytes: 100, sameVolume: false, mode: 'copy', enough: true, destinationBusy: true, suggested: 'C:/Games/Hades (2)', reusable: false }));
+    const started = held<Installation>();
+    vi.mocked(startInstall).mockReturnValueOnce(started.promise);
+    const { dialog, install } = await openPlan();
+    const suggested = await within(dialog).findByRole('button', { name: msg('modals.installUseSuggested') });
+    expect(suggested.getAttribute('aria-disabled')).toBeNull();
+    await user().click(install);
+    const checks = vi.mocked(planSpace).mock.calls.length;
+
+    expect(suggested.getAttribute('aria-disabled')).toBe('true');
+    expect(describedBy(suggested)).toContain(msg('modals.actionRunning'));
+    await user().click(suggested);
+    await settle();
+
+    expect(destinationField(dialog).value).toBe('C:/Games/Hades');
+    expect(within(dialog).getByText(msg('modals.installDestinationBusy', { path: 'C:/Games/Hades (2)' }))).toBeTruthy();
+    expect(vi.mocked(planSpace).mock.calls.length).toBe(checks);
+    expect(sent().map((request) => request.destination)).toEqual(['C:/Games/Hades']);
+    started.reject(new Error('stop'));
+    await settle();
+  });
+
   it('a space check that answers while the install starts does not move the destination it sent', async () => {
     vi.mocked(inspectDownload).mockImplementation(async (id: string) => twoRoots(id));
     const { dialog, install } = await openPlan();
