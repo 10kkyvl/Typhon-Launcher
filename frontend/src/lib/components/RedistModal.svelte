@@ -150,11 +150,16 @@
     if (!target || running) return;
     const at = opening;
     const heard = () => alive && at === opening;
-    running = { gameId: target.gameId, path: pkg.path };
+    const gameId = target.gameId;
+    // An opening of the same game since then shows what was read before the installer was done: it
+    // reads the runtimes again once the answer is said.
+    const later = () => alive && target?.gameId === gameId;
+    running = { gameId, path: pkg.path };
     try {
-      const result = await installRedist(target.gameId, pkg.path);
+      const result = await installRedist(gameId, pkg.path);
       if (!heard()) {
         toast(resultText(result, pkg.name), 'success');
+        if (later()) await refreshRuntimes(seq);
         return;
       }
       outcomes = { ...outcomes, [pkg.path]: { text: resultText(result, pkg.name), failed: false } };
@@ -162,6 +167,7 @@
     } catch (err) {
       if (!heard()) {
         toast(msg('redist.lateFailed', { name: pkg.name, reason: redistErrorText(err) }), 'danger');
+        if (later()) await refreshRuntimes(seq);
         return;
       }
       outcomes = { ...outcomes, [pkg.path]: { text: redistErrorText(err), failed: true } };

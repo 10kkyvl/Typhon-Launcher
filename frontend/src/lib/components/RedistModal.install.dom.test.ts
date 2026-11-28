@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import type { LibraryGame } from '../services/library';
-import { installRedist, installedRuntimes, officialLinks, scanRedist, type RedistPackage, type RedistResult } from '../services/redist';
+import { installRedist, installedRuntimes, officialLinks, scanRedist, type RedistPackage, type RedistResult, type RedistRuntime } from '../services/redist';
 import { libraryGames } from '../stores/library';
 import { closeRedist, openRedist } from '../stores/redist';
 import { toasts } from '../stores/toasts';
@@ -167,5 +167,62 @@ describe('RedistModal: closed while an installer runs', () => {
     const alert = await within(row(dialog, vc.name)).findByRole('alert');
     expect(alert.textContent?.trim()).toBe(msg('redist.failed'));
     expect(toastTexts()).toEqual([]);
+  });
+});
+
+describe('RedistModal: opened again while its installer runs', () => {
+  const x64: RedistRuntime = { name: 'Microsoft Visual C++ 2015 x64', version: '14.0', arch: 'x64' };
+
+  async function reopenedWhileInstalling(gameId = 'g1', title = 'Hades') {
+    const installing = held<RedistResult>();
+    vi.mocked(installRedist).mockReturnValueOnce(installing.promise);
+    vi.mocked(installedRuntimes).mockResolvedValue([]);
+    render(RedistModal, { target: app });
+    const first = await openDialog();
+    const keys = user();
+    await within(first).findByText(vc.name);
+    await keys.click(within(row(first, vc.name)).getByRole('button', { name: msg('redist.install') }));
+    await keys.keyboard('{Escape}');
+    await vi.waitFor(() => expect(first.isConnected).toBe(false));
+    openRedist(gameId);
+    const dialog = await screen.findByRole('dialog', { name: msg('redist.title', { title }) });
+    await within(dialog).findByText(vc.name);
+    await vi.waitFor(() => expect(dialog.textContent).toContain(msg('redist.missing', { arch: 'x64' })));
+    return { installing, dialog };
+  }
+
+  it.each([
+    ['success', (installing: ReturnType<typeof held<RedistResult>>) => installing.resolve(done), ['success', msg('redist.resultOk', { name: vc.name })]],
+    [
+      'refusal',
+      (installing: ReturnType<typeof held<RedistResult>>) => installing.reject(new Error('typhon:redist.failed: exit 1603')),
+      ['danger', msg('redist.lateFailed', { name: vc.name, reason: msg('redist.failed') })],
+    ],
+  ] as const)('for the same game: a late %s is said in a toast first, then the installed runtimes are read again', async (_kind, answer, said) => {
+    const { installing, dialog } = await reopenedWhileInstalling();
+    const reads = vi.mocked(installedRuntimes).mock.calls.length;
+    const reading = held<RedistRuntime[]>();
+    vi.mocked(installedRuntimes).mockReturnValueOnce(reading.promise);
+
+    answer(installing);
+
+    await vi.waitFor(() => expect(vi.mocked(installedRuntimes).mock.calls.length).toBe(reads + 1));
+    expect(toastTexts()).toEqual([said]);
+    expect(dialog.textContent).toContain(msg('redist.missing', { arch: 'x64' }));
+    reading.resolve([x64]);
+    await vi.waitFor(() => expect(dialog.textContent).not.toContain(msg('redist.missing', { arch: 'x64' })));
+    expect(dialog.textContent).toContain(msg('redist.missing', { arch: 'x86' }));
+  });
+
+  it('for another game: the late answer is said in a toast and nothing is read again', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const { installing } = await reopenedWhileInstalling('g2', 'Celeste');
+    const reads = vi.mocked(installedRuntimes).mock.calls.length;
+
+    installing.resolve(done);
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['success', msg('redist.resultOk', { name: vc.name })]]));
+    await Promise.resolve();
+    expect(vi.mocked(installedRuntimes).mock.calls.length).toBe(reads);
   });
 });
