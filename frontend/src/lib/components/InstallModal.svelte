@@ -88,7 +88,8 @@
       spacePending = true;
     },
     onResult: (result) => {
-      const advice = adviseDestination(result, origin, destination);
+      // While an action runs the destination is what was sent: a busy folder is suggested, not taken.
+      const advice = adviseDestination(result, busy ? 'typed' : origin, destination);
       destination = advice.destination;
       hint = advice.hint;
       space = result;
@@ -215,13 +216,15 @@
     else planner.schedule(request);
   }
 
+  // While an action runs, nothing that changes what it sent is taken: the plan shows what was sent.
   function setMode(next: string) {
-    if (next === mode) return;
+    if (busy || next === mode) return;
     mode = next;
     replan(true);
   }
 
   function pickRoot(id: string) {
+    if (busy) return;
     if (id === OTHER_ROOT) {
       void browseDestination();
       return;
@@ -308,10 +311,11 @@
   });
 
   async function browseDestination() {
+    if (busy) return;
     const at = opening;
     try {
       const path = await selectFolder(msg('modals.installChooseFolder'));
-      if (path && alive && at === opening) {
+      if (path && alive && at === opening && !busy) {
         destination = path;
         replan(true, 'pick');
       }
@@ -323,12 +327,13 @@
 
   function useSuggested() {
     const current = hint;
-    if (!current) return;
+    if (!current || busy) return;
     destination = current.path;
     replan(true);
   }
 
   function setDestination(value: string) {
+    if (busy) return;
     destination = value;
     replan(false);
   }

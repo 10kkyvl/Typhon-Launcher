@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { installErrorText } from '../install/installErrors';
 import { confirmExecutable, inspectDownload, planSpace, startInstall, type Installation, type PlanInfo } from '../services/install';
-import type { Settings } from '../services/settings';
+import { selectFolder, type Settings } from '../services/settings';
 import { installations } from '../stores/install';
 import { settings } from '../stores/settings';
 import { toasts } from '../stores/toasts';
@@ -21,6 +21,10 @@ vi.mock('../services/install', async (importOriginal) => ({
   planSpace: vi.fn(),
   confirmExecutable: vi.fn(),
   startInstall: vi.fn(),
+}));
+vi.mock('../services/settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/settings')>()),
+  selectFolder: vi.fn(),
 }));
 
 const coded = (code: string) => new Error(`typhon:${code}`);
@@ -327,5 +331,93 @@ describe('InstallModal: messages', () => {
 
     const text = within(dialog).getByText(installErrorText('typhon:install.disk_full: full'));
     expect(text.closest('[data-tone="danger"]')).not.toBeNull();
+  });
+});
+
+describe('InstallModal: what a running Start sent is what the plan shows', () => {
+  const portable = (id: string): PlanInfo => ({
+    ...planFor(id, 'Hades'),
+    plan: { type: 'portable', sourcePath: 'D:/dl/Hades', destination: 'C:/Games/Hades', installerPath: '', candidates: null } as unknown as PlanInfo['plan'],
+    mode: 'move',
+  });
+  const twoRoots = (id: string): PlanInfo => ({ ...planFor(id, 'Hades'), roots: ['C:/Games', 'D:/Games'] });
+  const sent = () => vi.mocked(startInstall).mock.calls.map(([, request]) => request);
+  const destinationField = (dialog: HTMLElement) =>
+    within(dialog).getByRole('textbox', { name: msg('modals.installDestinationFolder') }) as HTMLInputElement;
+
+  it('holds move / copy while the install of a portable package starts, and shows the mode it sent', async () => {
+    vi.mocked(inspectDownload).mockImplementation(async (id: string) => portable(id));
+    vi.mocked(planSpace).mockImplementation(async () => ({ requiredBytes: 10, freeBytes: 100, sameVolume: false, mode: 'move', enough: true, destinationBusy: false, suggested: '', reusable: false }));
+    const started = held<Installation>();
+    vi.mocked(startInstall).mockReturnValueOnce(started.promise);
+    const { dialog } = openDialog();
+    const install = await within(dialog).findByRole('button', { name: msg('modals.installMoveAndInstall') });
+    await vi.waitFor(() => expect(install.getAttribute('aria-disabled')).toBeNull());
+    await user().click(install);
+
+    const copy = within(dialog).getByRole('radio', { name: msg('modals.installModeCopy') });
+    await user().click(copy);
+
+    expect(sent().map((request) => request.mode)).toEqual(['move']);
+    expect(within(dialog).getByRole('radio', { checked: true }).textContent?.trim()).toBe(msg('modals.installModeMove'));
+    expect(copy).toHaveProperty('disabled', true);
+    started.reject(new Error('stop'));
+    await settle();
+  });
+
+  it('holds the library folder while the install starts, and shows the destination it sent', async () => {
+    vi.mocked(inspectDownload).mockImplementation(async (id: string) => twoRoots(id));
+    const started = held<Installation>();
+    vi.mocked(startInstall).mockReturnValueOnce(started.promise);
+    const { dialog, install } = await openPlan();
+    await user().click(install);
+
+    const root = within(dialog).getByRole('combobox', { name: msg('modals.installRootLabel') });
+    await user().click(root);
+
+    expect(within(document.body).queryByRole('listbox')).toBeNull();
+    expect(root).toHaveProperty('disabled', true);
+    expect(sent().map((request) => request.destination)).toEqual([destinationField(dialog).value]);
+    started.reject(new Error('stop'));
+    await settle();
+  });
+
+  it('a folder picked in Browse that answers while the install starts changes nothing it shows', async () => {
+    const picked = held<string>();
+    vi.mocked(selectFolder).mockReturnValueOnce(picked.promise);
+    const started = held<Installation>();
+    vi.mocked(startInstall).mockReturnValueOnce(started.promise);
+    const { dialog, install } = await openPlan();
+    await user().click(within(dialog).getByRole('button', { name: msg('modals.installBrowse') }));
+    await user().click(install);
+
+    picked.resolve('E:/Elsewhere');
+    await settle();
+
+    expect(sent().map((request) => request.destination)).toEqual(['C:/Games/Hades']);
+    expect(destinationField(dialog).value).toBe('C:/Games/Hades');
+    started.reject(new Error('stop'));
+    await settle();
+  });
+
+  it('a space check that answers while the install starts does not move the destination it sent', async () => {
+    vi.mocked(inspectDownload).mockImplementation(async (id: string) => twoRoots(id));
+    const { dialog, install } = await openPlan();
+    const checking = held<Awaited<ReturnType<typeof planSpace>>>();
+    vi.mocked(planSpace).mockReturnValueOnce(checking.promise);
+    const started = held<Installation>();
+    vi.mocked(startInstall).mockReturnValueOnce(started.promise);
+    await user().click(within(dialog).getByRole('combobox', { name: msg('modals.installRootLabel') }));
+    await user().click(within(document.body).getByRole('option', { name: 'D:/Games' }));
+    const chosen = destinationField(dialog).value;
+    await user().click(install);
+
+    checking.resolve({ requiredBytes: 10, freeBytes: 100, sameVolume: false, mode: 'copy', enough: true, destinationBusy: true, suggested: 'D:/Games/Hades (2)', reusable: false });
+    await settle();
+
+    expect(sent().map((request) => request.destination)).toEqual([chosen]);
+    expect(destinationField(dialog).value).toBe(chosen);
+    started.reject(new Error('stop'));
+    await settle();
   });
 });

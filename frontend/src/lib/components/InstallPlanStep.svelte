@@ -121,7 +121,7 @@
     {#if (controlled || silent) && roots.length > 1}
       <div class="field">
         <span class="field-label" id="{uid}-root-label">{msg('modals.installRootLabel')}</span>
-        <Select width="100%" options={rootOptions} labelledby="{uid}-root-label" bind:value={() => rootChoice, pickRoot} />
+        <Select width="100%" options={rootOptions} labelledby="{uid}-root-label" disabled={!!held} bind:value={() => rootChoice, pickRoot} />
       </div>
     {/if}
 
@@ -161,7 +161,7 @@
       {:else}
         <div class="field">
           <span class="field-label" id="{uid}-mode-label">{msg('modals.installModeLabel')}</span>
-          <SegmentedControl options={modeOptions} labelledby="{uid}-mode-label" bind:value={() => mode, setMode} />
+          <SegmentedControl options={modeOptions} labelledby="{uid}-mode-label" disabled={!!held} bind:value={() => mode, setMode} />
         </div>
       {/if}
       {#if movesInPlace}
