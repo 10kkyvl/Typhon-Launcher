@@ -375,8 +375,6 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installFolderDialogFailed': 'Failed to open the folder picker',
   'modals.installChooseInstaller': 'Choose an installer',
   'modals.installChooseGameExecutable': 'Choose the game executable',
-  'modals.installGameAdded': 'Game added to the library',
-  'modals.installDownloadDataDeleted': 'Downloaded files deleted',
   'modals.installGameAddedFor': '"{title}" added to the library',
   'modals.installDownloadDataDeletedFor': 'Downloaded files of "{title}" deleted',
   'modals.installWarningDownloadLeft': 'The game is installed, but its download could not be removed from the downloads list.',

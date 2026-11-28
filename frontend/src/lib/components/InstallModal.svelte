@@ -461,7 +461,7 @@
       const path = await selectExecutable(msg('modals.installChooseGameExecutable'));
       if (!path || !heard()) return;
       await addGame(path, current.name);
-      toast(msg('modals.installGameAdded'), 'success');
+      toast(msg('modals.installGameAddedFor', { title: current.name }), 'success');
       if (heard()) open = false;
     }, 'executable');
   }
@@ -514,7 +514,7 @@
     return run(async (heard) => {
       await deleteDownloadData(item.downloadId);
       if (heard()) cleanupResolved = true;
-      toast(msg('modals.installDownloadDataDeleted'), 'success');
+      toast(msg('modals.installDownloadDataDeletedFor', { title: item.name }), 'success');
     }, 'delete');
   }
 

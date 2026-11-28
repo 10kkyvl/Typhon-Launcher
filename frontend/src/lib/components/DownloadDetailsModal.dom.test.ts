@@ -424,6 +424,24 @@ describe('DownloadDetailsModal: its states and actions', () => {
     expect(get(toasts)).toEqual([]);
   });
 
+  it('a folder refused after the dialog turned to another download is not said on that one', async () => {
+    const opening = deferred<void>();
+    vi.mocked(openFolder).mockReturnValueOnce(opening.promise);
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)]), record('b', 'paused', [file('Other/data.bin', 3 * GB)])]);
+    const { user, rerender } = renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+    await user.click(screen.getByRole('button', { name: msg('modals.downloadDetailsOpenFolder') }));
+    await rerender({ open: true, id: 'b' });
+    await settle();
+    expect(screen.getByText('Other/data.bin')).toBeTruthy();
+
+    opening.reject(new Error('folder unavailable'));
+    await settle();
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(msg('modals.downloadDetailsFolderUnavailable'))).toBeNull();
+  });
+
   it('opens the game page and closes', async () => {
     downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)], { origin: { gameId: 'g1' } as Download['origin'] })]);
     const { user } = renderDom(DownloadDetailsModal, { open: true, id: 'a' });

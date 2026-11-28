@@ -197,6 +197,7 @@ describe('tests that mount a game or library dialog', () => {
         './InstallModal.dom.test.ts',
         './InstallModal.play.dom.test.ts',
         './AddDownloadModal.dom.test.ts',
+        './AddDownloadModal.setup.dom.test.ts',
         './DownloadDetailsModal.dom.test.ts',
         '../../routes/installed/InstalledAddGame.dom.test.ts',
         './LibrarySetupModal.field.dom.test.ts',

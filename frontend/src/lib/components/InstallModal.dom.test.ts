@@ -3,7 +3,8 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { locale, msg } from '../i18n';
 import { installErrorText } from '../install/installErrors';
-import { confirmExecutable, inspectDownload, planSpace, startInstall, type Installation, type PlanInfo } from '../services/install';
+import { confirmExecutable, deleteDownloadData, inspectDownload, planSpace, startInstall, type Installation, type PlanInfo } from '../services/install';
+import { addGame, selectExecutable, type LibraryGame } from '../services/library';
 import { selectFolder, type Settings } from '../services/settings';
 import { installations } from '../stores/install';
 import { settings } from '../stores/settings';
@@ -21,6 +22,12 @@ vi.mock('../services/install', async (importOriginal) => ({
   planSpace: vi.fn(),
   confirmExecutable: vi.fn(),
   startInstall: vi.fn(),
+  deleteDownloadData: vi.fn(),
+}));
+vi.mock('../services/library', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/library')>()),
+  selectExecutable: vi.fn(),
+  addGame: vi.fn(),
 }));
 vi.mock('../services/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/settings')>()),
@@ -433,5 +440,65 @@ describe('InstallModal: what a running Start sent is what the plan shows', () =>
     expect(destinationField(dialog).value).toBe(chosen);
     started.reject(new Error('stop'));
     await settle();
+  });
+});
+
+describe('InstallModal: late answers name what they are for', () => {
+  it('a plan read for the earlier download, answered after the dialog turned to the next, paints nothing, and Install sends the next one', async () => {
+    const first = held<PlanInfo>();
+    vi.mocked(inspectDownload).mockReturnValueOnce(first.promise);
+    const started = held<Installation>();
+    vi.mocked(startInstall).mockReturnValueOnce(started.promise);
+    const { dialog, view } = openDialog('d1');
+    await view.rerender({ downloadId: 'd2' });
+    const install = await within(dialog).findByRole('button', { name: msg('modals.installExtractAndInstall') });
+    await within(dialog).findByText('Celeste');
+
+    first.resolve(planFor('d1', 'Hades'));
+    await settle();
+
+    expect(within(dialog).queryByText('Hades')).toBeNull();
+    expect(within(dialog).getByText('Celeste')).toBeTruthy();
+    await vi.waitFor(() => expect(install.getAttribute('aria-disabled')).toBeNull());
+    await user().click(install);
+    expect(vi.mocked(startInstall).mock.calls.map(([id]) => id)).toEqual(['d2']);
+    started.reject(new Error('stop'));
+    await settle();
+  });
+
+  it('a game added by hand after the dialog moved on is named in its toast', async () => {
+    vi.mocked(inspectDownload).mockImplementation(async (id: string) => ({
+      ...planFor(id, id === 'd1' ? 'Hades' : 'Celeste'),
+      plan: { type: 'unknown', sourcePath: 'D:/dl/x', destination: '', installerPath: '', candidates: null } as unknown as PlanInfo['plan'],
+    }));
+    vi.mocked(selectExecutable).mockResolvedValueOnce('D:/dl/Hades/Hades.exe');
+    const adding = held<LibraryGame>();
+    vi.mocked(addGame).mockReturnValueOnce(adding.promise);
+    const { dialog, view } = openDialog('d1');
+    await user().click(await within(dialog).findByRole('button', { name: msg('modals.installPickExecutableButton') }));
+    await vi.waitFor(() => expect(vi.mocked(addGame).mock.calls).toEqual([['D:/dl/Hades/Hades.exe', 'Hades']]));
+    view.unmount();
+
+    adding.resolve({ id: 'g1', title: 'Hades' } as LibraryGame);
+    await settle();
+
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.installGameAddedFor', { title: 'Hades' }), 'success']]);
+  });
+
+  it('downloaded files deleted after the dialog moved on are named in its toast', async () => {
+    settings.set({ installCleanupPolicy: 'ask' } as Settings);
+    onTestFinished(() => settings.set(null));
+    installations.set([installation({ status: 'completed', type: 'archive_zip', candidates: null })]);
+    const deleting = held<void>();
+    vi.mocked(deleteDownloadData).mockReturnValueOnce(deleting.promise);
+    const { dialog, view } = openDialog();
+    await user().click(within(dialog).getByRole('button', { name: msg('modals.installDeleteDownloadedFiles') }));
+    expect(vi.mocked(deleteDownloadData).mock.calls).toEqual([['d1']]);
+    view.unmount();
+
+    deleting.resolve();
+    await settle();
+
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('modals.installDownloadDataDeletedFor', { title: 'Hades' }), 'success']]);
   });
 });

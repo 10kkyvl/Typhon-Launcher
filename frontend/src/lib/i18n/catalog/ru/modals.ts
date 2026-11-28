@@ -372,8 +372,6 @@ export const modals = {
   'modals.installFolderDialogFailed': 'Не удалось открыть диалог выбора папки',
   'modals.installChooseInstaller': 'Выберите установщик',
   'modals.installChooseGameExecutable': 'Выберите исполняемый файл игры',
-  'modals.installGameAdded': 'Игра добавлена в библиотеку',
-  'modals.installDownloadDataDeleted': 'Загруженные файлы удалены',
   'modals.installGameAddedFor': '«{title}» добавлена в библиотеку',
   'modals.installDownloadDataDeletedFor': 'Загруженные файлы «{title}» удалены',
   'modals.installWarningDownloadLeft': 'Игра установлена, но её загрузку не удалось убрать из списка загрузок.',
