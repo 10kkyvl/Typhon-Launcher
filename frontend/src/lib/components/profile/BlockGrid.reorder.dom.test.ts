@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../../i18n';
 import type { GridBlock } from '../../profile/layoutView';
@@ -122,6 +123,64 @@ describe('reordering the blocks with the keyboard', () => {
     await clicks.click(screen.getAllByRole('radio', { name: msg('profile.widthHalf') })[0]);
     await clicks.click(screen.getByRole('button', { name: msg('profile.removeBlock', { name: blockLabel('genres') }) }));
     expect([grid.onselect.mock.calls, grid.onwidth.mock.calls, grid.onremove.mock.calls]).toEqual([[['a']], [['a', 'half']], [['g']]]);
+  });
+});
+
+describe('what a move says, and where focus stays', () => {
+  const statuses = () => screen.queryAllByRole('status').map((status) => status.textContent?.trim() ?? '').filter(Boolean);
+
+  it('says once where a block moved with the keyboard went', async () => {
+    editor([text('a'), genres('g'), text('c')]);
+    const keys = user();
+    handle('a').focus();
+
+    await keys.keyboard('{ArrowDown}');
+    await vi.waitFor(() => expect(statuses()).toEqual([msg('profile.blockMoved', { name: text$(), position: 2, count: 3 })]));
+    await keys.keyboard('{ArrowDown}');
+    await vi.waitFor(() => expect(statuses()).toEqual([msg('profile.blockMoved', { name: text$(), position: 3, count: 3 })]));
+  });
+
+  it('says a move again when its words are the same as the last move\'s', async () => {
+    const grid = editor([text('a'), genres('g'), text('c')]);
+    const keys = user();
+    const region = screen.getByRole('status');
+    const heard: string[] = [];
+    const watch = new MutationObserver(() => heard.push(region.textContent ?? ''));
+    watch.observe(region, { childList: true, characterData: true, subtree: true });
+    const twice = msg('profile.blockMoved', { name: text$(), position: 2, count: 3 });
+
+    handle('a').focus();
+    await keys.keyboard('{ArrowDown}');
+    await vi.waitFor(() => expect(region.textContent).toBe(twice));
+    handle('c').focus();
+    await keys.keyboard('{ArrowUp}');
+    await vi.waitFor(() => expect(grid.order()).toEqual(['g', 'c', 'a']));
+    await vi.waitFor(() => expect(heard.filter((words) => words === twice)).toHaveLength(2));
+    watch.disconnect();
+    // Between the two, the region was emptied: a reader speaks a change of its text, not a text set again.
+    expect(heard.slice(heard.indexOf(twice) + 1, heard.lastIndexOf(twice))).toContain('');
+  });
+
+  it('keeps focus on a move button pressed with the keyboard, on the moved block, and says the move', async () => {
+    const grid = editor([text('a'), genres('g'), text('c')]);
+    const keys = user();
+    // The first of the two text blocks' buttons, before the move and after it.
+    const down = () => screen.getAllByRole('button', { name: msg('social.moveDown', { title: text$() }) })[0];
+    down().focus();
+
+    await keys.keyboard('{Enter}');
+    await vi.waitFor(() => expect(grid.order()).toEqual(['g', 'a', 'c']));
+    await vi.waitFor(() => expect(document.activeElement).toBe(down()));
+    expect(statuses()).toEqual([msg('profile.blockMoved', { name: text$(), position: 2, count: 3 })]);
+  });
+
+  it('says nothing for a press at an end, which moves nothing', async () => {
+    editor([text('a'), genres('g')]);
+    handle('a').focus();
+
+    await user().keyboard('{ArrowUp}');
+    await tick();
+    expect(statuses()).toEqual([]);
   });
 });
 

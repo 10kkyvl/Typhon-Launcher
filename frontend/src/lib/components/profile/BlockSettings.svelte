@@ -23,7 +23,8 @@
   import type { GameRef } from '../../services/profile';
   import GamePicker from './GamePicker.svelte';
   import { blockLabel } from './blockLabels';
-  import { gameRows } from './rowFocus';
+  import { blockPlace, blockRows, gameRows } from './rowFocus';
+  import { focusHandOff } from '../../utils/focusHandOff';
 
   let {
     block,
@@ -96,6 +97,15 @@
     void ids;
     untrack(gameRows.catchLeaving);
   });
+
+  // The settings close with their block: focus goes to the settings button of the block now in its
+  // place in the grid, else of the one above, else to the control after the grid.
+  function removeBlock() {
+    const place = blockPlace(block.id, 'settings');
+    const handOff = focusHandOff();
+    onremove();
+    void handOff(() => blockRows.leaveTarget(place));
+  }
 
   function changeSource(next: string) {
     if (next === 'manual') onconfig({ source: next, title: '', igdbIds: [] });
@@ -246,7 +256,7 @@
     </div>
   </div>
   <div class="foot">
-    <Button variant="ghost" {disabled} reason={held} onclick={onremove}>
+    <Button variant="ghost" {disabled} reason={held} onclick={removeBlock}>
       <Trash2 size="1.4rem" />{msg('profile.removeBlock', { name })}
     </Button>
   </div>

@@ -1,4 +1,5 @@
-import { rowFocus } from '../../utils/rowFocus';
+import { focusableIn } from '../../layers/focus';
+import { rowFocus, type RowPlace } from '../../utils/rowFocus';
 
 /**
  * The profile blocks' rules for focus when a row leaves while focus is in it, or moves under it (a
@@ -26,3 +27,29 @@ export const gameRows = rowFocus({
   controlIn,
   fallback: () => document.querySelector<HTMLElement>(`[${ADD_GAME_ATTR}] input`),
 });
+
+/** The attribute of each block's cell in the grid, with the block's id. */
+export const BLOCK_ATTR = 'data-block';
+/** The attribute of the grid itself. */
+export const GRID_ATTR = 'data-block-grid';
+
+/** The first control after the grid: the editor's "add block". */
+function afterGrid(): HTMLElement | null {
+  const grid = document.querySelector(`[${GRID_ATTR}]`);
+  if (!grid) return null;
+  return focusableIn(document.body).find((el) => !grid.contains(el) && (grid.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) ?? null;
+}
+
+/** With no block left, the control after the grid. */
+export const blockRows = rowFocus({
+  rowAttr: BLOCK_ATTR,
+  controlAttr: CONTROL_ATTR,
+  controlIn,
+  fallback: afterGrid,
+});
+
+/** Where the block `id` stands in the grid now, for a control outside it that removes the block. */
+export function blockPlace(id: string, control: string): RowPlace {
+  const order = Array.from(document.querySelectorAll(`[${BLOCK_ATTR}]`), (el) => el.getAttribute(BLOCK_ATTR) ?? '');
+  return { id, scope: null, order, control };
+}

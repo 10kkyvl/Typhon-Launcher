@@ -59,6 +59,9 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/SidebarStatus.svelte': { item: 'row' },
   'lib/components/SourceReleases.svelte': { row: 'row' },
   'lib/components/TitleBar.svelte': { wb: 'title bar' },
+  // The grid's handle is grabbed by the pointer and moves its block with the arrows: no base part
+  // moves a block. A kind of block in the editor's list adds that block, a press each, and stays in
+  // the Tab order held with its reason when it cannot be added: no radio choice, no menu of a trigger.
   'lib/components/profile/BlockGrid.svelte': { handle: 'drag handle' },
   'lib/components/profile/BlockPicker.svelte': { preset: 'list option' },
   'lib/components/profile/CollectionBlock.svelte': { tile: 'row' },

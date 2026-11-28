@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, type Snippet } from 'svelte';
+  import { tick, untrack, type Snippet } from 'svelte';
   import { ArrowDown, ArrowUp, GripVertical, Settings2, Trash2 } from '@lucide/svelte';
   import Tooltip from '../Tooltip.svelte';
   import Card from '../Card.svelte';
@@ -20,6 +20,7 @@
   import TextBlock from './TextBlock.svelte';
   import { blockLabel } from './blockLabels';
   import { pickTarget, type Box } from './reorder';
+  import { blockRows } from './rowFocus';
 
   let {
     blocks,
@@ -57,6 +58,8 @@
   let grid = $state<HTMLElement>();
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
+  // What the polite region says about the last move.
+  let said = $state('');
 
   function showable(block: GridBlock): boolean {
     const body = block.body;
@@ -86,10 +89,25 @@
     });
   }
 
-  async function commit(from: number, to: number, id: string) {
+  // A block removed or moved while focus is on one of its controls: focus stays on that control, or
+  // goes to the same control of the block now in its place, else of the one above, else to the
+  // control after the grid (the editor's "add block").
+  $effect.pre(() => {
+    void shown;
+    untrack(blockRows.catchLeaving);
+  });
+
+  // The handle is focused again after a drag and after its own keys: the moved cell is taken out of
+  // the page and put back. A move button keeps its own focus by the rule above.
+  async function commit(from: number, to: number, block: GridBlock, handle: boolean) {
+    const before = shown.findIndex((item) => item.id === block.id);
+    said = '';
     onmove?.(from, to);
     await tick();
-    grid?.querySelector<HTMLElement>(`[data-handle="${id}"]`)?.focus();
+    if (handle) grid?.querySelector<HTMLElement>(`[data-handle="${block.id}"]`)?.focus();
+    // Said once per move, and the same words again after a pause for the next move that has them.
+    const at = shown.findIndex((item) => item.id === block.id);
+    if (at >= 0 && at !== before) said = msg('profile.blockMoved', { name: blockLabel(block.type), position: at + 1, count: shown.length });
   }
 
   function grab(event: PointerEvent, block: GridBlock) {
@@ -110,7 +128,7 @@
     const to = dragOver;
     dragFrom = null;
     dragOver = null;
-    if (from !== null && to !== null && from !== to) void commit(from, to, block.id);
+    if (from !== null && to !== null && from !== to) void commit(from, to, block, true);
   }
 
   function release() {
@@ -118,10 +136,10 @@
     dragOver = null;
   }
 
-  function shift(block: GridBlock, delta: number) {
+  function shift(block: GridBlock, delta: number, handle: boolean) {
     const position = shown.findIndex((item) => item.id === block.id);
     const other = shown[position + delta];
-    if (other) void commit(block.index, other.index, block.id);
+    if (other) void commit(block.index, other.index, block, handle);
   }
 
   function key(event: KeyboardEvent, block: GridBlock) {
@@ -132,7 +150,7 @@
     const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : 0;
     if (delta === 0) return;
     event.preventDefault();
-    shift(block, delta);
+    shift(block, delta, true);
   }
 </script>
 
@@ -177,9 +195,10 @@
   {/if}
 {/snippet}
 
-<div class="grid" class:editing bind:this={grid}>
+<div class="grid" class:editing data-block-grid bind:this={grid}>
   {#each shown as block (block.id)}
     <div
+      data-block={block.id}
       class="cell w-{block.width}"
       class:dragging={dragFrom === block.index}
       class:over={dragFrom !== null && dragOver === block.index && dragFrom !== block.index}
@@ -194,6 +213,7 @@
                 class="handle"
                 type="button"
                 data-handle={block.id}
+                data-row-control="handle"
                 aria-label={msg('profile.dragBlock', { name })}
                 onpointerdown={(event) => grab(event, block)}
                 onpointermove={track}
@@ -215,10 +235,10 @@
             >
               {#snippet item(option)}{WIDTH_SHORT[option.id]}{/snippet}
             </SegmentedControl>
-            <IconButton size="sm" label={msg('social.moveUp', { title: name })} onclick={() => shift(block, -1)}>
+            <IconButton size="sm" label={msg('social.moveUp', { title: name })} data-row-control="up" onclick={() => shift(block, -1, false)}>
               <ArrowUp size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <IconButton size="sm" label={msg('social.moveDown', { title: name })} onclick={() => shift(block, 1)}>
+            <IconButton size="sm" label={msg('social.moveDown', { title: name })} data-row-control="down" onclick={() => shift(block, 1, false)}>
               <ArrowDown size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton
@@ -226,11 +246,12 @@
               label={msg('profile.blockSettings', { name })}
               lit={selectedId === block.id}
               aria-current={selectedId === block.id ? 'true' : undefined}
+              data-row-control="settings"
               onclick={() => onselect?.(block.id)}
             >
               <Settings2 size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <IconButton size="sm" label={msg('profile.removeBlock', { name })} onclick={() => onremove?.(block.id)}>
+            <IconButton size="sm" label={msg('profile.removeBlock', { name })} data-row-control="remove" onclick={() => onremove?.(block.id)}>
               <Trash2 size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </div>
@@ -247,6 +268,9 @@
     </div>
   {/each}
 </div>
+{#if editing}
+  <span class="sr-only" role="status">{said}</span>
+{/if}
 
 <style>
   .grid {
