@@ -5,7 +5,9 @@ import { locale, msg } from '../i18n';
 import { installErrorText } from '../install/installErrors';
 import { confirmExecutable, deleteDownloadData, inspectDownload, planSpace, startInstall, type Installation, type PlanInfo } from '../services/install';
 import { addGame, selectExecutable, type LibraryGame } from '../services/library';
+import type { Download } from '../services/downloads';
 import { selectFolder, type Settings } from '../services/settings';
+import { downloads } from '../stores/downloads';
 import { installations } from '../stores/install';
 import { settings } from '../stores/settings';
 import { toasts } from '../stores/toasts';
@@ -341,6 +343,36 @@ describe('InstallModal: done', () => {
     expect(within(dialog).queryByRole('button', { name: msg('modals.installDeleteDownloadedFiles') })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: msg('modals.installKeep') })).toBeNull();
     expect(deleteDownloadData).not.toHaveBeenCalled();
+  });
+
+  // The dialog stays mounted between openings: what the stores say later is what it shows.
+  it('asks about the downloaded files once the setting to ask arrives after the dialog was made', async () => {
+    onTestFinished(() => settings.set(null));
+    installations.set([installation({ status: 'completed', type: 'archive_zip', candidates: null })]);
+    const { dialog } = openDialog();
+    expect(within(dialog).getByRole('button', { name: msg('common.done') })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: msg('modals.installDeleteDownloadedFiles') })).toBeNull();
+
+    settings.set({ installCleanupPolicy: 'ask' } as Settings);
+
+    expect(await within(dialog).findByRole('button', { name: msg('modals.installDeleteDownloadedFiles') })).toBeTruthy();
+  });
+
+  it('warns that deleting stops seeding once the download starts seeding after the dialog was made', async () => {
+    settings.set({ installCleanupPolicy: 'ask' } as Settings);
+    onTestFinished(() => {
+      settings.set(null);
+      downloads.set([]);
+    });
+    downloads.set([{ id: 'd1', status: 'completed', seeding: false } as Download]);
+    installations.set([installation({ status: 'completed', type: 'archive_zip', candidates: null })]);
+    const { dialog } = openDialog();
+    expect(within(dialog).getByRole('button', { name: msg('modals.installDeleteDownloadedFiles') })).toBeTruthy();
+    expect(within(dialog).queryByText(msg('modals.installSeedingDeleteWarning'))).toBeNull();
+
+    downloads.set([{ id: 'd1', status: 'completed', seeding: true } as Download]);
+
+    expect(await within(dialog).findByText(msg('modals.installSeedingDeleteWarning'))).toBeTruthy();
   });
 });
 
