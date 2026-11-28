@@ -183,6 +183,7 @@ describe('tests that mount a game or library dialog', () => {
         './GamePropertiesModal.dom.test.ts',
         './GamePropertiesModal.controls.dom.test.ts',
         './GamePropertiesModal.kit.dom.test.ts',
+        './GamePropertiesModal.writes.dom.test.ts',
         './RedistModal.dom.test.ts',
         './RedistModal.install.dom.test.ts',
         './EmulatorPrompts.dom.test.ts',

@@ -17,6 +17,7 @@
     visible,
     on,
     busy,
+    heldBy,
     running,
     locked,
     suggested,
@@ -42,6 +43,8 @@
     visible: boolean;
     on: boolean;
     busy: boolean;
+    /** Why another write of the dialog holds the section ('' when none does). */
+    heldBy: string;
     running: boolean;
     locked: boolean;
     suggested: string;
@@ -63,6 +66,7 @@
     onkeep: () => void;
   } = $props();
   const uid = $props.id();
+  const held = $derived(busy ? msg('modals.actionRunning') : heldBy);
 </script>
 
 {#if loading && !compat}
@@ -75,17 +79,17 @@
     <div class="row spread">
       <div class="title">
         <h4>{msg('modals.compatTitle')}</h4>
-        {#if busy}
-          <p class="hint" id="{uid}-held">{msg('modals.actionRunning')}</p>
+        {#if held}
+          <p class="hint" id="{uid}-held">{held}</p>
         {/if}
       </div>
-      <!-- Held, not disabled, while its own switch runs: the pressed switch keeps the focus. -->
+      <!-- Held, not disabled, while a write runs: the pressed switch keeps the focus. -->
       <Toggle
         checked={on}
         label={msg('modals.compatToggle')}
         disabled={!busy && (running || (locked && !compat.active))}
-        aria-disabled={busy ? 'true' : undefined}
-        describedby={busy ? `${uid}-held` : undefined}
+        aria-disabled={held ? 'true' : undefined}
+        describedby={held ? `${uid}-held` : undefined}
         onchange={onswitch}
       />
     </div>
@@ -118,7 +122,8 @@
             labelledby="{uid}-wrapper-label"
             value={wrapper}
             width="26rem"
-            disabled={busy || running}
+            describedby={heldBy ? `${uid}-held` : undefined}
+            disabled={busy || running || heldBy !== ''}
             options={WRAPPERS.map((id) => ({ id, label: wrapperName(id) }))}
             onchange={onwrapper}
           />
@@ -130,7 +135,8 @@
               labelledby="{uid}-preset-label"
               bind:value={preset}
               width="26rem"
-              disabled={busy || running}
+              describedby={heldBy ? `${uid}-held` : undefined}
+              disabled={busy || running || heldBy !== ''}
               options={presetsFor(wrapper).map((id) => ({ id, label: presetLabel(id) }))}
             />
           </div>
@@ -156,11 +162,11 @@
         {/if}
         {#snippet action()}
           <div class="row">
-            <Button size="sm" disabled={(busy && compatAction !== 'revert') || running} busy={compatAction === 'revert'} onclick={onrevert}>
+            <Button size="sm" disabled={(busy && compatAction !== 'revert') || running || heldBy !== ''} reason={heldBy} busy={compatAction === 'revert'} onclick={onrevert}>
               {msg('modals.compatRevert')}
             </Button>
             {#if actions.keepChanged}
-              <Button size="sm" disabled={(busy && compatAction !== 'keep') || running} busy={compatAction === 'keep'} onclick={onkeep}>
+              <Button size="sm" disabled={(busy && compatAction !== 'keep') || running || heldBy !== ''} reason={heldBy} busy={compatAction === 'keep'} onclick={onkeep}>
                 {msg('modals.compatKeepChanged')}
               </Button>
             {/if}
@@ -171,7 +177,7 @@
       <Notice tone="warning" compact>
         {msg('modals.compatKeepChangedHint')}
         {#snippet action()}
-          <Button size="sm" disabled={(busy && compatAction !== 'keep') || running} busy={compatAction === 'keep'} onclick={onkeep}>
+          <Button size="sm" disabled={(busy && compatAction !== 'keep') || running || heldBy !== ''} reason={heldBy} busy={compatAction === 'keep'} onclick={onkeep}>
             {msg('modals.compatKeepChanged')}
           </Button>
         {/snippet}

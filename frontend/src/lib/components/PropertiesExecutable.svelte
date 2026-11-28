@@ -17,6 +17,7 @@
     candidatesLoading,
     candidatesError,
     exeBusy,
+    heldBy,
     exeError,
     onpick,
     onbrowse,
@@ -27,6 +28,8 @@
     candidatesLoading: boolean;
     candidatesError: string;
     exeBusy: '' | 'pick' | 'browse';
+    /** Why another write of the dialog holds the section ('' when none does). */
+    heldBy: string;
     exeError: string;
     onpick: (path: string) => void;
     onbrowse: () => void;
@@ -36,7 +39,8 @@
   // A file is set as it is chosen, so the arrows only walk the list. The path wraps where it must:
   // nothing is cut.
   const options = $derived(candidates.map((candidate) => ({ id: candidate.path, title: candidate.path })));
-  const held = $derived(exeBusy !== '' ? msg('modals.actionRunning') : '');
+  const held = $derived(exeBusy !== '' ? msg('modals.actionRunning') : heldBy);
+  const browseHeld = $derived(exeBusy === 'pick' ? held : exeBusy === '' ? heldBy : '');
 </script>
 
 <section class="section">
@@ -60,7 +64,7 @@
       {options}
       value={game.executable}
       activation="manual"
-      disabled={exeBusy !== ''}
+      disabled={held !== ''}
       onchange={onpick}
     />
   {/if}
@@ -71,7 +75,7 @@
     <Notice tone="danger" compact>{exeError}</Notice>
   {/if}
   <div>
-    <Button size="sm" disabled={exeBusy === 'pick'} reason={exeBusy === 'pick' ? held : ''} busy={exeBusy === 'browse'} onclick={onbrowse}>
+    <Button size="sm" disabled={browseHeld !== ''} reason={browseHeld} busy={exeBusy === 'browse'} onclick={onbrowse}>
       <FolderOpen size="1.5rem" strokeWidth={1.8} />
       {msg('modals.propertiesExeBrowse')}
     </Button>

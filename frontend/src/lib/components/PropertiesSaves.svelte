@@ -9,17 +9,22 @@
   let {
     game,
     savesBusy,
+    heldBy,
     savesError,
     onbrowse,
     onreset,
   }: {
     game: LibraryGame;
     savesBusy: '' | 'browse' | 'reset';
+    /** Why another write of the dialog holds the section ('' when none does). */
+    heldBy: string;
     savesError: string;
     onbrowse: () => void;
     onreset: () => void;
   } = $props();
   const held = $derived(msg('modals.actionRunning'));
+  const browseHeld = $derived(savesBusy === 'reset' ? held : savesBusy === '' ? heldBy : '');
+  const resetHeld = $derived(savesBusy === 'browse' ? held : savesBusy === '' ? heldBy : '');
 </script>
 
 <section class="section">
@@ -29,12 +34,12 @@
     <Notice tone="danger" compact>{savesError}</Notice>
   {/if}
   <div class="row">
-    <Button size="sm" data-saves-browse disabled={savesBusy === 'reset'} reason={savesBusy === 'reset' ? held : ''} busy={savesBusy === 'browse'} onclick={onbrowse}>
+    <Button size="sm" data-saves-browse disabled={browseHeld !== ''} reason={browseHeld} busy={savesBusy === 'browse'} onclick={onbrowse}>
       <FolderOpen size="1.5rem" strokeWidth={1.8} />
       {msg('modals.propertiesSavesBrowse')}
     </Button>
     {#if game.savesDir}
-      <Button size="sm" variant="ghost" disabled={savesBusy === 'browse'} reason={savesBusy === 'browse' ? held : ''} busy={savesBusy === 'reset'} onclick={onreset}>
+      <Button size="sm" variant="ghost" disabled={resetHeld !== ''} reason={resetHeld} busy={savesBusy === 'reset'} onclick={onreset}>
         {msg('modals.propertiesSavesReset')}
       </Button>
     {/if}

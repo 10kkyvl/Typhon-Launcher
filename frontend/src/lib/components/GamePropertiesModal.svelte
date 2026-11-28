@@ -106,6 +106,16 @@
 
   let savesBusy = $state<'' | 'browse' | 'reset'>('');
   let savesError = $state('');
+
+  // The wrapper switch, the executable and the saves folder change what the game starts or its files.
+  // Go's Enable takes the executable's folder at its start and places the files there, so these run
+  // one at a time: while one runs the others are held, saying which one they wait for.
+  const fileWrite = $derived(compatBusy ? 'compat' : exeBusy ? 'exe' : savesBusy ? 'saves' : '');
+  const heldReason = { compat: 'modals.propertiesHeldCompat', exe: 'modals.propertiesHeldExe', saves: 'modals.propertiesHeldSaves' } as const;
+  const heldBy = (own: 'compat' | 'exe' | 'saves') => (fileWrite && fileWrite !== own ? msg(heldReason[fileWrite]) : '');
+  const exeHeld = $derived(heldBy('exe'));
+  const compatHeld = $derived(heldBy('compat'));
+  const savesHeld = $derived(heldBy('saves'));
   // The game whose saves folder the open question would reset: the one it was asked for.
   let resetAsk = $state<{ id: string; title: string; path: string } | null>(null);
 
@@ -251,7 +261,7 @@
   }
 
   async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '') {
-    if (!game || compatBusy) return;
+    if (!game || compatBusy || compatHeld) return;
     const id = game.id;
     const { heard, title } = pressedNow();
     compatBusyFor = [...compatBusyFor, id];
@@ -300,7 +310,7 @@
   }
 
   async function pickCandidate(path: string) {
-    if (!game || exeBusy) return;
+    if (!game || exeBusy || exeHeld) return;
     const id = game.id;
     const { heard, title } = pressedNow();
     exeBusy = 'pick';
@@ -317,7 +327,7 @@
   }
 
   async function browseExecutable() {
-    if (!game || exeBusy) return;
+    if (!game || exeBusy || exeHeld) return;
     const current = game;
     const { heard, title } = pressedNow();
     exeBusy = 'browse';
@@ -433,7 +443,7 @@
   }
 
   async function browseSaves() {
-    if (!game || savesBusy) return;
+    if (!game || savesBusy || savesHeld) return;
     const { heard, title } = pressedNow();
     savesBusy = 'browse';
     savesError = '';
@@ -453,7 +463,7 @@
   }
 
   function askResetSaves() {
-    if (!game || savesBusy || !game.savesDir) return;
+    if (!game || savesBusy || savesHeld || !game.savesDir) return;
     savesError = '';
     resetAsk = { id: game.id, title: game.title, path: game.savesDir };
   }
@@ -500,6 +510,7 @@
         {candidatesLoading}
         {candidatesError}
         {exeBusy}
+        heldBy={exeHeld}
         {exeError}
         onpick={pickCandidate}
         onbrowse={browseExecutable}
@@ -529,6 +540,7 @@
           visible={compatVisible}
           on={compatOn}
           busy={compatBusy}
+          heldBy={compatHeld}
           {running}
           locked={compatLocked}
           suggested={compatSuggested}
@@ -544,7 +556,7 @@
           keepOffer={compatKeepOffer}
           bind:section={compatSection}
           onswitch={(on) => {
-            if (compatBusy) return;
+            if (compatBusy || compatHeld) return;
             compatOn = on;
             void changeCompat(on);
           }}
@@ -571,7 +583,7 @@
       />
 
       {#if !emulated && (game.installDir || game.savesDir)}
-        <PropertiesSaves {game} {savesBusy} {savesError} onbrowse={browseSaves} onreset={askResetSaves} />
+        <PropertiesSaves {game} {savesBusy} heldBy={savesHeld} {savesError} onbrowse={browseSaves} onreset={askResetSaves} />
       {/if}
     </div>
   {/if}
