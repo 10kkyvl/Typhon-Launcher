@@ -189,7 +189,7 @@ describe('AddImageModal: gone with its screen while it adds', () => {
     );
   });
 
-  it('a late refusal that is a whole sentence is said alone, as the dialog says it', async () => {
+  it('a late refusal that is a whole sentence is said after the game it concerns', async () => {
     const adding = held<LibraryGame>();
     vi.mocked(addEmulatedGame).mockReturnValueOnce(adding.promise);
     const { view, keys, add } = await filled();
@@ -198,7 +198,7 @@ describe('AddImageModal: gone with its screen while it adds', () => {
 
     adding.reject(new Error('typhon:emulators.pkg_invalid: bad'));
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emulators.pkg_invalid')]]));
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', 'Не удалось добавить «Okami». Файл .pkg повреждён или это не пакет PS3']]));
   });
 });
 

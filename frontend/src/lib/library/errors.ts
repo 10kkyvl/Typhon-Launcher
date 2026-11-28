@@ -45,3 +45,14 @@ export function actionErrorText(err: unknown, action: string): string {
   if (!isClauseCode(code)) return reason;
   return composed(action, reason);
 }
+
+/**
+ * A failure that arrives after its dialog is gone, in words that name its target: the action (one
+ * that names the emulator or the game) is always said, followed by any code's reason in the form
+ * `actionErrorText` gives a clause, a whole sentence included; a code with no words falls to the
+ * action.
+ */
+export function lateErrorText(err: unknown, action: string): string {
+  const code = errorCode(err);
+  return hasMessage(code) ? composed(action, msg(code)) : action;
+}

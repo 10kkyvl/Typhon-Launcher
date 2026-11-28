@@ -17,7 +17,7 @@
     narrowByLayout,
     suggestedTitle,
   } from '../library/emulation';
-  import { actionErrorText } from '../library/errors';
+  import { actionErrorText, lateErrorText } from '../library/errors';
   import { imageConsoles, imageTitle, listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
   import { addEmulatedGame, findEmulatedCover, type LibraryGame } from '../services/library';
   import { toast } from '../stores/toasts';
@@ -165,7 +165,7 @@
     try {
       await findEmulatedCover(game.id);
     } catch (err) {
-      toast(actionErrorText(err, msg('emul.coverFailedFor', { title: game.title })));
+      toast(lateErrorText(err, msg('emul.coverFailedFor', { title: game.title })));
     }
   }
 
@@ -185,7 +185,7 @@
       game = await addEmulatedGame(image.trim(), platform, name);
     } catch (err) {
       if (!alive) {
-        toast(actionErrorText(err, msg('emul.addFailedFor', { title: name })), 'danger');
+        toast(lateErrorText(err, msg('emul.addFailedFor', { title: name })), 'danger');
         return;
       }
       const code = errorCode(err);

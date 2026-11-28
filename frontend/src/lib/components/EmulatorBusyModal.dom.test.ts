@@ -131,6 +131,18 @@ describe('EmulatorBusyModal: the question', () => {
     );
     expect(toastTexts()).toEqual([]);
   });
+
+  it('says a refusal in the question that is a whole sentence alone', async () => {
+    vi.mocked(closeEmulator).mockRejectedValueOnce(new Error('typhon:emulators.already_running: open'));
+    render(EmulatorBusyModal, { target: app });
+    const { dialog } = await ask();
+    const keys = user();
+
+    await keys.click(within(dialog).getByRole('button', { name: msg('emul.busyConfirm', { emulator: 'PCSX2' }) }));
+
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emulators.already_running'));
+    expect(toastTexts()).toEqual([]);
+  });
 });
 
 describe('EmulatorBusyModal: replaced by another launch while the emulator closes', () => {
@@ -159,6 +171,14 @@ describe('EmulatorBusyModal: replaced by another launch while the emulator close
     );
     expect(within(second.dialog).queryByRole('alert')).toBeNull();
     expect(confirm.getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('a late refusal that is a whole sentence is said after the emulator it concerns', async () => {
+    const { closing } = await replaced();
+
+    closing.reject(new Error('typhon:emulators.already_running: open'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', 'Не удалось закрыть PCSX2. Эмулятор уже открыт: закройте его, чтобы запустить игру']]));
   });
 
   it('a late success is said once in a toast naming the emulator; the first launch was already answered no', async () => {

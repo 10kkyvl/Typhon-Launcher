@@ -5,7 +5,7 @@
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
   import { hasMessage, msg } from '../i18n';
-  import { actionErrorText } from '../library/errors';
+  import { actionErrorText, lateErrorText } from '../library/errors';
   import {
     listPlatforms,
     openOfficialPage,
@@ -77,7 +77,7 @@
       await openOfficialPage(current.platform);
     } catch (err) {
       if (alive && at === opening) failure = actionErrorText(err, msg('emul.openSiteFailed'));
-      else toast(actionErrorText(err, msg('emul.openSiteFailedFor', { emulator })), 'danger');
+      else toast(lateErrorText(err, msg('emul.openSiteFailedFor', { emulator })), 'danger');
     }
     if (alive && at === opening) busy = '';
   }
@@ -99,7 +99,7 @@
       }
     } catch (err) {
       if (!heard()) {
-        toast(actionErrorText(err, msg('emul.saveFailedFor', { emulator })), 'danger');
+        toast(lateErrorText(err, msg('emul.saveFailedFor', { emulator })), 'danger');
         return;
       }
       failure = actionErrorText(err, msg('emul.saveFailed'));

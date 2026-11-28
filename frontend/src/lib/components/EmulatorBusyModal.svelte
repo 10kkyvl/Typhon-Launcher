@@ -4,7 +4,7 @@
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
   import { msg } from '../i18n';
-  import { actionErrorText } from '../library/errors';
+  import { actionErrorText, lateErrorText } from '../library/errors';
   import { closeEmulator, listPlatforms, type PlatformStatus } from '../services/emulators';
   import { emulatorBusyPrompt } from '../stores/emulatorBusyPrompt';
   import { toast } from '../stores/toasts';
@@ -56,12 +56,11 @@
     try {
       await closeEmulator(current.platform);
     } catch (err) {
-      const text = actionErrorText(err, msg('emul.busyCloseFailed', { emulator: name }));
       if (!heard()) {
-        toast(text, 'danger');
+        toast(lateErrorText(err, msg('emul.busyCloseFailed', { emulator: name })), 'danger');
         return;
       }
-      failure = text;
+      failure = actionErrorText(err, msg('emul.busyCloseFailed', { emulator: name }));
       closing = false;
       return;
     }

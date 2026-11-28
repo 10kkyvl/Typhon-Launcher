@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg, type MessageKey } from '../i18n';
 import { errEmulators } from '../i18n/catalog/ru/errEmulators';
 import { errLibrary } from '../i18n/catalog/ru/errLibrary';
-import { actionErrorText, isClauseCode } from './errors';
+import { actionErrorText, isClauseCode, lateErrorText } from './errors';
 
 // Clause words the catalog does not hold yet: a lower-case reason with a sentence ending inside, and
 // one that only ends with a period.
@@ -88,5 +88,38 @@ describe('actionErrorText', () => {
   it('falls to the action for a code with no words and for an error with no code', () => {
     expect(actionErrorText(failure('emulators.not_found'), msg('emul.saveFailed'))).toBe(msg('emul.saveFailed'));
     expect(actionErrorText(new Error('disk'), msg('emul.saveFailed'))).toBe(msg('emul.saveFailed'));
+  });
+});
+
+describe('lateErrorText', () => {
+  const failure = (code: string) => new Error(`typhon:${code}: detail`);
+
+  it('says a sentence code after the action, which names the target', () => {
+    locale.set('en');
+    expect(lateErrorText(failure('emulators.bios_dir_unknown'), msg('emul.biosOpenFailedFor', { emulator: 'PCSX2' }))).toBe(
+      'Could not open the BIOS folder of PCSX2. The BIOS folder of this emulator could not be determined',
+    );
+    locale.set('ru');
+    expect(lateErrorText(failure('emulators.already_running'), msg('emul.saveFailedFor', { emulator: 'PCSX2' }))).toBe(
+      'Не удалось указать эмулятор PCSX2. Эмулятор уже открыт: закройте его, чтобы запустить игру',
+    );
+  });
+
+  it("says another domain's sentence after the action too", () => {
+    expect(lateErrorText(failure('wrappers.running'), msg('emul.addFailedFor', { title: 'Okami' }))).toBe(
+      msg('common.failedReasonSentence', { action: msg('emul.addFailedFor', { title: 'Okami' }), reason: msg('wrappers.running') }),
+    );
+  });
+
+  it('says a clause code as actionErrorText does', () => {
+    const action = msg('emul.saveFailedFor', { emulator: 'PCSX2' });
+    expect(lateErrorText(failure('emulators.not_exe'), action)).toBe('Не удалось указать эмулятор PCSX2: нужен исполняемый файл эмулятора (.exe)');
+    expect(lateErrorText(failure('emulators.shape_inner_period'), action)).toBe('Не удалось указать эмулятор PCSX2. Путь не задан. Выберите файл ещё раз');
+  });
+
+  it('says the action alone for a reason that says the same, a code with no words and an error with no code', () => {
+    expect(lateErrorText(failure('emulators.save_failed'), msg('emul.saveFailed'))).toBe(msg('emul.saveFailed'));
+    expect(lateErrorText(failure('emulators.not_found'), msg('emul.saveFailedFor', { emulator: 'PCSX2' }))).toBe(msg('emul.saveFailedFor', { emulator: 'PCSX2' }));
+    expect(lateErrorText(new Error('disk'), msg('emul.saveFailedFor', { emulator: 'PCSX2' }))).toBe(msg('emul.saveFailedFor', { emulator: 'PCSX2' }));
   });
 });

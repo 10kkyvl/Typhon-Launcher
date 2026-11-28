@@ -2,24 +2,27 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { locale, msg, type MessageKey } from '../i18n';
 import { errEmulators } from '../i18n/catalog/ru/errEmulators';
 import { errLibrary } from '../i18n/catalog/ru/errLibrary';
-import { actionErrorText, isClauseCode } from './errors';
+import { actionErrorText, isClauseCode, lateErrorText } from './errors';
 
 // Every caller that composes an action and a reason, and the actions it passes, read from its source, so
-// a new action or a new caller is met by the table below without being listed by hand.
+// a new action or a new caller is met by the tables below without being listed by hand.
 const sources = import.meta.glob<string>(['../../**/*.svelte', '../../**/*.ts', '!../../**/*.test.ts', '!../../**/node_modules/**'], {
   query: '?raw',
   import: 'default',
   eager: true,
 });
-const COMPOSES = /\b(?:actionErrorText|propertiesErrorText)\b/;
+const COMPOSES = /\b(?:actionErrorText|lateErrorText|propertiesErrorText)\b/;
 const DEFINED = ['./errors.ts', '../game/propertiesErrors.ts'];
 const callers = Object.entries(sources).filter(([path, source]) => COMPOSES.test(source) && !DEFINED.includes(path));
 // `errorText` is the properties dialog's name for propertiesErrorText.
-const CALL = /\b(?:actionErrorText|errorText)\(\s*[\w.]+\s*,\s*msg\(([^)]*)\)/g;
-const actions = [...new Set(callers.flatMap(([, source]) => [...source.matchAll(CALL)].flatMap((call) => [...call[1].matchAll(/'([\w.]+)'/g)].map((key) => key[1]))))].sort();
+const keysPassedTo = (call: RegExp) =>
+  [...new Set(callers.flatMap(([, source]) => [...source.matchAll(call)].flatMap((found) => [...found[1].matchAll(/'([\w.]+)'/g)].map((key) => key[1]))))].sort();
+const actions = keysPassedTo(/\b(?:actionErrorText|errorText)\(\s*[\w.]+\s*,\s*msg\(([^)]*)\)/g);
+const lateActions = keysPassedTo(/\blateErrorText\(\s*[\w.]+\s*,\s*msg\(([^)]*)\)/g);
 
 const words: Record<string, string> = { ...errLibrary, ...errEmulators };
 const clauses = Object.keys(words).filter(isClauseCode);
+const withWords = Object.keys(words).filter((code) => /^(library|emulators)\./.test(code));
 const failure = (code: string) => new Error(`typhon:${code}: detail`);
 const normal = (text: string) => text.trim().replace(/\.$/, '').toLocaleLowerCase();
 const colons = (text: string) => (text.match(/:/g) ?? []).length;
@@ -47,16 +50,21 @@ describe('actionErrorText over every clause code and every action its callers pa
         'emul.saveFailed',
         'emul.busyCloseFailed',
         'emul.saveFailedFor',
-        'emul.openSiteFailedFor',
-        'emul.biosOpenFailedFor',
-        'emul.addFailedFor',
-        'emul.coverFailedFor',
+        'emul.biosOpenFailed',
+        'emul.addFailed',
         'modals.compatEnableFailed',
         'modals.compatDisableFailed',
         'modals.propertiesExeSaveFailed',
       ]),
     );
     expect(clauses).toEqual(expect.arrayContaining(['emulators.save_failed', 'emulators.windows_program', 'library.no_executable']));
+  });
+
+  // A late answer arrives after its dialog is gone: each of the four dialogs says it naming its target.
+  it('reads the late toasts of the four emulator dialogs, each with an action that names its target', () => {
+    expect(lateActions).toEqual(
+      ['emul.addFailedFor', 'emul.biosOpenFailedFor', 'emul.busyCloseFailed', 'emul.coverFailedFor', 'emul.openSiteFailedFor', 'emul.saveFailedFor'].sort(),
+    );
   });
 
   for (const lang of ['ru', 'en'] as const) {
@@ -75,6 +83,29 @@ describe('actionErrorText over every clause code and every action its callers pa
           if (capitalAfterColon(text)) wrong.push(`capital after a colon: ${text}`);
           if (text.includes('..')) wrong.push(`periods: ${text}`);
           if (said(action) !== 1) wrong.push(`action not said once: ${text}`);
+          if (!normal(text).includes(normal(reason))) wrong.push(`reason lost: ${text}`);
+        }
+      }
+      expect(wrong).toEqual([]);
+    });
+  }
+
+  for (const lang of ['ru', 'en'] as const) {
+    it(`${lang}: a late failure opens with its action and says every reason, a sentence's too, after it`, () => {
+      locale.set(lang);
+      const wrong: string[] = [];
+      for (const key of lateActions) {
+        const action = msg(key as MessageKey, { emulator: 'RPCS3', title: 'Okami' });
+        for (const code of withWords) {
+          const reason = msg(code as MessageKey);
+          const text = lateErrorText(failure(code), action);
+          const parts = text.split(/[.:]\s+/).map(normal);
+          if (!text.startsWith(action.replace(/\.$/, ''))) wrong.push(`action not first: ${text}`);
+          if (parts.filter((part) => part === normal(action)).length !== 1) wrong.push(`action not said once: ${text}`);
+          if (new Set(parts).size !== parts.length) wrong.push(`repeats: ${text}`);
+          if (colons(text) > 1) wrong.push(`colons: ${text}`);
+          if (capitalAfterColon(text)) wrong.push(`capital after a colon: ${text}`);
+          if (text.includes('..')) wrong.push(`periods: ${text}`);
           if (!normal(text).includes(normal(reason))) wrong.push(`reason lost: ${text}`);
         }
       }

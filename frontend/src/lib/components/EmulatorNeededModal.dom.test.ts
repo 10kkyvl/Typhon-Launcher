@@ -223,12 +223,14 @@ describe('EmulatorNeededModal: replaced by another launch while the file is save
     );
   });
 
-  it('a late refusal that is a whole sentence is said alone, as the prompt says it', async () => {
+  it('a late refusal that is a whole sentence is said after the emulator it concerns', async () => {
     const { saving } = await replaced();
 
     saving.reject(new Error('typhon:emulators.already_running: open'));
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emulators.already_running')]]));
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([['danger', 'Не удалось указать эмулятор PCSX2. Эмулятор уже открыт: закройте его, чтобы запустить игру']]),
+    );
   });
 
   it('a late success is said once in a toast naming the emulator', async () => {

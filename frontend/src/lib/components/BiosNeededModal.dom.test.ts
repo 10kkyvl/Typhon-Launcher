@@ -164,11 +164,13 @@ describe('BiosNeededModal: replaced by another launch while the folder opens', (
     expect(open.getAttribute('aria-busy')).toBeNull();
   });
 
-  it('a late refusal that is a whole sentence is said alone, as the prompt says it', async () => {
+  it('a late refusal that is a whole sentence is said after the emulator it concerns', async () => {
     const { opening } = await replaced();
 
     opening.reject(new Error('typhon:emulators.bios_dir_unknown: no'));
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emulators.bios_dir_unknown')]]));
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([['danger', 'Не удалось открыть папку BIOS для PCSX2. Не удалось определить папку BIOS этого эмулятора']]),
+    );
   });
 });
