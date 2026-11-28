@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { saveSettingsPatch } from '../services/settings';
-  import { settings } from '../stores/settings';
-  import { loadFriends } from '../stores/social';
+  import { loadFriends, saveSocialConsent } from '../stores/social';
   import { toast } from '../stores/toasts';
   import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
@@ -58,10 +56,7 @@
     saving = true;
     failure = '';
     try {
-      const saved = await saveSettingsPatch({ accountSync: true });
-      if (!saved.accountSync) throw new Error('account sync not kept');
-      // Only the consent's own key: other saves may be on their way through the settings queue.
-      settings.update((current) => (current ? { ...current, accountSync: true } : current));
+      await saveSocialConsent();
     } catch (err) {
       if (heard()) {
         failure = failureText(err);

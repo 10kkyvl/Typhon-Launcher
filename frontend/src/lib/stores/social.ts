@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { AccountError } from '../services/account';
 import { accountErrorText } from '../services/accountMessages';
 import { inWails } from '../services/backend';
+import { saveSettingsPatch } from '../services/settings';
 import {
   emptyFriendsPage,
   friends as fetchFriends,
@@ -47,6 +48,18 @@ export const needsSocialConsent = derived(
   [settings, authState],
   ([$settings, $authState]) => $authState === 'authenticated' && !!$settings && !$settings.accountSync,
 );
+
+/**
+ * Saves the consent to sync the library with the account. The store holds it only once Go has saved
+ * it, never optimistically: Go refuses every social call until then. Rejects with Go's error, or when
+ * Go's answer does not hold the consent.
+ */
+export async function saveSocialConsent(): Promise<void> {
+  const saved = await saveSettingsPatch({ accountSync: true });
+  if (!saved.accountSync) throw new Error('account sync not kept');
+  // Only the consent's own key: other saves may be on their way through the settings queue.
+  settings.update((current) => (current ? { ...current, accountSync: true } : current));
+}
 
 function report(err: unknown, fallback: string) {
   if (err instanceof AccountError && err.code === 'unauthenticated') return;

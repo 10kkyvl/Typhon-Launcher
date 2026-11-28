@@ -403,6 +403,64 @@ describe('the first read of the friends', () => {
   });
 });
 
+describe('the sync consent saved (saveSocialConsent)', () => {
+  // The mocked settings store outlives vi.resetModules: the tests after these read what it held.
+  let restore = () => {};
+  afterEach(() => {
+    restore();
+    restore = () => {};
+  });
+
+  async function stores(before: Record<string, unknown>) {
+    vi.resetModules();
+    const { saveSocialConsent } = await import('./social');
+    const { settings } = await import('./settings');
+    const service = await import('../services/settings');
+    vi.mocked(service.saveSettingsPatch).mockReset();
+    const held = get(settings);
+    restore = () => settings.set(held);
+    settings.set(before as never);
+    return { saveSocialConsent, settings, save: vi.mocked(service.saveSettingsPatch) };
+  }
+
+  it('sends only the consent once and writes only its key, after Go has saved it', async () => {
+    const { saveSocialConsent, settings, save } = await stores({ accountSync: false, language: 'ru' });
+    const answer = deferred<never>();
+    save.mockReturnValueOnce(answer.promise);
+
+    const saving = saveSocialConsent();
+    await flush();
+    expect(get(settings)).toEqual({ accountSync: false, language: 'ru' });
+    settings.update((current) => (current ? ({ ...current, language: 'en' } as never) : current));
+    answer.resolve({ accountSync: true, language: 'ru' } as never);
+    await saving;
+
+    expect(save.mock.calls).toEqual([[{ accountSync: true }]]);
+    expect(get(settings)).toEqual({ accountSync: true, language: 'en' });
+  });
+
+  it('refused: rejects with Go\'s error and leaves the store as it was', async () => {
+    const before = { accountSync: false, language: 'ru' };
+    const { saveSocialConsent, settings, save } = await stores(before);
+    const refused = new Error('typhon:settings.save_failed: disk');
+    save.mockRejectedValueOnce(refused);
+
+    await expect(saveSocialConsent()).rejects.toBe(refused);
+
+    expect(get(settings)).toBe(before);
+  });
+
+  it('rejects when Go\'s answer does not hold the consent, the store untouched', async () => {
+    const before = { accountSync: false, language: 'ru' };
+    const { saveSocialConsent, settings, save } = await stores(before);
+    save.mockResolvedValueOnce({ accountSync: false, language: 'ru' } as never);
+
+    await expect(saveSocialConsent()).rejects.toThrow('account sync not kept');
+
+    expect(get(settings)).toBe(before);
+  });
+});
+
 describe('the read after the sync consent (loadFriends)', () => {
   async function signedIn() {
     const store = await load();
