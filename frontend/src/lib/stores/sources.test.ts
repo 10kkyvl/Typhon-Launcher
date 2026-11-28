@@ -352,7 +352,146 @@ describe('an add whose first refresh failed', () => {
     await store.add(FEED);
     expect(toast).not.toHaveBeenCalled();
 
+    // A later refresh, as Go sends it: the source updating, then failed.
+    handlers['source:updated']({ data: saved({ status: 'updating' }) });
+    handlers['source:updated']({ data: saved() });
     handlers['source:error']({ data: { sourceId: 'n', name: 'feed.example', message: refreshFailed.message, scheduled: false } });
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Wails orders events and call answers independently: the first refresh's error event may come
+// before or after the add's answer, and the add may end without saying it.
+describe('the first refresh’s error, said once whatever the order', () => {
+  const FEED = 'https://feed.example/feed.json';
+  const saved = (patch: Partial<Source> = {}) => ({ id: 'n', name: 'feed.example', type: 'url', url: FEED, status: 'error', ...patch }) as Source;
+  const refreshFailed = new Error('typhon:sources.feed_bad_status: GET https://feed.example/feed.json: status 503');
+  const errorOf = (sourceId: string, message = refreshFailed.message) => ({ data: { sourceId, name: sourceId, message, scheduled: false } });
+
+  it('says a held error once when the add ends without saying it: the list unreadable, the dialog gone', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      handlers['source:error'](errorOf('n'));
+      throw refreshFailed;
+    });
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+
+    // What the dialog does with a rejection once it was dismissed.
+    const mark = store.errorMark();
+    await store.add(FEED).catch((reason: unknown) => store.toastUnannounced(reason, mark));
+
+    expect(toast.mock.calls.filter((call) => call[1] === 'danger')).toHaveLength(1);
+  });
+
+  it('says a held error of a source the add did not save once the add ends', async () => {
+    const { store, toast } = await load();
+    let finish: (s: Source) => void = () => {};
+    api.addSource.mockImplementationOnce(() => new Promise<Source>((resolve) => (finish = resolve)));
+    const pending = store.add(FEED);
+
+    handlers['source:error'](errorOf('z', 'status 500'));
+    expect(toast).not.toHaveBeenCalled();
+    seeded = [saved({ status: 'active' })];
+    finish(saved({ status: 'active' }));
+    await pending;
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(String(toast.mock.calls[0][0])).toContain('z');
+  });
+
+  it('keeps an error held while another add that did not list the source is still out', async () => {
+    const { store, toast } = await load();
+    let finishFirst: (s: Source) => void = () => {};
+    let finishSecond: (s: Source) => void = () => {};
+    api.addSource.mockImplementationOnce(() => new Promise<Source>((resolve) => (finishFirst = resolve)));
+    api.addSource.mockImplementationOnce(() => new Promise<Source>((resolve) => (finishSecond = resolve)));
+    const first = store.add(FEED);
+    const second = store.add('https://second.example/feed.json');
+
+    handlers['source:error'](errorOf('z', 'status 500'));
+    finishFirst(saved({ status: 'active' }));
+    await first;
+    expect(toast).not.toHaveBeenCalled();
+
+    finishSecond(saved({ id: 'm', url: 'https://second.example/feed.json', status: 'active' }));
+    await second;
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('swallows the error event of the failure the add already said when it comes after the answer', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [saved()];
+      throw refreshFailed;
+    });
+
+    const result = await store.add(FEED);
+    expect(result.failure).toBe(refreshFailed);
+
+    handlers['source:updated']({ data: saved({ status: 'updating' }) });
+    handlers['source:updated']({ data: saved() });
+    handlers['source:error'](errorOf('n'));
+
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('says a later refresh’s error of that source after its late event was swallowed', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [saved()];
+      throw refreshFailed;
+    });
+    await store.add(FEED);
+    handlers['source:updated']({ data: saved() });
+    handlers['source:error'](errorOf('n'));
+
+    handlers['source:updated']({ data: saved({ status: 'updating' }) });
+    handlers['source:updated']({ data: saved() });
+    handlers['source:error'](errorOf('n'));
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a later refresh’s error when the add’s refresh sent no error event (its state could not be saved)', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [saved({ status: 'active' })];
+      throw refreshFailed;
+    });
+    await store.add(FEED);
+    // Go settles the source without an error event, then a later refresh fails the same way.
+    handlers['source:updated']({ data: saved({ status: 'active' }) });
+    handlers['source:updated']({ data: saved({ status: 'updating' }) });
+    handlers['source:updated']({ data: saved() });
+    handlers['source:error'](errorOf('n'));
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a different failure of that source that comes after the answer', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [saved()];
+      throw refreshFailed;
+    });
+    await store.add(FEED);
+
+    handlers['source:error'](errorOf('n', 'typhon:sources.source_busy: refresh already running'));
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('swallows no error of another source after the answer', async () => {
+    seeded = [saved({ id: 'o', url: 'https://other.example/feed.json', status: 'active' })];
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [...seeded, saved()];
+      throw refreshFailed;
+    });
+    await store.add(FEED);
+
+    handlers['source:error'](errorOf('o'));
+
     expect(toast).toHaveBeenCalledTimes(1);
   });
 });
