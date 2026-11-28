@@ -46,7 +46,7 @@
     { id: 'new', label: msg('modals.sourceDetailsStatusNew') },
   ]);
 
-  function statusBadgeInfo(status: string): { kind: 'success' | 'warning' | 'neutral'; label: string } | undefined {
+  function statusBadgeInfo(status: string): { kind: 'success' | 'warning' | 'neutral'; label: string } {
     switch (status) {
       case 'active':
         return { kind: 'success', label: msg('modals.sourceDetailsStatusActive') };
@@ -57,7 +57,7 @@
       case 'updating':
         return { kind: 'neutral', label: msg('modals.sourceDetailsStatusUpdating') };
       default:
-        return undefined;
+        return { kind: 'neutral', label: msg('modals.sourceDetailsStatusUnknown') };
     }
   }
 
@@ -279,6 +279,7 @@
     return { kind: 'neutral' as const, label: msg('modals.sourceDetailsStatusUnmatched') };
   }
 
+  const statusBadge = $derived(statusBadgeInfo(source?.status ?? ''));
   const acting = $derived(refreshing || toggling);
   const heldReason = $derived(acting ? msg('modals.actionRunning') : '');
   // A refresh started elsewhere ("Refresh all", the schedule) holds Delete as the dialog's own does.
@@ -294,7 +295,7 @@
         <div class="head-meta">
           <span class="url">{sourceLocation(source)}</span>
           <div class="head-badges">
-            <StatusBadge kind={statusBadgeInfo(source.status)?.kind ?? 'neutral'} label={statusBadgeInfo(source.status)?.label ?? source.status} />
+            <StatusBadge kind={statusBadge.kind} label={statusBadge.label} />
             <span class="updated">{msg('modals.sourceDetailsUpdatedAt', { date: relativeDate(source.lastUpdatedAt) })}</span>
           </div>
           {#if source.lastError}

@@ -88,6 +88,18 @@ describe('removing a source from its details', () => {
   });
 });
 
+describe('the status of a source', () => {
+  it('says a status it has no word for neutrally, never Go’s value', async () => {
+    sources.set([{ ...source, status: 'someday_new' } as unknown as Source]);
+    render(SourceDetailsModal, { target: app, props: { open: true, sourceId: 's1' } });
+
+    const details = await screen.findByRole('dialog', { name: 'FitGirl' });
+
+    expect(within(details).getByText(msg('modals.sourceDetailsStatusUnknown'))).toBeTruthy();
+    expect(details.textContent).not.toContain('someday_new');
+  });
+});
+
 describe('the status filter of a source', () => {
   it('is named by its label, as is its list, and choosing a status reloads the releases with it', async () => {
     render(SourceDetailsModal, { target: app, props: { open: true, sourceId: 's1' } });
