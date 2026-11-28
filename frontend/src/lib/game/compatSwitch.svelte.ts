@@ -16,6 +16,7 @@ import { toast } from '../stores/toasts';
 import { focusableIn } from '../layers/focus';
 import { focusHandOff } from '../utils/focusHandOff';
 import { bytesSize } from '../utils/format';
+import type { createFileWrites } from './fileWrites.svelte';
 import { defaultWrapper, describeImports, presetsFor, problemActions, problemText, progressView } from './compatMode';
 import { propertiesErrorText as errorText } from './propertiesErrors';
 
@@ -36,12 +37,11 @@ export function createCompatSwitch(deps: {
   focus: { section: () => HTMLElement | undefined; props: () => HTMLElement | undefined };
   /** The dialog's read number: a read answered after a newer one began paints nothing. */
   seq: () => number;
+  /** The dialog's file writes by game: the switch takes its game for as long as it runs. */
+  writes: ReturnType<typeof createFileWrites>;
 }) {
   let compat = $state<WrapperInfo | null>(null);
   let loading = $state(false);
-  // Games whose compatibility mode is being switched. The component outlives the dialog (App mounts it
-  // once), so a switch that goes on after the dialog closed is still known when it opens again.
-  let busyFor = $state<string[]>([]);
   let error = $state('');
   let on = $state(false);
   let force = $state(false);
@@ -52,10 +52,7 @@ export function createCompatSwitch(deps: {
   // Which problem action was pressed: that button stays focused and busy while the switch runs.
   let action = $state<Action>('');
 
-  const busy = $derived.by(() => {
-    const game = deps.game();
-    return game ? busyFor.includes(game.id) : false;
-  });
+  const busy = $derived(deps.writes.of(deps.game()?.id)?.kind === 'compat');
   const visible = $derived(Boolean(compat && (compat.supported || compat.active || compat.problem)));
   const suggested = $derived(compat?.suggested ?? '');
   const locked = $derived(!compat?.active && suggested === '' && !force);
@@ -103,8 +100,9 @@ export function createCompatSwitch(deps: {
     const game = deps.game();
     if (!game || busy || deps.held()) return;
     const id = game.id;
+    const end = deps.writes.start(id, { kind: 'compat' });
+    if (!end) return;
     const { heard, title } = deps.pressedNow();
-    busyFor = [...busyFor, id];
     action = pressed;
     error = '';
     keepOffer = false;
@@ -129,7 +127,7 @@ export function createCompatSwitch(deps: {
         error = failure;
       }
     } finally {
-      busyFor = busyFor.filter((other) => other !== id);
+      end();
       if (heard()) action = '';
       if (shown()) progress = null;
     }

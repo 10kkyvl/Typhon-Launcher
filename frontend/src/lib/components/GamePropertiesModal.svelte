@@ -16,6 +16,7 @@
   import { propertiesErrorText as errorText } from '../game/propertiesErrors';
   import { createGameModeWrites } from '../game/gameModeWrites.svelte';
   import { createCompatSwitch } from '../game/compatSwitch.svelte';
+  import { createFileWrites, type FileWrite } from '../game/fileWrites.svelte';
   import {
     clearSavesDir,
     getLaunchArgsLine,
@@ -42,8 +43,6 @@
   let candidates = $state<Candidate[]>([]);
   let candidatesLoading = $state(false);
   let candidatesError = $state('');
-  // What sets the executable: a found file pressed, or the file dialog.
-  let exeBusy = $state<'' | 'pick' | 'browse'>('');
   let exeError = $state('');
 
   let argsLine = $state('');
@@ -69,6 +68,16 @@
   let gameModeShown = $state(false);
   let gameModeMac = $state(false);
 
+  // The wrapper switch, the executable and the saves folder change what the game starts or its files.
+  // Go's Enable takes the executable's folder at its start and places the files there, so these run
+  // one at a time per game, across openings: while one runs the others are held, saying which one
+  // they wait for.
+  const fileWrites = createFileWrites();
+  const fileWrite = $derived(fileWrites.of(game?.id));
+  // What sets the executable: a found file pressed, or the file dialog.
+  const exeBusy = $derived(fileWrite?.kind === 'exe' ? fileWrite.how : '');
+  const savesBusy = $derived(fileWrite?.kind === 'saves' ? fileWrite.how : '');
+
   const running = $derived(Boolean(game && $runningGames.has(game.id)));
   const compat = createCompatSwitch({
     target: () => target,
@@ -77,18 +86,14 @@
     held: () => compatHeld,
     focus: { section: () => compatSection, props: () => propsEl },
     seq: () => seq,
+    writes: fileWrites,
   });
   const compatBusy = $derived(compat.busy);
 
-  let savesBusy = $state<'' | 'browse' | 'reset'>('');
   let savesError = $state('');
 
-  // The wrapper switch, the executable and the saves folder change what the game starts or its files.
-  // Go's Enable takes the executable's folder at its start and places the files there, so these run
-  // one at a time: while one runs the others are held, saying which one they wait for.
-  const fileWrite = $derived(compatBusy ? 'compat' : exeBusy ? 'exe' : savesBusy ? 'saves' : '');
   const heldReason = { compat: 'modals.propertiesHeldCompat', exe: 'modals.propertiesHeldExe', saves: 'modals.propertiesHeldSaves' } as const;
-  const heldBy = (own: 'compat' | 'exe' | 'saves') => (fileWrite && fileWrite !== own ? msg(heldReason[fileWrite]) : '');
+  const heldBy = (own: FileWrite['kind']) => (fileWrite && fileWrite.kind !== own ? msg(heldReason[fileWrite.kind]) : '');
   const exeHeld = $derived(heldBy('exe'));
   const compatHeld = $derived(heldBy('compat'));
   const savesHeld = $derived(heldBy('saves'));
@@ -133,12 +138,10 @@
       loadedFor = current.gameId;
       opening++;
       resetAsk = null;
-      exeBusy = '';
       argsBusy = false;
       adminBusy = false;
       presenceBusy = false;
       gameModes.reset();
-      savesBusy = '';
       candidates = [];
       candidatesError = '';
       exeError = '';
@@ -204,28 +207,37 @@
   let propsEl = $state<HTMLElement>();
   let compatSection = $state<HTMLElement>();
 
+  /** Compatibility mode reads the executable: a dialog that shows the game reads it again once it changed. */
+  function exeChanged(id: string) {
+    if (alive && target?.gameId === id) void compat.load(id);
+  }
+
   async function pickCandidate(path: string) {
     if (!game || exeBusy || exeHeld) return;
     const id = game.id;
+    const end = fileWrites.start(id, { kind: 'exe', how: 'pick' });
+    if (!end) return;
     const { heard, title } = pressedNow();
-    exeBusy = 'pick';
     exeError = '';
     let failure: string | undefined;
     try {
       await setExecutable(id, path);
     } catch (err) {
       failure = errorText(err, msg('modals.propertiesExeSaveFailed'));
+    } finally {
+      end();
     }
-    if (!heard()) return sayLate(title, failure);
-    exeBusy = '';
-    exeError = failure ?? '';
+    if (!heard()) sayLate(title, failure);
+    else exeError = failure ?? '';
+    if (failure === undefined) exeChanged(id);
   }
 
   async function browseExecutable() {
     if (!game || exeBusy || exeHeld) return;
     const current = game;
+    const end = fileWrites.start(current.id, { kind: 'exe', how: 'browse' });
+    if (!end) return;
     const { heard, title } = pressedNow();
-    exeBusy = 'browse';
     exeError = '';
     let failure: string | undefined;
     let changed = false;
@@ -234,19 +246,22 @@
       const path = emulated
         ? await selectImageFile(dialogTitle, [emulationPlatform(current)])
         : await selectGameExecutable(dialogTitle, current.installDir, current.executable);
+      // A file picked after the dialog was torn down is not set: the dialog mounted since knows
+      // nothing of this write and may be turning compatibility mode on.
+      if (path && !alive) return toast(msg('modals.propertiesExeLateDropped', { title }), 'warning');
       if (path) {
         changed = true;
         await setExecutable(current.id, path);
       }
     } catch (err) {
       failure = errorText(err, msg('modals.propertiesExeSaveFailed'));
+    } finally {
+      end();
     }
     if (!heard()) {
       if (changed || failure !== undefined) sayLate(title, failure);
-      return;
-    }
-    exeBusy = '';
-    exeError = failure ?? '';
+    } else exeError = failure ?? '';
+    if (changed && failure === undefined) exeChanged(current.id);
   }
 
   async function saveArgs(event?: MouseEvent) {
@@ -342,8 +357,9 @@
 
   async function browseSaves() {
     if (!game || savesBusy || savesHeld) return;
+    const end = fileWrites.start(game.id, { kind: 'saves', how: 'browse' });
+    if (!end) return;
     const { heard, title } = pressedNow();
-    savesBusy = 'browse';
     savesError = '';
     let failure: string | undefined;
     let dir = '';
@@ -351,12 +367,13 @@
       dir = await chooseSavesDir(game.id, game.title);
     } catch (err) {
       failure = errorText(err, msg('modals.propertiesSavesFailed'));
+    } finally {
+      end();
     }
     if (!heard()) {
       if (dir || failure !== undefined) sayLate(title, failure);
       return;
     }
-    savesBusy = '';
     savesError = failure ?? '';
   }
 
@@ -369,19 +386,19 @@
   // Go's ClearSavesDir forgets the chosen folder and deletes no file: the question says so. A refusal
   // stays in the question; one that comes after the dialog moved on is said in a toast.
   async function resetSaves(ask: { id: string; title: string }) {
+    const end = fileWrites.start(ask.id, { kind: 'saves', how: 'reset' });
+    // The question covers the dialog, so no other write of the game can have begun since it was asked.
+    if (!end) return;
     const { heard } = pressedNow();
-    savesBusy = 'reset';
     try {
       await clearSavesDir(ask.id);
     } catch (err) {
-      if (heard()) {
-        savesBusy = '';
-        throw err;
-      }
+      if (heard()) throw err;
       return sayLate(ask.title, errorText(err, msg('modals.propertiesSavesFailed')));
+    } finally {
+      end();
     }
-    if (!heard()) return sayLate(ask.title);
-    savesBusy = '';
+    if (!heard()) sayLate(ask.title);
   }
 
   function closeResetAsk(ask: object) {
