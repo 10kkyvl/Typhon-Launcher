@@ -4,6 +4,7 @@ export const common = {
   'common.close': 'Закрыть',
   'common.retry': 'Повторить',
   'common.failedReason': '{action}: {reason}',
+  'common.failedReasonSentence': '{action}. {reason}',
   'common.save': 'Сохранить',
   'common.refresh': 'Обновить',
   'common.add': 'Добавить',
