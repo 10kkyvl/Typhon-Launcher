@@ -239,7 +239,8 @@ const SITES: Record<string, Site[]> = {
   // A block whose data failed to load; blocks of a newer launcher filling the layout, a standing fact.
   'lib/components/profile/BlockGrid.svelte': [['danger', true]],
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
-  'lib/components/profile/GamePicker.svelte': [['danger', true]],
+  // The library's list that did not arrive, then the catalog ids of its games: each a read that failed.
+  'lib/components/profile/GamePicker.svelte': [['danger', true], ['danger', true]],
   // The profile's figures and the feed's first page failed to load; a "Show more" failed.
   'routes/activity/Activity.svelte': [
     ['danger', true],

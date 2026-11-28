@@ -1,10 +1,12 @@
-import { screen, waitFor, within } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { libraryGames } from '../../stores/library';
+import { libraryGames, libraryLoaded, libraryLoadError } from '../../stores/library';
+import { getGames, getRunningGames } from '../../services/library';
 import { igdbIdsOf } from '../../services/profile';
 import { locale, msg } from '../../i18n';
 import { calls, resetBindings } from '../../testing/fakeBinding';
-import { renderDom } from '../../testing/dom';
+import { renderDom, user } from '../../testing/dom';
 import { libraryGame } from './blocksTesting';
 import GamePicker from './GamePicker.svelte';
 
@@ -45,6 +47,9 @@ beforeEach(() => {
 
 afterEach(() => {
   libraryGames.set([]);
+  libraryLoaded.set(false);
+  libraryLoadError.set(null);
+  document.body.replaceChildren();
   expect(calls).toEqual([]);
 });
 
@@ -148,5 +153,82 @@ describe('the game picker', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(igdbIdsOf).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('list')).toBeTruthy();
+  });
+});
+
+describe('the game picker, when something goes wrong or goes away', () => {
+  it('says that the library could not be read, in the picker, instead of an empty list, and reads it again on Retry', async () => {
+    libraryGames.set([]);
+    libraryLoadError.set(new Error('the library service is down'));
+    vi.mocked(getGames).mockResolvedValueOnce(GAMES);
+    vi.mocked(getRunningGames).mockResolvedValueOnce([]);
+    const { user } = mount();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(msg('library.loadFailedText'));
+    expect(screen.queryByText(msg('profile.pickerEmpty'))).toBeNull();
+
+    await user.click(within(alert.closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') }));
+    await screen.findByRole('list');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(vi.mocked(getGames)).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps focus on a pressed game that turns taken, held and described as taken, and picks it once', async () => {
+    let chosen: number[] = [];
+    const onpick = vi.fn((pick: { igdbId: number }) => {
+      chosen = [...chosen, pick.igdbId];
+      void view.rerender({ chosen });
+    });
+    const view = renderDom(GamePicker, { chosen, onpick });
+    const row = await screen.findByRole('button', { name: 'Hades' });
+    row.focus();
+
+    await view.user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(row.getAttribute('aria-disabled')).toBe('true'));
+    expect(document.activeElement).toBe(row);
+    expect(row.matches(':disabled')).toBe(false);
+    expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe(msg('profile.pickerTaken'));
+    await view.user.keyboard('{Enter}');
+    await view.user.click(row);
+    expect(onpick).toHaveBeenCalledTimes(1);
+  });
+
+  it('a held Enter picks once, whatever the page does with the pick', async () => {
+    const { user, onpick } = mount();
+    (await screen.findByRole('button', { name: 'Hades' })).focus();
+
+    await user.keyboard('{Enter>4/}');
+    expect(onpick).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands focus back to the control that opened it when a pick closes it', async () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Choose a game';
+    document.body.append(opener);
+    const target = document.createElement('div');
+    document.body.append(target);
+    const view = render(GamePicker, { target, props: { chosen: [], onpick: () => view.unmount() } });
+    const row = await screen.findByRole('button', { name: 'Hades' });
+    row.focus();
+
+    await user().keyboard('{Enter}');
+    await vi.waitFor(() => expect(target.querySelector('.picker')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  it('leaves focus alone when the pick that closed it was a press that held no focus', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    const target = document.createElement('div');
+    document.body.append(target);
+    const view = render(GamePicker, { target, props: { chosen: [], onpick: () => view.unmount() } });
+    const row = await screen.findByRole('button', { name: 'Hades' });
+
+    expect(document.activeElement).toBe(document.body);
+    row.click();
+    await vi.waitFor(() => expect(target.querySelector('.picker')).toBeNull());
+    await tick();
+    expect(document.activeElement).toBe(document.body);
   });
 });

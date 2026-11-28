@@ -62,6 +62,9 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/profile/BlockGrid.svelte': { handle: 'drag handle' },
   'lib/components/profile/BlockPicker.svelte': { preset: 'list option' },
   'lib/components/profile/CollectionBlock.svelte': { tile: 'row' },
+  // A result of the game search adds the game it names (a collection takes several), so the kit's
+  // OptionList, one checked choice of a radio group, would say a choice that is not there; the
+  // support form's game field uses the same rows.
   'lib/components/profile/GamePicker.svelte': { row: 'list option' },
   'lib/components/profile/PinnedBlock.svelte': { hero: 'row' },
   'routes/activity/PopularGames.svelte': { row: 'row' },
