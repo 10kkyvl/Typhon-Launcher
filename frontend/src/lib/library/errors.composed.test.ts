@@ -4,7 +4,7 @@ import { errEmulators } from '../i18n/catalog/ru/errEmulators';
 import { errLibrary } from '../i18n/catalog/ru/errLibrary';
 import { actionErrorText, isClauseCode } from './errors';
 
-// Every caller that composes "{action}: {reason}" and the actions it passes, read from its source, so
+// Every caller that composes an action and a reason, and the actions it passes, read from its source, so
 // a new action or a new caller is met by the table below without being listed by hand.
 const sources = import.meta.glob<string>(['../../**/*.svelte', '../../**/*.ts', '!../../**/*.test.ts', '!../../**/node_modules/**'], {
   query: '?raw',
@@ -23,6 +23,11 @@ const clauses = Object.keys(words).filter(isClauseCode);
 const failure = (code: string) => new Error(`typhon:${code}: detail`);
 const normal = (text: string) => text.trim().replace(/\.$/, '').toLocaleLowerCase();
 const colons = (text: string) => (text.match(/:/g) ?? []).length;
+// The proper names the error and action words hold, read from their catalogs: such a name may follow a
+// colon with its capital.
+const PROPER = ['BIOS', 'CrossOver', 'Discord', 'IGDB', 'PCSX2', 'PS3', 'PS4', 'RPCS3', 'Steam', 'Typhon', 'Vita3K', 'Windows'];
+const capitalAfterColon = (text: string) =>
+  [...text.matchAll(/:\s+(\S+)/g)].some(([, word]) => /^\p{Lu}/u.test(word) && !PROPER.includes(word.replace(/[^\p{L}\p{N}]+$/u, '')));
 
 afterEach(() => locale.set('ru'));
 
@@ -55,7 +60,7 @@ describe('actionErrorText over every clause code and every action its callers pa
   });
 
   for (const lang of ['ru', 'en'] as const) {
-    it(`${lang}: says each thing once and never stacks two colons`, () => {
+    it(`${lang}: says each thing once, keeps the reason, never stacks two colons and puts no capital after one`, () => {
       locale.set(lang);
       const wrong: string[] = [];
       for (const key of actions) {
@@ -67,9 +72,10 @@ describe('actionErrorText over every clause code and every action its callers pa
           const said = (part: string) => parts.filter((other) => other === normal(part)).length;
           if (new Set(parts).size !== parts.length) wrong.push(`repeats: ${text}`);
           if (colons(text) > 1) wrong.push(`colons: ${text}`);
+          if (capitalAfterColon(text)) wrong.push(`capital after a colon: ${text}`);
           if (text.includes('..')) wrong.push(`periods: ${text}`);
           if (said(action) !== 1) wrong.push(`action not said once: ${text}`);
-          if (!normal(text).includes(normal(reason).split(':')[0])) wrong.push(`reason lost: ${text}`);
+          if (!normal(text).includes(normal(reason))) wrong.push(`reason lost: ${text}`);
         }
       }
       expect(wrong).toEqual([]);
@@ -92,7 +98,16 @@ describe('actionErrorText over every clause code and every action its callers pa
       'Could not save the emulator path. A Windows program does not work on this system: use the emulator build made for it',
     ],
     ['ru', 'emulators.not_exe', 'emul.saveFailed', 'Не удалось сохранить путь к эмулятору: нужен исполняемый файл эмулятора (.exe)'],
-    ['en', 'library.no_executable', 'modals.propertiesExeSaveFailed', 'Could not save the executable: Executable file not found'],
+    ['en', 'emulators.not_exe', 'emul.saveFailed', 'Could not save the emulator path. An emulator executable (.exe) is required'],
+    ['en', 'library.no_executable', 'modals.propertiesExeSaveFailed', 'Could not save the executable. Executable file not found'],
+    ['ru', 'library.crossover_unavailable', 'modals.propertiesExeSaveFailed', 'Не удалось сохранить исполняемый файл. CrossOver не установлен или недоступен'],
+    ['en', 'library.moving', 'emul.saveFailed', 'Could not save the emulator path. The game is being moved. Wait until the move finishes'],
+    [
+      'ru',
+      'library.state_unreadable',
+      'emul.saveFailed',
+      'Не удалось сохранить путь к эмулятору: файлы библиотеки не удалось прочитать, изменение не сохранено; перезапустите лаунчер',
+    ],
   ] as const)('%s %s after %s reads "%s"', (lang, code, action, expected) => {
     locale.set(lang);
     expect(actionErrorText(failure(code), msg(action))).toBe(expected);

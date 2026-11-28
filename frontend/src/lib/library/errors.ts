@@ -6,7 +6,7 @@ export function libraryErrorText(err: unknown, fallback: string): string {
 }
 
 // The emulator reasons that are whole sentences (they say what to do); the rest of the two domains'
-// are lower-case clauses. errors.test.ts holds this list to the catalog's words.
+// are reasons that do not say what failed. errors.test.ts holds this list to the Russian words.
 const SENTENCES = new Set([
   'emulators.already_running',
   'emulators.bios_dir_unknown',
@@ -22,20 +22,26 @@ export function isClauseCode(code: string): boolean {
 
 const same = (a: string, b: string) => a.trim().replace(/\.$/, '').toLocaleLowerCase() === b.trim().replace(/\.$/, '').toLocaleLowerCase();
 
+// Words that read on after a colon: they open lower-case and hold no colon and no sentence end of their own.
+const readsOn = (reason: string) => /^\p{Ll}/u.test(reason) && !reason.includes(':') && !/[.!?]\s/.test(reason.trim());
+
+function composed(action: string, reason: string): string {
+  if (same(reason, action)) return action;
+  if (readsOn(reason)) return msg('common.failedReason', { action, reason });
+  return msg('common.failedReasonSentence', { action: action.replace(/\.$/, ''), reason: reason.charAt(0).toLocaleUpperCase() + reason.slice(1) });
+}
+
 /**
- * A failure of `action` in words, by code: a clause reason is said after the action
- * ("{action}: {reason}"), a sentence alone, and a code with no words falls to the action. A reason
- * that says what the action says is said once; one that holds a colon of its own is its own sentence
- * after the action ("{action}. {Reason}"), so no two colons stack.
+ * A failure of `action` in words, by code: a sentence code alone, and a code with no words falls to
+ * the action. A clause code's reason is said after the action in the form its words in the current
+ * language take: after a colon when they open lower-case and hold no colon or sentence end of their
+ * own ("{action}: {reason}"), else as their own sentence ("{action}. {Reason}"); a reason that says
+ * what the action says is said once.
  */
 export function actionErrorText(err: unknown, action: string): string {
   const code = errorCode(err);
   if (!hasMessage(code)) return action;
   const reason = msg(code);
   if (!isClauseCode(code)) return reason;
-  if (same(reason, action)) return action;
-  if (reason.includes(':')) {
-    return msg('common.failedReasonSentence', { action: action.replace(/\.$/, ''), reason: reason.charAt(0).toLocaleUpperCase() + reason.slice(1) });
-  }
-  return msg('common.failedReason', { action, reason });
+  return composed(action, reason);
 }
