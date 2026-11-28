@@ -107,6 +107,21 @@ describe('AddImageModal: the form', () => {
     expect(onadded).toHaveBeenCalledWith(added);
   });
 
+  it('keeps the title it sends while it adds: the field is read-only and typing changes nothing', async () => {
+    const adding = held<LibraryGame>();
+    vi.mocked(addEmulatedGame).mockReturnValueOnce(adding.promise);
+    const { keys, title, add } = await filled();
+
+    await keys.click(add);
+    expect(title).toHaveProperty('readOnly', true);
+    await keys.type(title, ' 2');
+
+    expect((title as HTMLInputElement).value).toBe('Okami');
+    expect(vi.mocked(addEmulatedGame).mock.calls).toEqual([['C:/roms/okami.iso', 'ps2', 'Okami']]);
+    adding.resolve(added);
+    await vi.waitFor(() => expect(title.isConnected).toBe(false));
+  });
+
   it('says a refused image at the image field and gives it the focus', async () => {
     vi.mocked(addEmulatedGame).mockRejectedValueOnce(new Error('typhon:emulators.image_missing: gone'));
     const { keys, image, add } = await filled();

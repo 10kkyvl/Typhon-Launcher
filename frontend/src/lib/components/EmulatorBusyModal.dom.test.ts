@@ -94,6 +94,30 @@ describe('EmulatorBusyModal: the question', () => {
     closing.resolve();
   });
 
+  // Go is ending the process: answering the launch "no" now would leave the player without the game
+  // and the emulator both.
+  it('cannot be dismissed while the emulator closes: Escape and the close button answer nothing', async () => {
+    const closing = held<void>();
+    vi.mocked(closeEmulator).mockReturnValueOnce(closing.promise);
+    render(EmulatorBusyModal, { target: app });
+    const { answer, dialog } = await ask();
+    const keys = user();
+    const settled = vi.fn();
+    void answer.then(settled);
+    await keys.click(within(dialog).getByRole('button', { name: msg('emul.busyConfirm', { emulator: 'PCSX2' }) }));
+
+    await keys.keyboard('{Escape}');
+    const close = within(dialog).getByRole('button', { name: msg('common.close') });
+    expect(close).toHaveProperty('disabled', true);
+    await keys.click(close);
+    await Promise.resolve();
+
+    expect(dialog.isConnected).toBe(true);
+    expect(settled).not.toHaveBeenCalled();
+    closing.resolve();
+    await expect(answer).resolves.toBe(true);
+  });
+
   it('says a refusal in the question by code', async () => {
     vi.mocked(closeEmulator).mockRejectedValueOnce(new Error('typhon:emulators.not_configured: none'));
     render(EmulatorBusyModal, { target: app });

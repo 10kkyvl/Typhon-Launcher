@@ -1,9 +1,9 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg, type MessageKey } from '../i18n';
 import { executableCandidates } from '../services/install';
-import { clearSavesDir, getLaunchArgsLine, selectGameExecutable, setExecutable, setGameModeOverride, setSavesDir, type LibraryGame } from '../services/library';
+import { clearSavesDir, getLaunchArgsLine, selectGameExecutable, setExecutable, setGameModeOverride, setLaunchArgsLine, setSavesDir, type LibraryGame } from '../services/library';
 import { selectFolder } from '../services/settings';
 import { appInfo } from '../services/system';
 import { disableWrapper, enableWrapper, inspectWrapper, type WrapperInfo } from '../services/wrappers';
@@ -65,7 +65,7 @@ beforeEach(() => {
   document.body.append(app);
   libraryGames.set([hades]);
   // A queued answer one test left unused must not reach the next.
-  for (const call of [setGameModeOverride, setExecutable, selectGameExecutable, selectFolder, clearSavesDir, enableWrapper]) {
+  for (const call of [setGameModeOverride, setExecutable, setLaunchArgsLine, selectGameExecutable, selectFolder, clearSavesDir, enableWrapper]) {
     vi.mocked(call).mockReset();
   }
   vi.mocked(executableCandidates).mockResolvedValue([
@@ -387,5 +387,54 @@ describe('GamePropertiesModal: a wrapper switch that fails after its dialog clos
     enabling.reject(new Error('typhon:wrappers.no_target: nothing to replace'));
 
     await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('modals.compatLateFailed', { title: 'Hades', reason: msg('wrappers.no_target') })]]));
+  });
+});
+
+describe('GamePropertiesModal: presses that must change nothing', () => {
+  it('a press on the held compatibility switch leaves it showing the change that runs', async () => {
+    const enabling = held<void>();
+    vi.mocked(enableWrapper).mockReturnValueOnce(enabling.promise);
+    const dialog = await openDialog();
+    const keys = user();
+    const toggle = controls(dialog).compat;
+
+    await keys.click(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    await keys.click(toggle);
+
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(vi.mocked(enableWrapper)).toHaveBeenCalledTimes(1);
+    enabling.resolve();
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-disabled')).toBeNull());
+  });
+
+  it('Enter while an input method composes does not save the arguments; Enter after it does, once', async () => {
+    vi.mocked(setLaunchArgsLine).mockResolvedValue(hades);
+    const dialog = await openDialog();
+    const keys = user();
+    const field = within(dialog).getByRole('textbox', { name: msg('modals.propertiesArgsTitle') });
+    await vi.waitFor(() => expect(field).toHaveProperty('disabled', false));
+    await keys.type(field, 'x');
+
+    await fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    expect(vi.mocked(setLaunchArgsLine)).not.toHaveBeenCalled();
+    await fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(vi.mocked(setLaunchArgsLine).mock.calls).toEqual([['g1', 'x']]);
+    await vi.waitFor(() => expect(get(toasts).map((t) => t.message)).toEqual([msg('modals.propertiesArgsSaved')]));
+  });
+
+  it('the saves reset question asked for one game goes when the dialog is turned to another, and resets nothing', async () => {
+    libraryGames.set([hades, { id: 'g2', title: 'Celeste', uninstalled: false, installDir: '/games/celeste', executable: '/games/celeste/Celeste.exe', savesDir: '/saves/celeste' } as LibraryGame]);
+    const dialog = await openDialog();
+    await user().click(controls(dialog).savesReset);
+    const question = await screen.findByRole('dialog', { name: msg('modals.propertiesSavesResetTitle') });
+
+    openGameProperties('g2');
+
+    await screen.findByRole('dialog', { name: msg('modals.propertiesTitle', { title: 'Celeste' }) });
+    await vi.waitFor(() => expect(question.isConnected).toBe(false));
+    expect(screen.queryByRole('dialog', { name: msg('modals.propertiesSavesResetTitle') })).toBeNull();
+    expect(vi.mocked(clearSavesDir)).not.toHaveBeenCalled();
   });
 });
