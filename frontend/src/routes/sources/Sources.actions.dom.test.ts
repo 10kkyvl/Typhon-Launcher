@@ -226,19 +226,27 @@ describe('Sources: one removal rule for the row menu and the details dialog', ()
       expect(removeSource).not.toHaveBeenCalled();
     });
 
-    it(`${entry}: offers Remove for a source at rest, asking first`, async () => {
-      sources.set([MAIN]);
-      show();
-      const keys = user();
+    // Only a refresh holds Remove: a broken or switched-off source is the one a player most wants gone.
+    const offered: [string, Source][] = [
+      ['at rest', MAIN],
+      ['whose last refresh failed', { ...MAIN, status: 'error', health: 'error', lastError: 'feed answered 404' } as Source],
+      ['switched off', { ...MAIN, enabled: false, status: 'disabled' } as Source],
+    ];
+    for (const [state, source] of offered) {
+      it(`${entry}: offers Remove for a source ${state}, asking first`, async () => {
+        sources.set([source]);
+        show();
+        const keys = user();
 
-      const remove = await reach(keys);
-      expect(remove.held).toBe(false);
-      expect(remove.says).not.toContain(msg('modals.sourceDetailsRemoveHeldUpdating'));
-      await remove.press();
+        const remove = await reach(keys);
+        expect(remove.held).toBe(false);
+        expect(remove.says).not.toContain(msg('modals.sourceDetailsRemoveHeldUpdating'));
+        await remove.press();
 
-      expect(screen.getByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeTruthy();
-      expect(removeSource).not.toHaveBeenCalled();
-    });
+        expect(screen.getByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeTruthy();
+        expect(removeSource).not.toHaveBeenCalled();
+      });
+    }
   }
 });
 
