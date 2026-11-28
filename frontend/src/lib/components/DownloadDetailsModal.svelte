@@ -14,7 +14,7 @@
 </script>
 
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { installErrorText } from '../install/installErrors';
   import { FolderOpen, Gamepad2 } from '@lucide/svelte';
@@ -22,10 +22,10 @@
   import { openFolder } from '../services/settings';
   import { downloadsById, statusLabels } from '../stores/downloads';
   import { navigate } from '../stores/router';
-  import { toast } from '../stores/toasts';
   import { bytesSize, dateTime, progressPercent, speedBytes } from '../utils/format';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import { msg } from '../i18n';
 
@@ -103,13 +103,39 @@
     return Number.isNaN(date.getTime()) ? '—' : dateTime(date);
   }
 
+  // Opening the folder: the button stays focused and busy, a second press does nothing, the game page
+  // waits. Go answers a folder it cannot open without a code (platform.OpenFolder): one sentence for all.
+  let opening = $state(false);
+  let failure = $state('');
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
+
+  $effect(() => {
+    void open;
+    void id;
+    untrack(() => {
+      failure = '';
+    });
+  });
+
   async function openDestination(path: string) {
+    if (opening) return;
+    const target = id;
+    opening = true;
+    failure = '';
     try {
       await openFolder(path);
-    } catch {
-      toast(msg('modals.downloadDetailsFolderUnavailable'), 'danger');
+    } catch (err) {
+      console.warn('download details: open folder', err);
+      if (alive && open && id === target) failure = msg('modals.downloadDetailsFolderUnavailable');
+    } finally {
+      if (alive) opening = false;
     }
   }
+
+  const heldReason = $derived(opening ? msg('modals.actionRunning') : '');
 </script>
 
 <Modal bind:open title={download?.name ?? msg('modals.downloadDetailsTitle')} width="62rem">
@@ -125,12 +151,12 @@
           <div class="row">
             <span class="key">{msg('modals.downloadDetailsFolder')}</span>
             <span class="value path">
-              {download.destination}
-              <IconButton label={msg('modals.downloadDetailsOpenFolder')} size="sm" onclick={() => openDestination(download.destination)}>
+              <span class="path-text">{download.destination}</span>
+              <IconButton label={msg('modals.downloadDetailsOpenFolder')} size="sm" busy={opening} onclick={() => openDestination(download.destination)}>
                 <FolderOpen size="1.6rem" strokeWidth={1.8} />
               </IconButton>
               {#if gameId}
-                <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => openGamePage(gameId)}>
+                <IconButton label={msg('transfers.gamePage')} size="sm" disabled={opening} reason={heldReason} onclick={() => openGamePage(gameId)}>
                   <Gamepad2 size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/if}
@@ -207,7 +233,12 @@
           {/each}
         </div>
       </section>
+      {#if failure}
+        <Notice tone="danger" compact>{failure}</Notice>
+      {/if}
     </div>
+  {:else if id}
+    <Notice tone="info" compact>{msg('modals.downloadDetailsGone')}</Notice>
   {/if}
 </Modal>
 
@@ -260,14 +291,23 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A path or a message is read whole: it wraps where it must instead of being cut. */
   .value.path {
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .path-text {
+    overflow-wrap: anywhere;
   }
 
   .value.danger {
     color: var(--danger);
+    overflow: visible;
+    white-space: normal;
   }
 
   .file-list {
@@ -302,9 +342,7 @@
     min-width: 0;
     font-size: var(--font-sm);
     color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .file-size {

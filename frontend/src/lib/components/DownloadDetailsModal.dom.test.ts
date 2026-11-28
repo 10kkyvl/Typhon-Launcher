@@ -3,11 +3,15 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('@wailsio/runtime', async () => (await import('../testing/gameDialogsTesting')).goRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/downloads', async (actual) => ({
   ...(await actual<typeof import('../services/downloads')>()),
   getDownload: vi.fn(),
+}));
+vi.mock('../services/settings', async (actual) => ({
+  ...(await actual<typeof import('../services/settings')>()),
+  openFolder: vi.fn(),
 }));
 
 import { locale, msg } from '../i18n';
@@ -15,6 +19,10 @@ import { getDownload, type Download, type DownloadStatus, type FileState } from 
 import { downloads } from '../stores/downloads';
 import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
+import { resetBindings } from '../testing/fakeBinding';
+import { sentToGo } from '../testing/gameDialogsTesting';
+import { openFolder } from '../services/settings';
+import { navigate, resetHistory } from '../stores/router';
 import { bytesSize } from '../utils/format';
 import DownloadDetailsModal from './DownloadDetailsModal.svelte';
 
@@ -77,9 +85,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const sent = sentToGo();
+  resetBindings();
   downloads.set([]);
   toasts.set([]);
+  resetHistory();
   document.body.replaceChildren();
+  expect(sent).toEqual([]);
 });
 
 describe('DownloadDetailsModal: per-file progress follows Go while the download moves data', () => {
@@ -339,5 +351,87 @@ describe('DownloadDetailsModal: what it says', () => {
     await settle();
     expect(down()).toBeNull();
     expect(up()).not.toBeNull();
+  });
+});
+
+describe('DownloadDetailsModal: its states and actions', () => {
+  beforeEach(() => {
+    vi.mocked(getDownload).mockRejectedValue(new Error('unavailable in browser'));
+    vi.mocked(openFolder).mockReset();
+  });
+
+  const LONG = '/downloads/Hades Deluxe Edition with every update and the soundtrack/a very long folder name';
+  const describedBy = (el: Element) =>
+    (el.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .filter(Boolean)
+      .map((ref) => document.getElementById(ref)?.textContent?.trim());
+
+  it('says that the download left the list while the dialog was open', async () => {
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)])]);
+    renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+
+    downloads.set([]);
+    await settle();
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('status').textContent?.trim()).toBe(msg('modals.downloadDetailsGone'));
+  });
+
+  it('shows the folder whole and lets it wrap', async () => {
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)], { destination: LONG })]);
+    renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+    expect(screen.getByText(LONG)).toBeTruthy();
+    expect(screen.getByRole('dialog').querySelector('[title]')).toBeNull();
+  });
+
+  it('opens the folder once per press, busy, with the game page held with a reason meanwhile', async () => {
+    const opening = deferred<void>();
+    vi.mocked(openFolder).mockReturnValueOnce(opening.promise);
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)], { origin: { gameId: 'g1' } as Download['origin'] })]);
+    const { user } = renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+    const folder = screen.getByRole('button', { name: msg('modals.downloadDetailsOpenFolder') });
+    folder.focus();
+
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Enter}');
+
+    expect(vi.mocked(openFolder).mock.calls).toEqual([['/downloads']]);
+    expect(folder.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(folder);
+    const page = screen.getByRole('button', { name: msg('transfers.gamePage') });
+    expect(page.getAttribute('aria-disabled')).toBe('true');
+    expect(describedBy(page)).toContain(msg('modals.actionRunning'));
+    await user.click(page);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    opening.resolve();
+    await vi.waitFor(() => expect(folder.getAttribute('aria-busy')).toBeNull());
+  });
+
+  it('says a folder that cannot be opened in the dialog, not in a toast', async () => {
+    vi.mocked(openFolder).mockRejectedValueOnce(new Error('folder unavailable: stat /downloads: no such file'));
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)])]);
+    const { user } = renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+
+    await user.click(screen.getByRole('button', { name: msg('modals.downloadDetailsOpenFolder') }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('modals.downloadDetailsFolderUnavailable'));
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('opens the game page and closes', async () => {
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)], { origin: { gameId: 'g1' } as Download['origin'] })]);
+    const { user } = renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+    navigate('downloads');
+
+    await user.click(screen.getByRole('button', { name: msg('transfers.gamePage') }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

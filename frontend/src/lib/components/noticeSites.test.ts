@@ -57,6 +57,11 @@ const SITES: Record<string, Site[]> = {
     ['info', true],
     ['danger', true],
   ],
+  // A folder that would not open and a download that left the list: both just happened.
+  'lib/components/DownloadDetailsModal.svelte': [
+    ['danger', true],
+    ['info', true],
+  ],
   'lib/components/AddImageModal.svelte': [
     ['danger', true],
     ['danger', true],
