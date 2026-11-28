@@ -340,6 +340,28 @@ describe('AddSourceModal: a source saved whose first refresh failed', () => {
     await vi.waitFor(() => expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([told()]));
   });
 
+  it('finds the source saved in Go’s spelling of a Cyrillic URL, by the place Go named at Check, beside another new one', async () => {
+    const typed = 'https://раздачи.рф/feed.json';
+    const goPlace = 'https://%D1%80%D0%B0%D0%B7%D0%B4%D0%B0%D1%87%D0%B8.%D1%80%D1%84/feed.json';
+    vi.mocked(testSource).mockResolvedValueOnce(preview({ url: goPlace }));
+    vi.mocked(addSource).mockImplementationOnce(async () => {
+      vi.mocked(listSources).mockResolvedValue([
+        { ...saved, id: 'x', name: 'elsewhere', url: 'https://elsewhere.test/feed.json' },
+        { ...saved, url: goPlace },
+      ]);
+      throw goError('sources.feed_bad_status: status 503');
+    });
+    const { dialog, keys, field } = openDialog();
+    await keys.type(field, typed);
+    await keys.click(checkButton(dialog));
+
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.add') }));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([told()]);
+    expect(vi.mocked(addSource).mock.calls).toEqual([[typed]]);
+  });
+
   it('keeps a refusal that saved nothing at the field, the URL there, sent once', async () => {
     vi.mocked(addSource).mockRejectedValueOnce(goError('sources.feed_invalid_url'));
     const { dialog, keys } = await checked(async () => preview());

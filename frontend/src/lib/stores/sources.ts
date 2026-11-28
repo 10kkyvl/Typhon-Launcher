@@ -58,11 +58,13 @@ export function toastUnannounced(err: unknown, since: number) {
   toast(sourceErrorText(err), 'danger');
 }
 
-// Where the adds still waiting for Go's answer point: the error of a first refresh there is said by
-// the add, once, not by the event as well.
-const addingAt = new Map<string, number>();
-const placeOf = (kind: SourceType, location: string) => `${kind}:${location.trim().toLowerCase()}`;
-const placeOfSource = (item: Source) => placeOf(item.type, item.type === 'file' ? (item.path ?? '') : item.url);
+// The adds still waiting for Go's answer, each with the ids listed at its press. The source an add
+// saves is one whose id is not among them: Go saves the location in its own spelling, so no string
+// the frontend derives from the typed one names it. The error of a first refresh is said by the add,
+// once, not by the event as well: an error event for an id one of them did not list is held.
+const adding = new Set<Set<string>>();
+const holdsError = (id: string) => [...adding].some((before) => !before.has(id));
+const locationOf = (item: Source) => (item.type === 'file' ? (item.path ?? '') : item.url);
 
 function upsert(item: Source) {
   sources.update((list) => {
@@ -140,8 +142,7 @@ export async function initSources(): Promise<void> {
     const { sourceId, name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
     announce(message);
-    const item = get(sources).find((s) => s.id === sourceId);
-    if (item && addingAt.has(placeOfSource(item))) return;
+    if (holdsError(sourceId)) return;
     toast(msg('state.sourcesErrorToast', { name, message: sourceErrorText(new Error(message)) }), 'danger');
   });
   on('source:degraded', (event) => {
@@ -208,32 +209,32 @@ export interface AddResult {
 
 /**
  * Go's add saves the source and then answers its first refresh's error: an error does not say that
- * nothing was saved. The list read again tells: a source at that place that was not there before is
- * this add's, saved, with the failure; otherwise the add was refused and rejects.
+ * nothing was saved. The list read again tells: a source of that kind whose id was not listed at the
+ * press is this add's, saved, with the failure; otherwise the add was refused and rejects. `place` is
+ * Go's own spelling of the location, from the check's preview: it tells this add's source from one
+ * that arrived meanwhile, and is compared as it is, never re-derived.
  */
-async function addAt(kind: SourceType, location: string, send: () => Promise<Source>): Promise<AddResult> {
-  const place = placeOf(kind, location);
+async function addAt(kind: SourceType, place: string | undefined, send: () => Promise<Source>): Promise<AddResult> {
+  const whole = get(sourcesLoaded);
   const before = new Set(get(sources).map((s) => s.id));
-  addingAt.set(place, (addingAt.get(place) ?? 0) + 1);
+  adding.add(before);
   try {
     let source: Source;
     try {
       source = await send();
     } catch (err) {
-      const saved = await savedBy(place, before, err);
+      const saved = await savedBy(kind, place, whole, before, err);
       if (!saved) throw err;
       return { source: saved, failure: err };
     }
     await reload();
     return { source };
   } finally {
-    const left = (addingAt.get(place) ?? 1) - 1;
-    if (left > 0) addingAt.set(place, left);
-    else addingAt.delete(place);
+    adding.delete(before);
   }
 }
 
-async function savedBy(place: string, before: Set<string>, err: unknown): Promise<Source | undefined> {
+async function savedBy(kind: SourceType, place: string | undefined, whole: boolean, before: Set<string>, err: unknown) {
   if (errorCode(err) === 'sources.source_exists') return undefined;
   try {
     await reload();
@@ -241,13 +242,18 @@ async function savedBy(place: string, before: Set<string>, err: unknown): Promis
     // The list could not be read: nothing shows the source was saved, so the add's own reason stands.
     return undefined;
   }
-  return get(sources).find((s) => !before.has(s.id) && placeOfSource(s) === place);
+  const fresh = get(sources).filter((s) => s.type === kind && !before.has(s.id));
+  // Without Go's spelling, a lone new source is this add's only when the press saw the whole list.
+  const mine = place !== undefined ? fresh.filter((s) => locationOf(s) === place) : whole ? fresh : [];
+  return mine.length === 1 ? mine[0] : undefined;
 }
 
-export function add(url: string): Promise<AddResult> {
-  return addAt('url', url, () => addSourceRequest(url));
+/** `place`: the URL as Go spelt it in the check's preview. */
+export function add(url: string, place?: string): Promise<AddResult> {
+  return addAt('url', place, () => addSourceRequest(url));
 }
 
-export function addFile(path: string): Promise<AddResult> {
-  return addAt('file', path, () => addSourceFileRequest(path));
+/** `place`: the path as Go spelt it in the check's preview. */
+export function addFile(path: string, place?: string): Promise<AddResult> {
+  return addAt('file', place, () => addSourceFileRequest(path));
 }

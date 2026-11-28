@@ -357,6 +357,144 @@ describe('an add whose first refresh failed', () => {
   });
 });
 
+// The source an add saved is the one whose id was not in the list at the press: Go saves the URL in its
+// own spelling (feed.ValidateURL: url.Parse + String), so no string the frontend derives from the typed
+// one can find it.
+describe('an add finds the source it saved by id', () => {
+  const failedAt = (url: string) => new Error(`typhon:sources.feed_bad_status: GET ${url}: status 503`);
+  const urlSource = (id: string, url: string, patch: Partial<Source> = {}) => ({ id, name: id, type: 'url', url, status: 'error', ...patch }) as Source;
+  const fileSource = (id: string, path: string, patch: Partial<Source> = {}) =>
+    ({ id, name: id, type: 'file', url: '', path, status: 'active', ...patch }) as Source;
+
+  // The URL as typed and as Go saves it (output/redesign-2.0/work/rv-7m6r1/gonorm.out).
+  const spellings: [string, string, string][] = [
+    ['a Cyrillic host', 'https://раздачи.рф/feed.json', 'https://%D1%80%D0%B0%D0%B7%D0%B4%D0%B0%D1%87%D0%B8.%D1%80%D1%84/feed.json'],
+    ['a Cyrillic path', 'https://feed.example/фид.json', 'https://feed.example/%D1%84%D0%B8%D0%B4.json'],
+    ['a space in the path', 'https://feed.example/my feed.json', 'https://feed.example/my%20feed.json'],
+    ['an empty fragment', 'https://feed.example/feed.json#', 'https://feed.example/feed.json'],
+  ];
+
+  for (const [label, typed, stored] of spellings) {
+    it(`answers the saved source for ${label}, and leaves its refresh error to the add`, async () => {
+      const { store, toast } = await load();
+      const err = failedAt(stored);
+      api.addSource.mockImplementationOnce(async () => {
+        handlers['source:updated']({ data: urlSource('n', stored, { status: 'updating' }) });
+        handlers['source:error']({ data: { sourceId: 'n', name: 'n', message: err.message, scheduled: false } });
+        seeded = [urlSource('n', stored)];
+        throw err;
+      });
+
+      const outcome = await store.add(typed).then(
+        (value) => ({ resolved: value.source.id, failure: value.failure }),
+        (reason: unknown) => ({ rejected: String(reason) }),
+      );
+
+      expect(outcome).toEqual({ resolved: 'n', failure: err });
+      expect(get(store.sources).map((s) => s.id)).toEqual(['n']);
+      expect(toast).not.toHaveBeenCalled();
+    });
+  }
+
+  it('says the error of a source that was listed at the press while an add waits', async () => {
+    seeded = [urlSource('o', 'https://other.example/f.json', { status: 'active' })];
+    const { store, toast } = await load();
+    let finish: (s: Source) => void = () => {};
+    api.addSource.mockImplementationOnce(() => new Promise<Source>((resolve) => (finish = resolve)));
+    const pending = store.add('https://feed.example/f.json');
+
+    handlers['source:error']({ data: { sourceId: 'o', name: 'Other', message: 'status 500', scheduled: false } });
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    finish(urlSource('n', 'https://feed.example/f.json', { status: 'active' }));
+    await pending;
+  });
+
+  it('says the error of a listed file source whose path differs from the added one only by case', async () => {
+    seeded = [fileSource('o', '/feeds/Feed.json')];
+    const { store, toast } = await load();
+    let finish: (s: Source) => void = () => {};
+    api.addSourceFile.mockImplementationOnce(() => new Promise<Source>((resolve) => (finish = resolve)));
+    const pending = store.addFile('/feeds/feed.json');
+
+    handlers['source:error']({ data: { sourceId: 'o', name: 'Feed.json', message: 'status 500', scheduled: false } });
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    finish(fileSource('n', '/feeds/feed.json'));
+    await pending;
+  });
+
+  it('does not take a listed file source whose path differs only by case for the one it saved', async () => {
+    seeded = [fileSource('o', '/feeds/Feed.json')];
+    const { store } = await load();
+    api.addSourceFile.mockImplementationOnce(async () => {
+      seeded = [...seeded, fileSource('n', '/feeds/feed.json', { status: 'error' })];
+      throw new Error('typhon:sources.feed_invalid_json: bad');
+    });
+
+    expect((await store.addFile('/feeds/feed.json')).source.id).toBe('n');
+  });
+
+  it('takes, of two new sources, the one at the place Go named for the check', async () => {
+    const goPlace = 'https://%D1%80%D0%B0%D0%B7%D0%B4%D0%B0%D1%87%D0%B8.%D1%80%D1%84/feed.json';
+    const { store } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [urlSource('x', 'https://elsewhere.example/feed.json'), urlSource('n', goPlace)];
+      throw failedAt(goPlace);
+    });
+
+    expect((await store.add('https://раздачи.рф/feed.json', goPlace)).source.id).toBe('n');
+  });
+
+  it('rejects when the one new source is at another place than Go named: it is another add’s', async () => {
+    const { store } = await load();
+    const refused = new Error('typhon:sources.feed_invalid_url: bad');
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [urlSource('x', 'https://elsewhere.example/feed.json')];
+      throw refused;
+    });
+
+    await expect(store.add('https://feed.example/feed.json', 'https://feed.example/feed.json')).rejects.toBe(refused);
+  });
+
+  it('does not take a new source of the other kind for the one it saved', async () => {
+    const { store } = await load();
+    const refused = new Error('typhon:sources.feed_invalid_url: bad');
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [fileSource('f', '/feeds/feed.json')];
+      throw refused;
+    });
+
+    await expect(store.add('https://feed.example/feed.json')).rejects.toBe(refused);
+  });
+
+  it('rejects a refusal when the list was never read before the add, whatever the list holds after', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+    const { store } = await load();
+    const refused = new Error('typhon:sources.feed_invalid_url: bad');
+    api.addSource.mockImplementationOnce(async () => {
+      seeded = [urlSource('o', 'https://other.example/feed.json', { status: 'active' })];
+      throw refused;
+    });
+
+    await expect(store.add('https://feed.example/feed.json')).rejects.toBe(refused);
+  });
+
+  it('holds no error of a source listed at the press, whatever its place', async () => {
+    seeded = [urlSource('o', 'https://feed.example/feed.json', { status: 'active' })];
+    const { store, toast } = await load();
+    let finish: (s: Source) => void = () => {};
+    api.addSource.mockImplementationOnce(() => new Promise<Source>((resolve) => (finish = resolve)));
+    const pending = store.add('HTTPS://FEED.EXAMPLE/feed.json');
+
+    handlers['source:error']({ data: { sourceId: 'o', name: 'o', message: 'status 500', scheduled: false } });
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    finish(urlSource('n', 'https://feed.example/feed.json', { status: 'active' }));
+    await pending;
+  });
+});
+
 describe('background add failures', () => {
   const failed = new Error('typhon:sources.feed_bad_status: GET https://feed.example/x: 404');
 

@@ -119,10 +119,12 @@
     const token = run;
     const at = mode;
     const hand = pressHand();
+    // Go's spelling of what the check read: the store tells the source this add saved by it.
+    const place = preview ? location : undefined;
     const mark = errorMark();
     adding = true;
     try {
-      const { source, failure } = mode === 'file' ? await addSourceFile(value) : await addSource(value);
+      const { source, failure } = mode === 'file' ? await addSourceFile(value, place) : await addSource(value, place);
       // Saved with its first refresh failed: the list shows it with that error and its own Refresh.
       if (failure !== undefined) toast(msg('modals.addSourceAddedRefreshFailed', { name: source.name, reason: sourceErrorText(failure) }), 'warning');
       else toast(msg('modals.addSourceAdded', { name: source.name }), 'success');
