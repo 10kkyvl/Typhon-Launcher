@@ -3,6 +3,7 @@ export const common = {
   'common.cancel': 'Отмена',
   'common.close': 'Закрыть',
   'common.retry': 'Повторить',
+  'common.failedReason': '{action}: {reason}',
   'common.save': 'Сохранить',
   'common.refresh': 'Обновить',
   'common.add': 'Добавить',

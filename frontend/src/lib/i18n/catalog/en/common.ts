@@ -6,6 +6,7 @@ export const common: Record<CommonKey, Message> = {
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.retry': 'Retry',
+  'common.failedReason': '{action}: {reason}',
   'common.save': 'Save',
   'common.refresh': 'Refresh',
   'common.add': 'Add',
