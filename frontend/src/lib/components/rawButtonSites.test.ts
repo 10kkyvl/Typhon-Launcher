@@ -57,7 +57,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/NotificationsPanel.svelte': { notification: 'row' },
   'lib/components/Sidebar.svelte': { 'nav-item': 'nav item' },
   'lib/components/SidebarStatus.svelte': { item: 'row' },
-  'lib/components/SourceDetailsModal.svelte': { row: 'row' },
+  'lib/components/SourceReleases.svelte': { row: 'row' },
   'lib/components/TitleBar.svelte': { wb: 'title bar' },
   'lib/components/profile/BlockGrid.svelte': { handle: 'drag handle' },
   'lib/components/profile/BlockPicker.svelte': { preset: 'list option' },

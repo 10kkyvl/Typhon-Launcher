@@ -1,9 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
 import raw from './SourceDetailsModal.svelte?raw';
+import releasesRaw from './SourceReleases.svelte?raw';
 import { LatestRequestGate } from '../bigpicture/latestRequest';
 
 const source = raw.replace(/\r\n/g, '\n');
+// The releases block of the dialog: its own component, opened and reset with the dialog.
+const releasesSource = releasesRaw.replace(/\r\n/g, '\n');
+
+function segment(text: string, from: string, to: string) {
+  const start = text.indexOf(from);
+  const end = text.indexOf(to, start);
+  if (start < 0 || end < 0) throw new Error(`no segment ${from} … ${to}`);
+  return ts.transpile(text.slice(start, end), { target: ts.ScriptTarget.ES2022 });
+}
 
 interface Deps {
   getRelease: (id: string) => Promise<unknown>;
@@ -23,11 +33,15 @@ interface State {
 }
 
 function harness(deps: Deps) {
-  const start = source.indexOf('  $effect(() => {');
-  const end = source.indexOf('\n  function reloadAll()', start);
-  const js = ts.transpile(source.slice(start, end), { target: ts.ScriptTarget.ES2022 });
+  const js = [
+    segment(source, '  $effect(() => {', '\n  function reloadAll()'),
+    segment(releasesSource, '  $effect(() => {', '\n  /** Reads the list again'),
+  ].join('\n');
   const toast = vi.fn();
-  let effect!: () => void;
+  const effects: (() => void)[] = [];
+  const effect = () => {
+    for (const fn of effects) fn();
+  };
   const run = new Function('deps', 'gate', 'toast', '$effect', `
     const { getRelease, getSourceDetails, queryReleases } = deps;
     const LatestRequestGate = gate;
@@ -48,7 +62,7 @@ function harness(deps: Deps) {
       state: () => ({ details, releases, total, loadingReleases, detailsError, releasesError, search, page }),
       setPage: (n) => { page = n; },
     };
-  `)(deps, LatestRequestGate, toast, (fn: () => void) => { effect = fn; }) as {
+  `)(deps, LatestRequestGate, toast, (fn: () => void) => { effects.push(fn); }) as {
     show: (id: string | null, releaseId?: string | null) => void;
     loadDetails: (id: string) => Promise<void>;
     loadReleases: (id: string) => Promise<void>;
@@ -240,11 +254,11 @@ describe('focusing a release from a notification', () => {
 describe('source details template', () => {
   it('shows each load failure as a danger notice with a retry, ahead of the loader and the empty state', () => {
     expect(/\{#if detailsError \|\| detailsRetrying\}\s*<Notice tone="danger" compact bind:retrying=\{detailsRetrying\} retry=\{\{[^}]*run: retryDetails/.test(source)).toBe(true);
-    expect(/\{#if releasesError \|\| releasesRetrying\}\s*<div class="list-note">\s*<Notice tone="danger" compact bind:retrying=\{releasesRetrying\} retry=\{\{[^}]*run: retryReleases[\s\S]*?\{:else if loadingReleases\}[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
+    expect(/\{#if releasesError \|\| releasesRetrying\}\s*<div class="list-note">\s*<Notice tone="danger" compact bind:retrying=\{releasesRetrying\} retry=\{\{[^}]*run: retryReleases[\s\S]*?\{:else if loadingReleases\}[\s\S]*?\{:else if releases\.length === 0\}/.test(releasesSource)).toBe(true);
   });
 
   it('keeps the pager on a later page in error, with the range text hidden', () => {
-    expect(/\{#if !releasesError \|\| page > 1\}\s*<div class="tfoot">\s*\{#if !releasesError\}\s*<span class="range">/.test(source)).toBe(true);
-    expect(/<IconButton size="sm" variant="secondary" label=\{msg\('ui\.previous'\)\} disabled=\{page <= 1\} onclick=\{prevPage\}>/.test(source)).toBe(true);
+    expect(/\{#if !releasesError \|\| page > 1\}\s*<div class="tfoot">\s*\{#if !releasesError\}\s*<span class="range">/.test(releasesSource)).toBe(true);
+    expect(/<IconButton size="sm" variant="secondary" label=\{msg\('ui\.previous'\)\} disabled=\{page <= 1\} onclick=\{prevPage\}>/.test(releasesSource)).toBe(true);
   });
 });
