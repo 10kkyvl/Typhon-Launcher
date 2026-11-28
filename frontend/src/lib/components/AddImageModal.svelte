@@ -17,7 +17,7 @@
     narrowByLayout,
     suggestedTitle,
   } from '../library/emulation';
-  import { libraryErrorText } from '../library/errors';
+  import { actionErrorText } from '../library/errors';
   import { imageConsoles, imageTitle, listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
   import { addEmulatedGame, findEmulatedCover, type LibraryGame } from '../services/library';
   import { toast } from '../stores/toasts';
@@ -125,7 +125,7 @@
     try {
       path = await selectImageFile(msg('emul.addImageDialog'), null);
     } catch (err) {
-      if (alive) failure = libraryErrorText(err, msg('games.installedOpenDialogError'));
+      if (alive) failure = actionErrorText(err, msg('games.installedOpenDialogError'));
       return;
     }
     if (path && alive) pick(path);
@@ -192,7 +192,7 @@
         return;
       }
       adding = false;
-      const text = libraryErrorText(err, msg('emul.addFailed'));
+      const text = actionErrorText(err, msg('emul.addFailed'));
       if (IMAGE_CODES.test(code)) {
         imageRefused = text;
         await tick();

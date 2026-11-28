@@ -27,8 +27,9 @@ const colons = (text: string) => (text.match(/:/g) ?? []).length;
 afterEach(() => locale.set('ru'));
 
 describe('actionErrorText over every clause code and every action its callers pass', () => {
-  it('reads the callers: the emulator prompts, the properties dialog and its compatibility switch, the emulators card', () => {
+  it('reads the callers: the emulator prompts, the image dialog, the properties dialog and its compatibility switch, the emulators card', () => {
     expect(callers.map(([path]) => path).sort()).toEqual([
+      '../components/AddImageModal.svelte',
       '../components/BiosNeededModal.svelte',
       '../components/EmulatorBusyModal.svelte',
       '../components/EmulatorNeededModal.svelte',

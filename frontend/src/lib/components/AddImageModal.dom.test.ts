@@ -129,7 +129,7 @@ describe('AddImageModal: the form', () => {
     await keys.click(add);
 
     await vi.waitFor(() => expect(image.getAttribute('aria-invalid')).toBe('true'));
-    expect(describedBy(image)).toContain(msg('emulators.image_missing'));
+    expect(describedBy(image)).toContain(msg('common.failedReason', { action: msg('emul.addFailed'), reason: msg('emulators.image_missing') }));
     expect(document.activeElement).toBe(image);
     expect(toastTexts()).toEqual([]);
   });
@@ -141,7 +141,7 @@ describe('AddImageModal: the form', () => {
     await keys.click(add);
 
     await vi.waitFor(() => expect(title.getAttribute('aria-invalid')).toBe('true'));
-    expect(describedBy(title)).toContain(msg('emulators.title_empty'));
+    expect(describedBy(title)).toContain(msg('common.failedReason', { action: msg('emul.addFailed'), reason: msg('emulators.title_empty') }));
     expect(document.activeElement).toBe(title);
   });
 
@@ -153,7 +153,9 @@ describe('AddImageModal: the form', () => {
 
     await keys.click(within(dialog).getByRole('button', { name: msg('games.installedBrowseButton') }));
 
-    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emulators.unknown_platform'));
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(
+      msg('common.failedReason', { action: msg('games.installedOpenDialogError'), reason: msg('emulators.unknown_platform') }),
+    );
     expect(toastTexts()).toEqual([]);
   });
 });
