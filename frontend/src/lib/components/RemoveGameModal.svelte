@@ -8,6 +8,7 @@
   import Toggle from './Toggle.svelte';
   import type { OptionItem } from './optionList';
   import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
+  import { getGames } from '../services/library';
   import { REASONS, installErrorText } from '../install/installErrors';
   import { currentRouteKey } from '../stores/router';
   import { toast } from '../stores/toasts';
@@ -116,6 +117,19 @@
     return key ? msg('modals.removeGameFailedForReason', { title: name, reason: msg(key) }) : msg('modals.removeGameFailedFor', { title: name });
   }
 
+  // Go takes the card out of the library (or marks it uninstalled) before steps that can still fail
+  // (forgetting its installs, deleting its download): such a refusal comes for a removal that was made.
+  // One read of the list says which; GetGames only copies the list, so the read changes nothing.
+  async function removedAnyway(id: string, keepInLibrary: boolean): Promise<boolean> {
+    try {
+      const card = (await getGames()).find((game) => game.id === id);
+      return keepInLibrary ? card?.uninstalled === true : !card;
+    } catch (err) {
+      console.warn('remove game: read the library after a refusal', err);
+      return false;
+    }
+  }
+
   async function confirm() {
     if (!info || working || blocked) return;
     const at = opening;
@@ -134,9 +148,7 @@
     const hand = focusHandOff(() => pressed);
     working = true;
     failure = '';
-    try {
-      await removeGame(id, options);
-      toast(keepInLibrary ? msg('modals.removeGameRemovedFromDisk', { title: name }) : msg('modals.removeGameRemovedFromLibrary', { title: name }));
+    const removed = () => {
       if (!heard()) {
         // The game page unmounts the dialog when the card leaves first: while the player is still on
         // the page the removal was pressed on, the page's own flow (where it leaves to) finishes.
@@ -146,7 +158,18 @@
       working = false;
       open = false;
       onremoved?.(chosen);
+    };
+    try {
+      await removeGame(id, options);
+      toast(keepInLibrary ? msg('modals.removeGameRemovedFromDisk', { title: name }) : msg('modals.removeGameRemovedFromLibrary', { title: name }));
+      removed();
     } catch (err) {
+      if (await removedAnyway(id, keepInLibrary)) {
+        const key = keepInLibrary ? 'modals.removeGameRemovedFromDiskUnfinished' : 'modals.removeGameRemovedFromLibraryUnfinished';
+        toast(msg(key, { title: name, reason: installErrorText(err) }), 'warning');
+        removed();
+        return;
+      }
       if (!heard()) {
         toast(refusedFor(name, err), 'danger');
         return;

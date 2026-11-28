@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
+import { getGames, type LibraryGame } from '../services/library';
 import { navigate, resetHistory } from '../stores/router';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
@@ -16,6 +17,11 @@ vi.mock('../services/install', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/install')>()),
   inspectRemoval: vi.fn(),
   removeGame: vi.fn(),
+}));
+// What the library holds after a refused removal: by default the card is there and installed.
+vi.mock('../services/library', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/library')>()),
+  getGames: vi.fn(),
 }));
 
 function info(patch: Partial<RemovalInfo> = {}): RemovalInfo {
@@ -57,6 +63,7 @@ beforeEach(() => {
   app = document.createElement('div');
   app.id = 'app';
   document.body.append(app);
+  vi.mocked(getGames).mockResolvedValue([{ id: 'g1', title: 'Hades' } as LibraryGame]);
 });
 
 afterEach(() => {
@@ -64,6 +71,7 @@ afterEach(() => {
   resetBindings();
   vi.mocked(inspectRemoval).mockReset();
   vi.mocked(removeGame).mockReset();
+  vi.mocked(getGames).mockReset();
   toasts.set([]);
   resetHistory();
   document.body.replaceChildren();
@@ -390,5 +398,86 @@ describe('RemoveGameModal: an answer after the dialog is gone', () => {
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(get(toasts).map((t) => t.message)).toEqual([msg('modals.removeGameRemovedFromLibrary', { title: 'Hades' })]);
     expect(confirmButton(dialog, 'modals.removeGameModeLibraryLabel').getAttribute('aria-busy')).toBeNull();
+  });
+});
+
+describe('RemoveGameModal: a refusal for a removal Go has made', () => {
+  const unfinished = (key: 'modals.removeGameRemovedFromDiskUnfinished' | 'modals.removeGameRemovedFromLibraryUnfinished', reason: string) =>
+    msg(key, { title: 'Hades', reason });
+
+  it('the card is gone from the library: says it was removed with what did not finish, and closes as after a removal', async () => {
+    vi.mocked(removeGame).mockRejectedValueOnce(coded('download.cleanup_in_use'));
+    vi.mocked(getGames).mockResolvedValue([]);
+    const onremoved = vi.fn();
+    const { dialog } = await openDialog({}, { mode: 'library', onremoved });
+
+    await user().click(confirmButton(dialog, 'modals.removeGameModeLibraryLabel'));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(onremoved.mock.calls).toEqual([['library']]);
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([
+      [unfinished('modals.removeGameRemovedFromLibraryUnfinished', msg('errInstall.downloadCleanupInUse')), 'warning'],
+    ]);
+    expect(vi.mocked(removeGame)).toHaveBeenCalledTimes(1);
+  });
+
+  it('the card stays, uninstalled: says it was removed from this computer, and closes', async () => {
+    vi.mocked(removeGame).mockRejectedValueOnce(new Error('save installs: disk full'));
+    vi.mocked(getGames).mockResolvedValue([{ id: 'g1', title: 'Hades', uninstalled: true } as LibraryGame]);
+    const onremoved = vi.fn();
+    const { dialog } = await openDialog({}, { mode: 'disk', onremoved });
+
+    await user().click(confirmButton(dialog, 'modals.removeGameModeDiskLabel'));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(onremoved.mock.calls).toEqual([['disk']]);
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([
+      [unfinished('modals.removeGameRemovedFromDiskUnfinished', msg('errInstall.fallback')), 'warning'],
+    ]);
+  });
+
+  it('a destroyed dialog after the player left: the same words once, and goes nowhere', async () => {
+    const pending = held<void>();
+    vi.mocked(removeGame).mockReturnValueOnce(pending.promise);
+    vi.mocked(getGames).mockResolvedValue([]);
+    const onremoved = vi.fn();
+    const { dialog, view } = await openDialog({}, { mode: 'library', onremoved });
+    await user().click(confirmButton(dialog, 'modals.removeGameModeLibraryLabel'));
+    view.unmount();
+    navigate('settings');
+
+    pending.reject(coded('download.cleanup_in_use'));
+    await settle();
+
+    expect(onremoved).not.toHaveBeenCalled();
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([
+      [unfinished('modals.removeGameRemovedFromLibraryUnfinished', msg('errInstall.downloadCleanupInUse')), 'warning'],
+    ]);
+  });
+
+  it('the card is still installed: the refusal stays a refusal, in the dialog', async () => {
+    vi.mocked(removeGame).mockRejectedValueOnce(coded('install.files_locked'));
+    const { dialog } = await openDialog({}, { mode: 'disk' });
+
+    await user().click(confirmButton(dialog, 'modals.removeGameModeDiskLabel'));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('errInstall.installFilesLocked'));
+    expect(vi.mocked(getGames)).toHaveBeenCalledTimes(1);
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('a library it cannot read: the refusal stays a refusal, in the dialog', async () => {
+    vi.mocked(removeGame).mockRejectedValueOnce(coded('install.files_locked'));
+    vi.mocked(getGames).mockRejectedValue(new Error('unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { dialog } = await openDialog({}, { mode: 'library' });
+
+    await user().click(confirmButton(dialog, 'modals.removeGameModeLibraryLabel'));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('errInstall.installFilesLocked'));
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
