@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { msg } from '../i18n';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { locale, msg } from '../i18n';
 import { installErrorText } from '../install/installErrors';
 import { confirmExecutable, inspectDownload, planSpace, startInstall, type Installation, type PlanInfo } from '../services/install';
 import { selectFolder, type Settings } from '../services/settings';
@@ -331,6 +331,20 @@ describe('InstallModal: messages', () => {
 
     const text = within(dialog).getByText(installErrorText('typhon:install.disk_full: full'));
     expect(text.closest('[data-tone="danger"]')).not.toBeNull();
+  });
+
+  it.each(['ru', 'en'] as const)('says an install that left a warning in its own words, never Go’s (%s)', (language) => {
+    const goText = 'игра установлена, но запись загрузки не удалена: remove D:\\dl\\Hades: access is denied';
+    const before = get(locale);
+    onTestFinished(() => locale.set(before));
+    locale.set(language);
+    installations.set([installation({ status: 'completed', type: 'portable', candidates: null, warning: goText })]);
+    const { dialog } = openDialog();
+
+    const notice = within(dialog).getByText(msg('modals.installWarningDownloadLeft')).closest('[data-tone="warning"]');
+    expect(notice).not.toBeNull();
+    expect(dialog.textContent).not.toContain('запись загрузки');
+    expect(dialog.textContent).not.toContain('access is denied');
   });
 });
 

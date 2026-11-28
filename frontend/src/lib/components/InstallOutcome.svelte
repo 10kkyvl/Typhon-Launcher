@@ -116,8 +116,10 @@
       <p class="note">{msg('emul.installDone')}</p>
       <EmulatorHint platform={installation.platform} />
     {/if}
+    <!-- Go's warning is prose with a wrapped error, and Go sets one only when the download's record
+         stays after a move (install.releaseMovedDownload): the dialog says that in its own words. -->
     {#if installation.warning}
-      <Notice tone="warning" compact announce={false}>{installation.warning}</Notice>
+      <Notice tone="warning" compact announce={false}>{msg('modals.installWarningDownloadLeft')}</Notice>
     {/if}
     {#if askCleanup && !cleanupResolved}
       <div class="field">
