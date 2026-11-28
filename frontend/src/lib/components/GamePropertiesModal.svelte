@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import ConfirmModal from './ConfirmModal.svelte';
   import Modal from './Modal.svelte';
   import GameProfiles from './GameProfiles.svelte';
@@ -13,6 +14,7 @@
   import { selectImageFile } from '../services/emulators';
   import { errorCode, msg } from '../i18n';
   import { propertiesErrorText as errorText } from '../game/propertiesErrors';
+  import { createGameModeWrites } from '../game/gameModeWrites.svelte';
   import { defaultWrapper, describeImports, presetsFor, problemActions, progressView } from '../game/compatMode';
   import {
     clearSavesDir,
@@ -38,7 +40,7 @@
   } from '../services/wrappers';
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
   import { libraryGames, runningGames } from '../stores/library';
-  import { withOverride, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
+  import type { GameModeKey, OverrideState } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
   import { focusableIn } from '../layers/focus';
   import { focusHandOff } from '../utils/focusHandOff';
@@ -74,7 +76,7 @@
   let presenceBusy = $state(false);
   let presenceError = $state('');
 
-  let gameModeBusy = $state(false);
+  const gameModes = createGameModeWrites(setGameModeOverride, (id) => get(libraryGames).find((g) => g.id === id)?.gameMode);
   let gameModeError = $state('');
   let gameModeShown = $state(false);
   let gameModeMac = $state(false);
@@ -161,7 +163,7 @@
       argsBusy = false;
       adminBusy = false;
       presenceBusy = false;
-      gameModeBusy = false;
+      gameModes.reset();
       savesBusy = '';
       compatAction = '';
       candidates = [];
@@ -191,6 +193,11 @@
 
   $effect(() => {
     presence = !game?.hidePresence;
+  });
+
+  $effect(() => {
+    void game?.gameMode;
+    untrack(() => gameModes.settle());
   });
 
   $effect(() => {
@@ -404,21 +411,24 @@
     }
   }
 
+  // A change made while another is written waits its turn; changes still waiting when the opening
+  // passes are said in one toast once the last is stored, a refusal in its own.
   async function changeGameMode(key: GameModeKey, state: OverrideState) {
-    if (!game || gameModeBusy) return;
+    if (!game) return;
     const id = game.id;
     const { heard, title } = pressedNow();
-    gameModeBusy = true;
     gameModeError = '';
     let failure: string | undefined;
     try {
-      await setGameModeOverride(id, withOverride(game.gameMode, key, state));
+      await gameModes.write(id, key, state);
     } catch (err) {
       failure = errorText(err, msg('modals.propertiesGameModeFailed'));
     }
-    if (!heard()) return sayLate(title, failure);
-    gameModeBusy = false;
-    gameModeError = failure ?? '';
+    if (!heard()) {
+      if (failure !== undefined || gameModes.waiting(id) === 0) sayLate(title, failure);
+      return;
+    }
+    if (failure !== undefined) gameModeError = failure;
   }
 
   async function changePresence(on: boolean) {
@@ -575,6 +585,7 @@
         {gameModeShown}
         {gameModeMac}
         {gameModeError}
+        gameModeChosen={gameModes.chosen}
         ongamemode={changeGameMode}
         {presence}
         {presenceBusy}

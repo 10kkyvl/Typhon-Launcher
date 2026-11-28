@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg, type MessageKey } from '../i18n';
 import { executableCandidates } from '../services/install';
-import { clearSavesDir, getLaunchArgsLine, selectGameExecutable, setExecutable, setSavesDir, type LibraryGame } from '../services/library';
+import { clearSavesDir, getLaunchArgsLine, selectGameExecutable, setExecutable, setGameModeOverride, setSavesDir, type LibraryGame } from '../services/library';
 import { selectFolder } from '../services/settings';
 import { appInfo } from '../services/system';
 import { disableWrapper, enableWrapper, inspectWrapper, type WrapperInfo } from '../services/wrappers';
@@ -64,6 +64,10 @@ beforeEach(() => {
   app.id = 'app';
   document.body.append(app);
   libraryGames.set([hades]);
+  // A queued answer one test left unused must not reach the next.
+  for (const call of [setGameModeOverride, setExecutable, selectGameExecutable, selectFolder, clearSavesDir, enableWrapper]) {
+    vi.mocked(call).mockReset();
+  }
   vi.mocked(executableCandidates).mockResolvedValue([
     { path: '/games/hades/Hades.exe', score: 1 },
     { path: '/games/hades/x64/Hades.exe', score: 0.5 },
@@ -273,5 +277,70 @@ describe('GamePropertiesModal: one write that changes what the game starts or it
     expect(get(toasts)).toEqual([]);
     setting.resolve(hades);
     await vi.waitFor(() => expect(revert.getAttribute('aria-disabled')).toBeNull());
+  });
+});
+
+describe('GamePropertiesModal: game mode changes made while one is written', () => {
+  async function chooseIn(dialog: HTMLElement, label: MessageKey, option: MessageKey) {
+    const keys = user();
+    const select = within(dialog).getByRole('combobox', { name: msg(label) });
+    await keys.click(select);
+    await keys.click(await screen.findByRole('option', { name: msg(option) }));
+    return select;
+  }
+
+  it('wait their turn, show the chosen value meanwhile, and are sent in order, each on top of the one before', async () => {
+    const first = held<LibraryGame>();
+    vi.mocked(setGameModeOverride).mockReturnValueOnce(first.promise).mockResolvedValueOnce(hades);
+    const dialog = await openDialog();
+    await within(dialog).findByRole('combobox', { name: msg('settings.gameModePowerLabel') });
+
+    await chooseIn(dialog, 'settings.gameModePowerLabel', 'modals.propertiesGameModeOn');
+    const hide = await chooseIn(dialog, 'settings.gameModeHideLabel', 'modals.propertiesGameModeOff');
+
+    expect(hide.textContent).toContain(msg('modals.propertiesGameModeOff'));
+    expect(vi.mocked(setGameModeOverride).mock.calls).toEqual([['g1', { highPerformance: true }]]);
+    first.resolve(hades);
+    await vi.waitFor(() =>
+      expect(vi.mocked(setGameModeOverride).mock.calls).toEqual([
+        ['g1', { highPerformance: true }],
+        ['g1', { highPerformance: true, hideLauncher: false }],
+      ]),
+    );
+    expect(hide.textContent).toContain(msg('modals.propertiesGameModeOff'));
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+
+  it('refused after waiting, shows the stored value again and says why in the dialog', async () => {
+    const first = held<LibraryGame>();
+    vi.mocked(setGameModeOverride).mockReturnValueOnce(first.promise).mockRejectedValueOnce(new Error('disk'));
+    const dialog = await openDialog();
+    await within(dialog).findByRole('combobox', { name: msg('settings.gameModePowerLabel') });
+
+    const power = await chooseIn(dialog, 'settings.gameModePowerLabel', 'modals.propertiesGameModeOn');
+    const hide = await chooseIn(dialog, 'settings.gameModeHideLabel', 'modals.propertiesGameModeOff');
+    first.resolve(hades);
+
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('modals.propertiesGameModeFailed'));
+    expect(hide.textContent).not.toContain(msg('modals.propertiesGameModeOff'));
+    expect(power.textContent).toContain(msg('modals.propertiesGameModeOn'));
+    expect(vi.mocked(setGameModeOverride)).toHaveBeenCalledTimes(2);
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('still waiting when the dialog closes, are sent in order and said once in a toast naming the game', async () => {
+    const first = held<LibraryGame>();
+    vi.mocked(setGameModeOverride).mockReturnValueOnce(first.promise).mockResolvedValueOnce(hades);
+    const dialog = await openDialog();
+    await within(dialog).findByRole('combobox', { name: msg('settings.gameModePowerLabel') });
+    await chooseIn(dialog, 'settings.gameModePowerLabel', 'modals.propertiesGameModeOn');
+    await chooseIn(dialog, 'settings.gameModeHideLabel', 'modals.propertiesGameModeOff');
+    closeGameProperties();
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+
+    first.resolve(hades);
+
+    await vi.waitFor(() => expect(vi.mocked(setGameModeOverride)).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([['success', msg('modals.propertiesLateSaved', { title: 'Hades' })]]));
   });
 });

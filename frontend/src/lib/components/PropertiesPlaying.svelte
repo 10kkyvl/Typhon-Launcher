@@ -14,6 +14,7 @@
     gameModeShown,
     gameModeMac,
     gameModeError,
+    gameModeChosen,
     ongamemode,
     presence,
     presenceBusy,
@@ -25,6 +26,8 @@
     /** On macOS only hiding the launcher applies. */
     gameModeMac: boolean;
     gameModeError: string;
+    /** The change a row shows while it waits, is sent, or until the library holds it. */
+    gameModeChosen: (key: GameModeKey) => OverrideState | undefined;
     ongamemode: (key: GameModeKey, state: OverrideState) => void;
     presence: boolean;
     presenceBusy: boolean;
@@ -63,7 +66,7 @@
         <span class="label" id="{uid}-gamemode-{row.key}-label">{row.title}</span>
         <Select
           labelledby="{uid}-gamemode-{row.key}-label"
-          value={overrideState(game.gameMode, row.key)}
+          value={gameModeChosen(row.key) ?? overrideState(game.gameMode, row.key)}
           width="26rem"
           options={row.options}
           onchange={(id) => ongamemode(row.key, id as OverrideState)}
