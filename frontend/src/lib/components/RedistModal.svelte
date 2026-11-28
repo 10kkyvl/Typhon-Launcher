@@ -46,6 +46,9 @@
   let outcomes = $state<Record<string, Outcome>>({});
 
   let seq = 0;
+  // One per read of the installed runtimes: the first read of an opening and a re-read after an
+  // installer answered can run together, and only the newest one's answer is shown.
+  let runtimesRead = 0;
   // One per opening of the dialog: a retry or an installer that answers after its opening has
   // passed paints nothing; an installer's answer is then said once in a toast naming the package.
   let opening = 0;
@@ -115,16 +118,19 @@
   }
 
   async function loadSystem(id: number) {
+    const read = ++runtimesRead;
     try {
       const found = await installedRuntimes();
       if (id !== seq) return;
-      runtimes = found;
+      if (read === runtimesRead) runtimes = found;
     } catch (err) {
       if (id !== seq) return;
-      if (isUnsupported(err)) unsupported = true;
-      else systemError = redistErrorText(err);
-      systemLoading = false;
-      return;
+      if (read === runtimesRead) {
+        if (isUnsupported(err)) unsupported = true;
+        else systemError = redistErrorText(err);
+        systemLoading = false;
+        return;
+      }
     }
     try {
       const found = await officialLinks();
@@ -138,11 +144,12 @@
   }
 
   async function refreshRuntimes(id: number) {
+    const read = ++runtimesRead;
     try {
       const found = await installedRuntimes();
-      if (id === seq) runtimes = found;
+      if (id === seq && read === runtimesRead) runtimes = found;
     } catch (err) {
-      if (id === seq) systemError = redistErrorText(err);
+      if (id === seq && read === runtimesRead) systemError = redistErrorText(err);
     }
   }
 

@@ -214,6 +214,38 @@ describe('RedistModal: opened again while its installer runs', () => {
     expect(dialog.textContent).toContain(msg('redist.missing', { arch: 'x86' }));
   });
 
+  it.each([
+    ['found nothing', (older: ReturnType<typeof held<RedistRuntime[]>>) => older.resolve([])],
+    ['failed', (older: ReturnType<typeof held<RedistRuntime[]>>) => older.reject(new Error('typhon:redist.failed: registry'))],
+  ] as const)('for the same game, reopened while its own first read runs: that older read, answered last (%s), does not paint over the re-read', async (_how, answerOlder) => {
+    const installing = held<RedistResult>();
+    vi.mocked(installRedist).mockReturnValueOnce(installing.promise);
+    vi.mocked(installedRuntimes).mockResolvedValue([]);
+    render(RedistModal, { target: app });
+    const first = await openDialog();
+    const keys = user();
+    await within(first).findByText(vc.name);
+    await keys.click(within(row(first, vc.name)).getByRole('button', { name: msg('redist.install') }));
+    await keys.keyboard('{Escape}');
+    await vi.waitFor(() => expect(first.isConnected).toBe(false));
+    const older = held<RedistRuntime[]>();
+    const newer = held<RedistRuntime[]>();
+    vi.mocked(installedRuntimes).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    openRedist('g1');
+    const dialog = await screen.findByRole('dialog', { name: msg('redist.title', { title: 'Hades' }) });
+    await within(dialog).findByText(vc.name);
+
+    installing.resolve(done);
+    await vi.waitFor(() => expect(vi.mocked(installedRuntimes)).toHaveBeenCalledTimes(3));
+    newer.resolve([x64]);
+    await newer.promise;
+    answerOlder(older);
+
+    await vi.waitFor(() => expect(dialog.textContent).toContain(msg('redist.missing', { arch: 'x86' })));
+    expect(dialog.textContent).not.toContain(msg('redist.missing', { arch: 'x64' }));
+    expect(dialog.textContent).not.toContain(msg('redist.failed'));
+  });
+
   it('for another game: the late answer is said in a toast and nothing is read again', async () => {
     libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
     const { installing } = await reopenedWhileInstalling('g2', 'Celeste');
