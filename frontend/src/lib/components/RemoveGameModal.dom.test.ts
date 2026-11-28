@@ -20,10 +20,15 @@ vi.mock('../services/install', async (importOriginal) => ({
   removeGame: vi.fn(),
 }));
 // What the library holds after a refused removal: by default the card is there and installed.
-vi.mock('../services/library', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/library')>()),
-  getGames: vi.fn(),
-}));
+// gameCard reads the module's own getGames, which a mock of the export does not reach.
+vi.mock('../services/library', async (importOriginal) => {
+  const getGames = vi.fn<() => Promise<LibraryGame[]>>();
+  return {
+    ...(await importOriginal<typeof import('../services/library')>()),
+    getGames,
+    gameCard: vi.fn(async (id: string) => (await getGames()).find((game) => game.id === id)),
+  };
+});
 
 function info(patch: Partial<RemovalInfo> = {}): RemovalInfo {
   return {

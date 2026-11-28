@@ -178,6 +178,11 @@ export async function getGames(): Promise<LibraryGame[]> {
   return ((await LibraryService.GetGames()) ?? []) as unknown as LibraryGame[];
 }
 
+/** The card Go holds for the game now, read from the whole list; undefined when it is not there. */
+export async function gameCard(id: string): Promise<LibraryGame | undefined> {
+  return (await getGames()).find((game) => game.id === id);
+}
+
 export async function getRunningGames(): Promise<string[]> {
   if (!inWails) return [];
   return (await LibraryService.GetRunningGames()) ?? [];

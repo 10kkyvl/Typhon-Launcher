@@ -9,7 +9,7 @@
   import Toggle from './Toggle.svelte';
   import type { OptionItem } from './optionList';
   import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
-  import { getGames } from '../services/library';
+  import { gameCard } from '../services/library';
   import { REASONS, installErrorText } from '../install/installErrors';
   import { libraryGamesById } from '../stores/library';
   import { currentRouteKey } from '../stores/router';
@@ -125,7 +125,7 @@
   // A card that was uninstalled before the press proves nothing: it reads the same after a plain refusal.
   async function removedAnyway(id: string, keepInLibrary: boolean, wasUninstalled: boolean): Promise<boolean> {
     try {
-      const card = (await getGames()).find((game) => game.id === id);
+      const card = await gameCard(id);
       return keepInLibrary ? card?.uninstalled === true && !wasUninstalled : !card;
     } catch (err) {
       console.warn('remove game: read the library after a refusal', err);
