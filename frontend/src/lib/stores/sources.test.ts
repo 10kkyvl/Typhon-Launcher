@@ -657,6 +657,22 @@ describe('an add finds the source it saved by id', () => {
     expect((await store.add('https://раздачи.рф/feed.json', goPlace)).source.id).toBe('n');
   });
 
+  // Go's spelling is compared as it is: on a case-sensitive disk these are two files, two sources.
+  it('two adds out for paths that differ only by case each take the source at its own place', async () => {
+    const { store } = await load();
+    const answers: ((err: Error) => void)[] = [];
+    api.addSourceFile.mockImplementation(() => new Promise<Source>((_, reject) => answers.push(reject)));
+    const upper = store.addFile('/feeds/Feed.json', '/feeds/Feed.json');
+    const lower = store.addFile('/feeds/feed.json', '/feeds/feed.json');
+
+    seeded = [fileSource('u', '/feeds/Feed.json', { status: 'error' }), fileSource('l', '/feeds/feed.json', { status: 'error' })];
+    for (const reject of answers) reject(new Error('typhon:sources.feed_invalid_json: bad'));
+
+    expect(answers).toHaveLength(2);
+    expect((await upper).source.id).toBe('u');
+    expect((await lower).source.id).toBe('l');
+  });
+
   it('rejects when the one new source is at another place than Go named: it is another add’s', async () => {
     const { store } = await load();
     const refused = new Error('typhon:sources.feed_invalid_url: bad');
