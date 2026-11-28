@@ -158,6 +158,15 @@ export const profile = {
   'profile.leaveHeaderText': 'Набранные имя, имя пользователя и текст «О себе» ещё не сохранены. Если уйти, они пропадут.',
   'profile.leaveBothText': 'Правки профиля ещё не сохранены. Если уйти, набранные имя, имя пользователя и текст «О себе» пропадут, а остальные правки останутся черновиком до возвращения на профиль.',
   'profile.headerNotSavedKept': 'Имя, имя пользователя и текст «О себе» не сохранены, набранное осталось в редакторе профиля. {reason}',
+  // 7-F4 profile blocks
+  'profile.fieldCounter': '{count} из {max}',
+  'profile.fieldNear': { one: 'Остался {count} символ', few: 'Осталось {count} символа', many: 'Осталось {count} символов' },
+  'profile.fieldAt': 'Достигнут предел длины',
+  'profile.fieldOver': { one: 'Предел превышен на {count} символ', few: 'Предел превышен на {count} символа', many: 'Предел превышен на {count} символов' },
+  'profile.gameFirst': 'Игра уже первая',
+  'profile.gameLast': 'Игра уже последняя',
+  'profile.blockMoved': '{name}: место {position} из {count}',
+  'profile.aboutEmpty': 'Текста «О себе» пока нет',
 } as const;
 
 export type ProfileKey = keyof typeof profile;

@@ -161,4 +161,13 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.leaveHeaderText': 'The name, username and About text you typed are not saved. If you leave, they are lost.',
   'profile.leaveBothText': 'The profile changes are not saved yet. If you leave, the name, username and About text you typed are lost; the other changes stay as a draft until you come back to the profile.',
   'profile.headerNotSavedKept': "The name, username and About text were not saved; what you typed is kept in the profile's editor. {reason}",
+  // 7-F4 profile blocks
+  'profile.fieldCounter': '{count} of {max}',
+  'profile.fieldNear': { one: '{count} character left', other: '{count} characters left' },
+  'profile.fieldAt': 'The length limit is reached',
+  'profile.fieldOver': { one: '{count} character over the limit', other: '{count} characters over the limit' },
+  'profile.gameFirst': 'The game is already first',
+  'profile.gameLast': 'The game is already last',
+  'profile.blockMoved': '{name}: place {position} of {count}',
+  'profile.aboutEmpty': 'No About text yet',
 };
