@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { saveSettingsPatch, type Settings } from '../services/settings';
 import { emptyFriendsPage, friends } from '../services/social';
-import { settings } from '../stores/settings';
+import { settings, updateSettings } from '../stores/settings';
 import { toasts } from '../stores/toasts';
 import { authState } from '../stores/user';
 import { user } from '../testing/dom';
@@ -233,5 +233,26 @@ describe('SocialConsentScreen: an answer after the screen is gone', () => {
     await vi.waitFor(() => expect(said()).toHaveLength(1));
 
     expect(said()).toEqual([[msg('modals.socialConsentEnableFailed'), 'danger']]);
+  });
+});
+
+describe('SocialConsentScreen beside another save of the settings', () => {
+  it('writes only its own key: a save still queued keeps the value the player chose', async () => {
+    settings.set({ accountSync: false, language: 'ru', theme: 'dark' } as Settings);
+    const theme = held<Settings>();
+    const consent = held<Settings>();
+    vi.mocked(saveSettingsPatch).mockReturnValueOnce(theme.promise).mockReturnValueOnce(consent.promise);
+    const queued = updateSettings({ theme: 'light' });
+    render(SocialConsentScreen, { target: app, props: { open: true } });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.socialConsentTitle') });
+    await user().click(within(dialog).getByRole('button', { name: msg('modals.socialConsentEnable') }));
+
+    // Go answers the consent with the settings it had when that save ran: the theme before the queued one.
+    consent.resolve({ accountSync: true, language: 'ru', theme: 'dark' } as Settings);
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    theme.resolve({ accountSync: true, language: 'ru', theme: 'light' } as Settings);
+    await queued;
+
+    expect([get(settings)?.theme, get(settings)?.accountSync]).toEqual(['light', true]);
   });
 });

@@ -258,9 +258,9 @@
   // Read on arrival (the start's read stands for it while it runs) and again whenever the session
   // changes under the screen (a guest signs in, the connection comes back): the store forgets the
   // lists of a session that ended.
-  // The consent given in the screen's dialog shows in the settings at once but reaches Go only when the
-  // dialog's save lands; the dialog then reads the friends itself (loadFriends) and closes. So while
-  // it is open the screen reads nothing, and once it closed with the consent given, only the blocked list.
+  // The consent given in the screen's dialog shows in the settings only once Go saved it; the dialog
+  // then reads the friends itself (loadFriends) and closes. So while it is open the screen reads
+  // nothing, and once it closed with the consent given, only the blocked list.
   let readByConsent = false;
   $effect(() => {
     void $authState;
