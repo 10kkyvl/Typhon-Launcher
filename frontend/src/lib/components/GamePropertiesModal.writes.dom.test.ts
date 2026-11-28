@@ -344,3 +344,48 @@ describe('GamePropertiesModal: game mode changes made while one is written', () 
     await vi.waitFor(() => expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([['success', msg('modals.propertiesLateSaved', { title: 'Hades' })]]));
   });
 });
+
+describe('GamePropertiesModal: a wrapper switch that fails after its dialog closed', () => {
+  async function enableThenClose() {
+    const enabling = held<void>();
+    vi.mocked(enableWrapper).mockReturnValueOnce(enabling.promise);
+    const dialog = await openDialog();
+    await user().click(controls(dialog).compat);
+    closeGameProperties();
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    return enabling;
+  }
+
+  const toastTexts = () => get(toasts).map((t) => [t.kind, t.message]);
+
+  it('says the switch was not made, with the reason by code, not that the properties were not changed', async () => {
+    const enabling = await enableThenClose();
+
+    enabling.reject(new Error('typhon:wrappers.no_target: nothing to replace'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('modals.compatLateFailed', { title: 'Hades', reason: msg('wrappers.no_target') })]]));
+  });
+
+  // Enable failed while placing files and its rollback failed too: Go keeps the entry with the
+  // problem (files partly replaced), and its error may carry no code at all.
+  it.each([
+    [{ code: 'wrappers.recovery_failed' }, () => msg('wrappers.recovery_failed')],
+    [{ code: 'wrappers.tampered', file: 'd3d9.dll' }, () => msg('modals.compatProblemFile', { file: 'd3d9.dll' })],
+  ])('with a problem Go recorded (%o), says what the problem is', async (problem, reason) => {
+    const enabling = await enableThenClose();
+    vi.mocked(inspectWrapper).mockResolvedValue(wrapper({ problem } as Partial<WrapperInfo>));
+
+    enabling.reject(new Error('write d3d9.dll: no space left on device\nrestore d3d9.dll: access denied'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('modals.compatLateFailed', { title: 'Hades', reason: reason() })]]));
+  });
+
+  it('when the problem cannot be read, says the reason the failure carries', async () => {
+    const enabling = await enableThenClose();
+    vi.mocked(inspectWrapper).mockRejectedValue(new Error('typhon:wrappers.bad_state: unreadable'));
+
+    enabling.reject(new Error('typhon:wrappers.no_target: nothing to replace'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('modals.compatLateFailed', { title: 'Hades', reason: msg('wrappers.no_target') })]]));
+  });
+});

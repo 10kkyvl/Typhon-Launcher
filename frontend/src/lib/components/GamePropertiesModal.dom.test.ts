@@ -126,7 +126,7 @@ describe('GamePropertiesModal reports a failed switch wherever the user is', () 
 
     await vi.waitFor(() => expect(toastTexts()).toHaveLength(1));
     expect(get(toasts)[0].kind).toBe('danger');
-    expect(toastTexts()[0]).toBe(msg('modals.propertiesLateFailed', { title: 'Hades', reason: failText() }));
+    expect(toastTexts()[0]).toBe(msg('modals.compatLateFailed', { title: 'Hades', reason: failText() }));
   });
 
   it("open for another game: a toast naming the first, and that game's dialog is left alone", async () => {
@@ -137,7 +137,7 @@ describe('GamePropertiesModal reports a failed switch wherever the user is', () 
 
     fail(failure);
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([msg('modals.propertiesLateFailed', { title: 'Hades', reason: failText() })]));
+    await vi.waitFor(() => expect(toastTexts()).toEqual([msg('modals.compatLateFailed', { title: 'Hades', reason: failText() })]));
     expect(within(other).queryByText(failText())).toBeNull();
   });
 

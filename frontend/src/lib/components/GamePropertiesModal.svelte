@@ -15,7 +15,7 @@
   import { errorCode, msg } from '../i18n';
   import { propertiesErrorText as errorText } from '../game/propertiesErrors';
   import { createGameModeWrites } from '../game/gameModeWrites.svelte';
-  import { defaultWrapper, describeImports, presetsFor, problemActions, progressView } from '../game/compatMode';
+  import { defaultWrapper, describeImports, presetsFor, problemActions, problemText, progressView } from '../game/compatMode';
   import {
     clearSavesDir,
     getLaunchArgsLine,
@@ -300,9 +300,24 @@
       if (heard()) compatAction = '';
       if (shown()) compatProgress = null;
     }
-    if (!heard()) sayLate(title, failure);
+    if (!heard()) {
+      if (failure === undefined) sayLate(title);
+      else toast(msg('modals.compatLateFailed', { title, reason: (await recordedProblem(id)) ?? failure }), 'danger');
+    }
     if (shown()) await loadCompat(id);
     if (heard()) await hand?.(() => compatSection?.querySelector<HTMLElement>('[role="switch"]') ?? (after?.isConnected ? after : null));
+  }
+
+  // A switch that failed and could not undo itself leaves a problem Go recorded (files partly
+  // replaced): its words say more than the failure, which may carry no code at all.
+  async function recordedProblem(id: string): Promise<string | null> {
+    try {
+      const problem = (await inspectWrapper(id)).problem;
+      return problem ? problemText(problem.code, problem.file) : null;
+    } catch (err) {
+      console.warn('read the wrapper problem after a late failure', err);
+      return null;
+    }
   }
 
   let propsEl = $state<HTMLElement>();
