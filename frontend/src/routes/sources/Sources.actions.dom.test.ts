@@ -181,6 +181,67 @@ describe('Sources: removing a source', () => {
   });
 });
 
+// Go removes a source that is refreshing; the refresh's caller then hears "source not found" right
+// after the player's own removal. Both ways to remove hold it alike while the source refreshes.
+describe('Sources: one removal rule for the row menu and the details dialog', () => {
+  type Keys = ReturnType<typeof user>;
+  type Remove = { held: boolean; says: string; press: () => Promise<void> };
+  const reasons = (element: Element) =>
+    (element.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent?.trim() ?? '');
+
+  const entries: [string, (keys: Keys) => Promise<Remove>][] = [
+    [
+      'the row menu',
+      async (keys) => {
+        await keys.click(menuButton('Main feed'));
+        const item = screen.getAllByRole('menuitem').at(-1) as HTMLElement;
+        return { held: item.getAttribute('aria-disabled') === 'true', says: item.textContent?.trim() ?? '', press: () => keys.click(item) };
+      },
+    ],
+    [
+      'the details dialog',
+      async (keys) => {
+        await pick(keys, 'Main feed', msg('transfers.sourcesDetailsAction'));
+        const remove = within(await screen.findByRole('dialog', { name: 'Main feed' })).getByRole('button', { name: msg('common.delete') });
+        return { held: remove.getAttribute('aria-disabled') === 'true', says: reasons(remove).join(' '), press: () => keys.click(remove) };
+      },
+    ],
+  ];
+
+  for (const [entry, reach] of entries) {
+    it(`${entry}: holds Remove with its reason while the source refreshes, and asks nothing when pressed`, async () => {
+      sources.set([{ ...MAIN, status: 'updating' } as Source]);
+      show();
+      const keys = user();
+
+      const remove = await reach(keys);
+      expect(remove.held).toBe(true);
+      expect(remove.says).toContain(msg('modals.sourceDetailsRemoveHeldUpdating'));
+      await remove.press();
+
+      expect(screen.queryByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeNull();
+      expect(removeSource).not.toHaveBeenCalled();
+    });
+
+    it(`${entry}: offers Remove for a source at rest, asking first`, async () => {
+      sources.set([MAIN]);
+      show();
+      const keys = user();
+
+      const remove = await reach(keys);
+      expect(remove.held).toBe(false);
+      expect(remove.says).not.toContain(msg('modals.sourceDetailsRemoveHeldUpdating'));
+      await remove.press();
+
+      expect(screen.getByRole('dialog', { name: msg('transfers.sourcesRemoveAction') })).toBeTruthy();
+      expect(removeSource).not.toHaveBeenCalled();
+    });
+  }
+});
+
 describe('Sources: the header actions', () => {
   it('Refresh all asks Go to refresh every source and reads the list again', async () => {
     let finish: (value: never[]) => void = () => {};

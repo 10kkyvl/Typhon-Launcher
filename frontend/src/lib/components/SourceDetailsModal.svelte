@@ -13,7 +13,7 @@
   import { LatestRequestGate } from '../bigpicture/latestRequest';
   import { removeSourcePrompt, type ConfirmPrompt } from '../confirm/prompts';
   import { toast } from '../stores/toasts';
-  import { refresh as refreshSource, remove as removeSource, sources, toggle as toggleSource } from '../stores/sources';
+  import { refresh as refreshSource, remove as removeSource, removeHeldReason, sources, toggle as toggleSource } from '../stores/sources';
   import { relativeDate, bytesSize } from '../utils/format';
   import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
@@ -282,7 +282,7 @@
   const acting = $derived(refreshing || toggling);
   const heldReason = $derived(acting ? msg('modals.actionRunning') : '');
   // A refresh started elsewhere ("Refresh all", the schedule) holds Delete as the dialog's own does.
-  const removeHeld = $derived(heldReason || (source?.status === 'updating' ? msg('modals.sourceDetailsRemoveHeldUpdating') : ''));
+  const removeHeld = $derived(heldReason || removeHeldReason(source));
   const from = $derived(total === 0 ? 0 : (page - 1) * pageSize + 1);
   const to = $derived(Math.min(page * pageSize, total));
 </script>

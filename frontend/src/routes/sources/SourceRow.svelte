@@ -12,6 +12,7 @@
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
   import { isIndeterminate, progressPercent, type SourceProgress } from '../../lib/sources/progress';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
+  import { removeHeldReason } from '../../lib/stores/sources';
   import { sourceWarningText } from '../../lib/sources/sourceWarnings';
   import { clockTime, formatCount, longDate, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
@@ -89,7 +90,9 @@
     return { words: relativeDate(iso), exact: msg('transfers.sourcesExactTime', { date: longDate(date), time: clockTime(date) }) };
   }
 
+  // A menu item has no hint of its own: a held one says why in its label, as Refresh does.
   function sourceMenu(source: Source) {
+    const removeHeld = removeHeldReason(source);
     return [
       {
         id: 'refresh',
@@ -97,7 +100,7 @@
         disabled: source.status === 'updating',
       },
       { id: 'details', label: msg('transfers.sourcesDetailsAction') },
-      { id: 'remove', label: msg('transfers.sourcesRemoveAction'), danger: true, separator: true },
+      { id: 'remove', label: removeHeld || msg('transfers.sourcesRemoveAction'), disabled: removeHeld !== '', danger: true, separator: true },
     ];
   }
 

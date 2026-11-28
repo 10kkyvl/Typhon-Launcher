@@ -239,6 +239,14 @@ export async function toggle(id: string, enabled: boolean) {
   }
 }
 
+/**
+ * Why a source cannot be removed now, '' when it can: the one rule of the row menu and the details
+ * dialog. Go removes a refreshing source, and the refresh's caller then hears "source not found".
+ */
+export function removeHeldReason(source: Source | undefined): string {
+  return source?.status === 'updating' ? msg('modals.sourceDetailsRemoveHeldUpdating') : '';
+}
+
 /** Rejects when the backend refused: both callers ask through a confirmation, which shows the reason. */
 export async function remove(id: string) {
   await removeSourceRequest(id);

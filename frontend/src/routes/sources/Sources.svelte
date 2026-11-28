@@ -21,6 +21,7 @@
     refreshingAll,
     reloadSources,
     remove,
+    removeHeldReason,
     sources,
     sourcesLoaded,
     sourcesLoadError,
@@ -132,6 +133,7 @@
     } else if (action === 'details') {
       openDetails(source.id);
     } else if (action === 'remove') {
+      if (removeHeldReason(source)) return;
       pending = {
         prompt: { ...removeSourcePrompt(source.name), text: msg('modals.sourceDetailsRemoveText', { name: source.name }) },
         run: () => remove(source.id),
