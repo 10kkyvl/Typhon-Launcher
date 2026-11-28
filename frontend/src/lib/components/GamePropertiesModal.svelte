@@ -12,7 +12,8 @@
   import { emulationPlatform, isEmulated } from '../library/emulation';
   import { selectImageFile } from '../services/emulators';
   import { selectFolder } from '../services/settings';
-  import { msg } from '../i18n';
+  import { errorCode, hasMessage, msg } from '../i18n';
+  import { installErrorText } from '../install/installErrors';
   import { propertiesErrorText as errorText } from '../game/propertiesErrors';
   import { createGameModeWrites, gameModeTitles } from '../game/gameModeWrites.svelte';
   import { createCompatSwitch } from '../game/compatSwitch.svelte';
@@ -320,7 +321,8 @@
   // The game mode changes of each opening still to be answered, and how those answered after it
   // passed went, by row (the last answer of a row is what it holds). Counted by opening, not by game:
   // a newer opening of the same game queues its own.
-  const gameModeBatches = new Map<number, { title: string; left: number; late: Map<GameModeKey, string | undefined> }>();
+  type Refusal = { failure: string; words: string };
+  const gameModeBatches = new Map<number, { title: string; left: number; late: Map<GameModeKey, Refusal | undefined> }>();
 
   // A change made while another is written waits its turn. The changes of an opening answered after it
   // passed are said in one toast once the last of them is answered: saved, or the rows Go refused.
@@ -333,29 +335,40 @@
     gameModeBatches.set(at, batch);
     batch.left += 1;
     gameModeError = '';
-    let failure: string | undefined;
+    let refusal: Refusal | undefined;
     try {
       await gameModes.write(id, key, state);
     } catch (err) {
-      failure = errorText(err, msg('modals.propertiesGameModeFailed'));
+      // The reason alone, for a row of the late toast: Go's words for the code, none when it has none.
+      const code = errorCode(err);
+      const words = hasMessage(code) ? msg(code) : installErrorText(err, '');
+      refusal = { failure: errorText(err, msg('modals.propertiesGameModeFailed')), words };
     }
     batch.left -= 1;
     if (batch.left === 0) gameModeBatches.delete(at);
     if (heard()) {
-      if (failure !== undefined) gameModeError = failure;
+      if (refusal) gameModeError = refusal.failure;
       return;
     }
-    batch.late.set(key, failure);
+    batch.late.set(key, refusal);
     if (batch.left === 0) sayGameModesLate(batch.title, batch.late);
   }
 
-  function sayGameModesLate(title: string, late: Map<GameModeKey, string | undefined>) {
-    const refused = gameModeKeys.filter((key) => late.get(key) !== undefined);
+  function sayGameModesLate(title: string, late: Map<GameModeKey, Refusal | undefined>) {
+    const refused = gameModeKeys.flatMap((key) => {
+      const refusal = late.get(key);
+      return refusal ? [{ row: msg(gameModeTitles[key]), ...refusal }] : [];
+    });
     if (refused.length === 0) return sayLate(title);
-    const separator = msg('modals.propertiesGameModeLateSeparator');
-    const rows = refused.map((key) => msg(gameModeTitles[key])).join(separator);
-    const reason = [...new Set(refused.map((key) => late.get(key)))].join(separator);
-    toast(msg('modals.propertiesGameModeLateRefused', { title, rows, reason }), 'danger');
+    if (new Set(refused.map((one) => one.failure)).size === 1) {
+      const rows = refused.map((one) => one.row).join(msg('modals.propertiesGameModeLateSeparator'));
+      return toast(msg('modals.propertiesGameModeLateRefused', { title, rows, reason: refused[0].failure }), 'danger');
+    }
+    // Reasons that differ: each row is a sentence with its own, as a reason may hold a semicolon.
+    const rows = refused
+      .map(({ row, words }) => msg('modals.propertiesGameModeLateRow', { row, reason: words.replace(/\.$/, '') || msg('modals.propertiesGameModeLateNoReason') }))
+      .join(msg('modals.propertiesGameModeLateRowSeparator'));
+    toast(msg('modals.propertiesGameModeLateRefusedEach', { title, rows }), 'danger');
   }
 
   async function changePresence(on: boolean) {

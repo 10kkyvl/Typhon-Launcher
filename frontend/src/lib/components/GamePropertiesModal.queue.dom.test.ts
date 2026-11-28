@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { msg, type MessageKey } from '../i18n';
+import { locale, msg, type MessageKey } from '../i18n';
 import { propertiesErrorText } from '../game/propertiesErrors';
 import { executableCandidates } from '../services/install';
 import { getLaunchArgsLine, setGameModeOverride, type LibraryGame } from '../services/library';
@@ -169,6 +169,32 @@ describe('GamePropertiesModal: the game mode changes of a closed opening are sum
     first.resolve(hades);
 
     await vi.waitFor(() => expect(toastList()).toEqual([refused(['settings.gameModeHideLabel', 'settings.gameModePriorityLabel'])]));
+  });
+
+  // A reason may hold a semicolon of its own (the library's unreadable state in Russian): each row is
+  // its own sentence with its own reason, and what failed is said once, at the start.
+  it.each([
+    [
+      'ru',
+      '«Hades»: не сохранено. Схема питания «Высокая производительность»: файлы библиотеки не удалось прочитать, изменение не сохранено; перезапустите лаунчер. Скрывать лаунчер в трей: игра не найдена. Повышать приоритет игры: причина неизвестна.',
+    ],
+    [
+      'en',
+      '"Hades": not saved. “High performance” power plan: The library files could not be read, so the change was not saved. Restart the launcher. Hide the launcher in the tray: Game not found. Raise game priority: reason unknown.',
+    ],
+  ] as const)('%s: refused for different reasons, each row is said with its own reason', async (lang, message) => {
+    locale.set(lang);
+    const first = held<LibraryGame>();
+    vi.mocked(setGameModeOverride)
+      .mockReturnValueOnce(first.promise)
+      .mockRejectedValueOnce(new Error('typhon:library.game_not_found: g1'))
+      .mockRejectedValueOnce(new Error('disk'));
+    const dialog = await queueThree();
+    await closeDialog(dialog);
+
+    first.reject(new Error('typhon:library.state_unreadable: library.json'));
+
+    await vi.waitFor(() => expect(toastList()).toEqual([{ kind: 'danger', message, count: 1 }]));
   });
 
   it('a row changed twice, refused first and stored last: it holds the last, so all is saved', async () => {
