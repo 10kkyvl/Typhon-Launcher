@@ -80,7 +80,7 @@ afterEach(() => {
   expect(sent).toEqual([]);
 });
 
-const because = (action: Parameters<typeof msg>[0], code: Parameters<typeof msg>[0]) => msg('modals.propertiesFailedReason', { action: msg(action), reason: msg(code) });
+const because = (action: Parameters<typeof msg>[0], code: Parameters<typeof msg>[0]) => msg('common.failedReason', { action: msg(action), reason: msg(code) });
 
 const toastTexts = () => get(toasts).map((item) => [item.kind, item.message]);
 

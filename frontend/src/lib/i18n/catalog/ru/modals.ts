@@ -518,7 +518,6 @@ export const modals = {
   'modals.propertiesSavesResetting': 'Сбрасываем…',
   'modals.propertiesLateSaved': 'Свойства «{title}» сохранены',
   'modals.propertiesLateFailed': 'Свойства «{title}» не изменены. {reason}',
-  'modals.propertiesFailedReason': '{action}: {reason}',
   'modals.propertiesHeldCompat': 'Дождитесь, пока переключится режим совместимости',
   'modals.propertiesHeldExe': 'Дождитесь, пока сменится исполняемый файл',
   'modals.propertiesHeldSaves': 'Дождитесь, пока сменится папка сохранений',

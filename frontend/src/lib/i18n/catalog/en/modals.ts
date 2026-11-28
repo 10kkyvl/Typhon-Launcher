@@ -520,7 +520,6 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.propertiesSavesResetting': 'Resetting…',
   'modals.propertiesLateSaved': 'The properties of "{title}" are saved',
   'modals.propertiesLateFailed': 'The properties of "{title}" were not changed. {reason}',
-  'modals.propertiesFailedReason': '{action}: {reason}',
   'modals.propertiesHeldCompat': 'Wait until compatibility mode is switched',
   'modals.propertiesHeldExe': 'Wait until the executable is changed',
   'modals.propertiesHeldSaves': 'Wait until the saves folder is changed',
