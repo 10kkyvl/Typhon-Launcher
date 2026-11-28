@@ -232,6 +232,53 @@ describe('GamePropertiesModal: the game mode changes of a closed opening are sum
     expect(toastList()).toEqual([saved]);
   });
 
+  // The dialog that said the refusal is gone: the summary of its opening counts every write of it.
+  it('refused while the dialog was open, then closed with one waiting that is stored: the refused row is said as not saved', async () => {
+    const first = held<LibraryGame>();
+    const second = held<LibraryGame>();
+    vi.mocked(setGameModeOverride).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const dialog = await openDialog();
+    await chooseIn(dialog, 'settings.gameModePowerLabel', 'modals.propertiesGameModeOn');
+    await chooseIn(dialog, 'settings.gameModeHideLabel', 'modals.propertiesGameModeOff');
+    first.reject(new Error('disk'));
+    await within(dialog).findByText(msg('modals.propertiesGameModeFailed'));
+    await closeDialog(dialog);
+
+    second.resolve(hades);
+
+    await vi.waitFor(() => expect(toastList()).toEqual([refused(['settings.gameModePowerLabel'])]));
+  });
+
+  it('refused while open with nothing else waiting, then another change that is stored after closing: the refused row is said as not saved', async () => {
+    const second = held<LibraryGame>();
+    vi.mocked(setGameModeOverride).mockRejectedValueOnce(new Error('disk')).mockReturnValueOnce(second.promise);
+    const dialog = await openDialog();
+    await chooseIn(dialog, 'settings.gameModePowerLabel', 'modals.propertiesGameModeOn');
+    await within(dialog).findByText(msg('modals.propertiesGameModeFailed'));
+    await chooseIn(dialog, 'settings.gameModeHideLabel', 'modals.propertiesGameModeOff');
+    await closeDialog(dialog);
+
+    second.resolve(hades);
+
+    await vi.waitFor(() => expect(toastList()).toEqual([refused(['settings.gameModePowerLabel'])]));
+  });
+
+  it("a refusal of an earlier opening is not counted in a later opening's summary", async () => {
+    const second = held<LibraryGame>();
+    vi.mocked(setGameModeOverride).mockRejectedValueOnce(new Error('disk')).mockReturnValueOnce(second.promise);
+    const dialog = await openDialog();
+    await chooseIn(dialog, 'settings.gameModePowerLabel', 'modals.propertiesGameModeOn');
+    await within(dialog).findByText(msg('modals.propertiesGameModeFailed'));
+    await closeDialog(dialog);
+    const again = await openDialog();
+    await chooseIn(again, 'settings.gameModeHideLabel', 'modals.propertiesGameModeOff');
+    await closeDialog(again);
+
+    second.resolve(hades);
+
+    await vi.waitFor(() => expect(toastList()).toEqual([saved]));
+  });
+
   it('all answered while the dialog is open: no toast', async () => {
     const first = held<LibraryGame>();
     vi.mocked(setGameModeOverride).mockReturnValueOnce(first.promise).mockResolvedValueOnce(hades).mockResolvedValueOnce(hades);

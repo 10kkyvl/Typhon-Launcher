@@ -134,13 +134,13 @@
       if (!current) {
         loadedFor = '';
         seq++;
-        opening++;
+        passOpening();
         resetAsk = null;
         return;
       }
       if (loadedFor === current.gameId) return;
       loadedFor = current.gameId;
-      opening++;
+      passOpening();
       resetAsk = null;
       argsBusy = false;
       adminBusy = false;
@@ -318,20 +318,27 @@
     }
   }
 
-  // The game mode changes of each opening still to be answered, and how those answered after it
-  // passed went, by row (the last answer of a row is what it holds). Counted by opening, not by game:
-  // a newer opening of the same game queues its own.
+  // The game mode changes of each opening: how many are still to be answered, and how every answered
+  // one went, by row (the last answer of a row is what it holds), those heard while it was open too.
+  // Counted by opening, not by game: a newer opening of the same game queues its own.
   type Refusal = { failure: string; words: string };
-  const gameModeBatches = new Map<number, { title: string; left: number; late: Map<GameModeKey, Refusal | undefined> }>();
+  const gameModeBatches = new Map<number, { title: string; left: number; rows: Map<GameModeKey, Refusal | undefined> }>();
 
-  // A change made while another is written waits its turn. The changes of an opening answered after it
-  // passed are said in one toast once the last of them is answered: saved, or the rows Go refused.
+  /** An opening passes: one whose game mode changes were all answered while it was open says nothing. */
+  function passOpening() {
+    if (gameModeBatches.get(opening)?.left === 0) gameModeBatches.delete(opening);
+    opening++;
+  }
+
+  // A change made while another is written waits its turn. An opening that passed with changes still
+  // to be answered is summed up in one toast once the last of them is answered: saved, or every row Go
+  // refused in that opening, one already said in the dialog included, as that dialog is gone.
   async function changeGameMode(key: GameModeKey, state: OverrideState) {
     if (!game) return;
     const id = game.id;
     const at = opening;
     const { heard, title } = pressedNow();
-    const batch = gameModeBatches.get(at) ?? { title, left: 0, late: new Map() };
+    const batch = gameModeBatches.get(at) ?? { title, left: 0, rows: new Map() };
     gameModeBatches.set(at, batch);
     batch.left += 1;
     gameModeError = '';
@@ -345,13 +352,14 @@
       refusal = { failure: errorText(err, msg('modals.propertiesGameModeFailed')), words };
     }
     batch.left -= 1;
-    if (batch.left === 0) gameModeBatches.delete(at);
+    batch.rows.set(key, refusal);
     if (heard()) {
       if (refusal) gameModeError = refusal.failure;
       return;
     }
-    batch.late.set(key, refusal);
-    if (batch.left === 0) sayGameModesLate(batch.title, batch.late);
+    if (batch.left > 0) return;
+    gameModeBatches.delete(at);
+    sayGameModesLate(batch.title, batch.rows);
   }
 
   function sayGameModesLate(title: string, late: Map<GameModeKey, Refusal | undefined>) {
