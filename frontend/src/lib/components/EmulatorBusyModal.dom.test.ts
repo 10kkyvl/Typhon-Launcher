@@ -152,7 +152,11 @@ describe('EmulatorBusyModal: replaced by another launch while the emulator close
 
     closing.reject(new Error('typhon:emulators.not_configured: none'));
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emul.lateFailed', { emulator: 'PCSX2', reason: msg('emulators.not_configured') })]]));
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([
+        ['danger', msg('common.failedReason', { action: msg('emul.busyCloseFailed', { emulator: 'PCSX2' }), reason: msg('emulators.not_configured') })],
+      ]),
+    );
     expect(within(second.dialog).queryByRole('alert')).toBeNull();
     expect(confirm.getAttribute('aria-busy')).toBeNull();
   });

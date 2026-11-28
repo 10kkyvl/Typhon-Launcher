@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { msg } from '../i18n';
+import { locale, msg } from '../i18n';
 import { imageTitle, listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
 import { addEmulatedGame, findEmulatedCover, type LibraryGame } from '../services/library';
 import { toasts } from '../stores/toasts';
@@ -43,6 +43,7 @@ afterEach(() => {
   const sent = sentToGo();
   resetBindings();
   toasts.set([]);
+  locale.set('ru');
   vi.clearAllMocks();
   vi.restoreAllMocks();
   document.body.replaceChildren();
@@ -184,7 +185,38 @@ describe('AddImageModal: gone with its screen while it adds', () => {
     adding.reject(new Error('typhon:emulators.image_missing: gone'));
 
     await vi.waitFor(() =>
-      expect(toastTexts()).toEqual([['danger', msg('emul.addFailedForReason', { title: 'Okami', reason: msg('emulators.image_missing') })]]),
+      expect(toastTexts()).toEqual([['danger', msg('common.failedReason', { action: msg('emul.addFailedFor', { title: 'Okami' }), reason: msg('emulators.image_missing') })]]),
+    );
+  });
+
+  it('a late refusal that is a whole sentence is said alone, as the dialog says it', async () => {
+    const adding = held<LibraryGame>();
+    vi.mocked(addEmulatedGame).mockReturnValueOnce(adding.promise);
+    const { view, keys, add } = await filled();
+    await keys.click(add);
+    view.unmount();
+
+    adding.reject(new Error('typhon:emulators.pkg_invalid: bad'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emulators.pkg_invalid')]]));
+  });
+});
+
+describe('AddImageModal: the cover looked up after the dialog closed', () => {
+  it('says a failed look-up once, naming the game, its reason with a colon its own sentence', async () => {
+    locale.set('en');
+    vi.mocked(addEmulatedGame).mockResolvedValueOnce(added);
+    vi.mocked(findEmulatedCover).mockRejectedValueOnce(new Error('typhon:emulators.cover_lookup_failed: down'));
+    const { dialog, keys, add } = await filled();
+    await keys.click(within(dialog).getByRole('switch', { name: msg('emul.addFindCover') }));
+
+    await keys.click(add);
+
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([
+        ['success', msg('games.installedGameAddedToast', { title: 'Okami' })],
+        ['info', 'Could not look for a cover for "Okami". Could not look for a cover: the search is unavailable'],
+      ]),
     );
   });
 });

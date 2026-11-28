@@ -135,7 +135,7 @@ describe('BiosNeededModal: the standing prompt', () => {
 });
 
 describe('BiosNeededModal: replaced by another launch while the folder opens', () => {
-  it('a late refusal paints nothing in the new prompt and is said once in a toast naming the emulator', async () => {
+  async function replaced() {
     const opening = held<void>();
     vi.mocked(openBiosFolder).mockReturnValueOnce(opening.promise);
     render(BiosNeededModal, { target: app });
@@ -145,13 +145,30 @@ describe('BiosNeededModal: replaced by another launch while the folder opens', (
     await keys.click(button(first.dialog, 'emul.biosOpenFolder'));
     const second = await ask('ps1');
     await within(second.dialog).findByText('/bios/ps1');
+    return { opening, second };
+  }
+
+  it('a late refusal paints nothing in the new prompt and is said once in a toast naming the emulator, after what failed', async () => {
+    const { opening, second } = await replaced();
     const open = button(second.dialog, 'emul.biosOpenFolder');
     expect(open.getAttribute('aria-busy')).toBeNull();
 
-    opening.reject(new Error('typhon:emulators.bios_dir_unknown: no'));
+    opening.reject(new Error('typhon:emulators.not_configured: none'));
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emul.lateFailed', { emulator: 'PCSX2', reason: msg('emulators.bios_dir_unknown') })]]));
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([
+        ['danger', msg('common.failedReason', { action: msg('emul.biosOpenFailedFor', { emulator: 'PCSX2' }), reason: msg('emulators.not_configured') })],
+      ]),
+    );
     expect(within(second.dialog).queryByRole('alert')).toBeNull();
     expect(open.getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('a late refusal that is a whole sentence is said alone, as the prompt says it', async () => {
+    const { opening } = await replaced();
+
+    opening.reject(new Error('typhon:emulators.bios_dir_unknown: no'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emulators.bios_dir_unknown')]]));
   });
 });

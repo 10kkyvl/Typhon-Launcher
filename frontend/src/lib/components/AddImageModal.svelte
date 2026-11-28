@@ -7,7 +7,7 @@
   import Select from './Select.svelte';
   import TextField from './TextField.svelte';
   import Toggle from './Toggle.svelte';
-  import { errorCode, hasMessage, msg } from '../i18n';
+  import { errorCode, msg } from '../i18n';
   import {
     consoleForImage,
     consolesForImage,
@@ -165,9 +165,7 @@
     try {
       await findEmulatedCover(game.id);
     } catch (err) {
-      const code = errorCode(err);
-      const title = game.title;
-      toast(hasMessage(code) ? msg('emul.coverFailedForReason', { title, reason: msg(code) }) : msg('emul.coverFailedFor', { title }));
+      toast(actionErrorText(err, msg('emul.coverFailedFor', { title: game.title })));
     }
   }
 
@@ -186,11 +184,11 @@
     try {
       game = await addEmulatedGame(image.trim(), platform, name);
     } catch (err) {
-      const code = errorCode(err);
       if (!alive) {
-        toast(hasMessage(code) ? msg('emul.addFailedForReason', { title: name, reason: msg(code) }) : msg('emul.addFailedFor', { title: name }), 'danger');
+        toast(actionErrorText(err, msg('emul.addFailedFor', { title: name })), 'danger');
         return;
       }
+      const code = errorCode(err);
       adding = false;
       const text = actionErrorText(err, msg('emul.addFailed'));
       if (IMAGE_CODES.test(code)) {

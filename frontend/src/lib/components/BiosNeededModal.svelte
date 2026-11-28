@@ -4,7 +4,7 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
-  import { errorCode, hasMessage, msg } from '../i18n';
+  import { msg } from '../i18n';
   import { actionErrorText } from '../library/errors';
   import { biosFolder, listPlatforms, openBiosFolder, type PlatformStatus } from '../services/emulators';
   import { biosPrompt } from '../stores/biosPrompt';
@@ -78,8 +78,7 @@
       if (heard()) {
         failure = actionErrorText(err, msg('emul.biosOpenFailed'));
       } else {
-        const code = errorCode(err);
-        toast(hasMessage(code) ? msg('emul.lateFailed', { emulator, reason: msg(code) }) : msg('emul.biosOpenFailedFor', { emulator }), 'danger');
+        toast(actionErrorText(err, msg('emul.biosOpenFailedFor', { emulator })), 'danger');
       }
     }
     if (heard()) opening = false;

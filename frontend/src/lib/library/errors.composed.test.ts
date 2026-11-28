@@ -37,7 +37,20 @@ describe('actionErrorText over every clause code and every action its callers pa
       '../game/compatSwitch.svelte.ts',
       '../../routes/settings/EmulatorsCard.svelte',
     ].sort());
-    expect(actions).toEqual(expect.arrayContaining(['emul.saveFailed', 'emul.busyCloseFailed', 'modals.compatEnableFailed', 'modals.compatDisableFailed', 'modals.propertiesExeSaveFailed']));
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        'emul.saveFailed',
+        'emul.busyCloseFailed',
+        'emul.saveFailedFor',
+        'emul.openSiteFailedFor',
+        'emul.biosOpenFailedFor',
+        'emul.addFailedFor',
+        'emul.coverFailedFor',
+        'modals.compatEnableFailed',
+        'modals.compatDisableFailed',
+        'modals.propertiesExeSaveFailed',
+      ]),
+    );
     expect(clauses).toEqual(expect.arrayContaining(['emulators.save_failed', 'emulators.windows_program', 'library.no_executable']));
   });
 
@@ -46,7 +59,7 @@ describe('actionErrorText over every clause code and every action its callers pa
       locale.set(lang);
       const wrong: string[] = [];
       for (const key of actions) {
-        const action = msg(key as MessageKey, { emulator: 'RPCS3' });
+        const action = msg(key as MessageKey, { emulator: 'RPCS3', title: 'Okami' });
         for (const code of clauses) {
           const reason = msg(code as MessageKey);
           const text = actionErrorText(failure(code), action);

@@ -4,7 +4,7 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
-  import { errorCode, hasMessage, msg } from '../i18n';
+  import { hasMessage, msg } from '../i18n';
   import { actionErrorText } from '../library/errors';
   import {
     listPlatforms,
@@ -66,11 +66,6 @@
     };
   });
 
-  function sayLate(err: unknown, emulator: string, fallback: string) {
-    const code = errorCode(err);
-    toast(hasMessage(code) ? msg('emul.lateFailed', { emulator, reason: msg(code) }) : fallback, 'danger');
-  }
-
   async function openSite() {
     const current = prompt;
     if (!current || busy || !info) return;
@@ -82,7 +77,7 @@
       await openOfficialPage(current.platform);
     } catch (err) {
       if (alive && at === opening) failure = actionErrorText(err, msg('emul.openSiteFailed'));
-      else sayLate(err, emulator, msg('emul.openSiteFailedFor', { emulator }));
+      else toast(actionErrorText(err, msg('emul.openSiteFailedFor', { emulator })), 'danger');
     }
     if (alive && at === opening) busy = '';
   }
@@ -103,7 +98,10 @@
         saved = true;
       }
     } catch (err) {
-      if (!heard()) return sayLate(err, emulator, msg('emul.saveFailedFor', { emulator }));
+      if (!heard()) {
+        toast(actionErrorText(err, msg('emul.saveFailedFor', { emulator })), 'danger');
+        return;
+      }
       failure = actionErrorText(err, msg('emul.saveFailed'));
     }
     if (!heard()) {

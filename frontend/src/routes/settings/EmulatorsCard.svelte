@@ -10,7 +10,7 @@
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { hasMessage, msg } from '../../lib/i18n';
-  import { actionErrorText, libraryErrorText } from '../../lib/library/errors';
+  import { actionErrorText } from '../../lib/library/errors';
   import { inWails } from '../../lib/services/backend';
   import {
     detectEmulators,
@@ -186,12 +186,7 @@
           replace(await setEmulatorPath(item.platform, item.path));
           saved.add(item.platform);
         } catch (err) {
-          failures.push(
-            msg('emul.detectApplyFailed', {
-              emulator: nameOf(item.platform),
-              reason: libraryErrorText(err, msg('emul.saveFailed')),
-            }),
-          );
+          failures.push(actionErrorText(err, msg('emul.saveFailedFor', { emulator: nameOf(item.platform) })));
         }
       }
     } finally {

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { msg } from '../i18n';
+import { locale, msg } from '../i18n';
 import { listPlatforms, openOfficialPage, selectEmulatorFile, setEmulatorPath, type PlatformStatus } from '../services/emulators';
 import { askForEmulator, emulatorPrompt } from '../stores/emulatorPrompt';
 import { toasts } from '../stores/toasts';
@@ -37,6 +37,7 @@ afterEach(() => {
   resetBindings();
   get(emulatorPrompt)?.settle(false);
   toasts.set([]);
+  locale.set('ru');
   vi.clearAllMocks();
   document.body.replaceChildren();
   expect(sent).toEqual([]);
@@ -204,9 +205,30 @@ describe('EmulatorNeededModal: replaced by another launch while the file is save
 
     saving.reject(new Error('typhon:emulators.not_exe: no'));
 
-    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emul.lateFailed', { emulator: 'PCSX2', reason: msg('emulators.not_exe') })]]));
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([['danger', msg('common.failedReason', { action: msg('emul.saveFailedFor', { emulator: 'PCSX2' }), reason: msg('emulators.not_exe') })]]),
+    );
     expect(within(second.dialog).queryByRole('alert')).toBeNull();
     expect(choose.getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('a late reason that holds a colon is its own sentence after what failed, never a second colon', async () => {
+    locale.set('en');
+    const { saving } = await replaced();
+
+    saving.reject(new Error('typhon:emulators.windows_program: exe'));
+
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([['danger', 'Could not set the emulator PCSX2. A Windows program does not work on this system: use the emulator build made for it']]),
+    );
+  });
+
+  it('a late refusal that is a whole sentence is said alone, as the prompt says it', async () => {
+    const { saving } = await replaced();
+
+    saving.reject(new Error('typhon:emulators.already_running: open'));
+
+    await vi.waitFor(() => expect(toastTexts()).toEqual([['danger', msg('emulators.already_running')]]));
   });
 
   it('a late success is said once in a toast naming the emulator', async () => {
@@ -216,5 +238,32 @@ describe('EmulatorNeededModal: replaced by another launch while the file is save
     saving.resolve(ps2);
 
     await vi.waitFor(() => expect(toastTexts()).toEqual([['success', msg('emul.pathSaved', { emulator: 'PCSX2' })]]));
+  });
+});
+
+describe('EmulatorNeededModal: replaced by another launch while the site opens', () => {
+  it('a late failure is said once in a toast naming the emulator, after what failed', async () => {
+    const opening = held<void>();
+    vi.mocked(openOfficialPage).mockReturnValueOnce(opening.promise);
+    render(EmulatorNeededModal, { target: app });
+    const first = await ask();
+    const keys = user();
+    const site = await vi.waitFor(() => {
+      const found = button(first.dialog, 'emul.neededOpenSite');
+      expect(found.getAttribute('aria-disabled')).toBeNull();
+      return found;
+    });
+    await keys.click(site);
+    const second = await ask('ps3');
+    await within(second.dialog).findByText(msg('emul.neededText', { console: 'PlayStation 3', emulator: 'RPCS3' }));
+
+    opening.reject(new Error('typhon:emulators.unknown_platform: x'));
+
+    await vi.waitFor(() =>
+      expect(toastTexts()).toEqual([
+        ['danger', msg('common.failedReason', { action: msg('emul.openSiteFailedFor', { emulator: 'PCSX2' }), reason: msg('emulators.unknown_platform') })],
+      ]),
+    );
+    expect(within(second.dialog).queryByRole('alert')).toBeNull();
   });
 });

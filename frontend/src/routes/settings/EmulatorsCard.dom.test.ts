@@ -7,8 +7,7 @@ vi.mock('../../lib/services/backend', () => ({ inWails: true }));
 vi.mock('../../lib/services/emulators', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).emulatorsService(await original()));
 vi.mock('../../../bindings/typhon/internal/emulators', async (original) => (await import('../../lib/testing/settingsDialogsTesting')).fakeService(await original(), 'emulators'));
 
-import { msg } from '../../lib/i18n';
-import { libraryErrorText } from '../../lib/library/errors';
+import { locale, msg } from '../../lib/i18n';
 import { detectEmulators, listPlatforms, openOfficialPage, selectEmulatorFile, setEmulatorPath, type PlatformStatus } from '../../lib/services/emulators';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -50,6 +49,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.replaceChildren();
   toasts.set([]);
+  locale.set('ru');
   vi.restoreAllMocks();
   for (const mock of [listPlatforms, openOfficialPage, selectEmulatorFile, setEmulatorPath, detectEmulators]) vi.mocked(mock).mockReset();
   expect(calls).toEqual([]);
@@ -313,7 +313,7 @@ describe('EmulatorsCard: the found emulators', () => {
 
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      `${msg('emul.detectApplyPartly')} ${msg('emul.detectApplyFailed', { emulator: 'PPSSPP', reason: libraryErrorText(refused, msg('emul.saveFailed')) })}`,
+      `${msg('emul.detectApplyPartly')} ${msg('emul.saveFailedFor', { emulator: 'PPSSPP' })}`,
     );
     expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
     expect(dialog.textContent).not.toContain('nope');
@@ -328,6 +328,21 @@ describe('EmulatorsCard: the found emulators', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(vi.mocked(setEmulatorPath).mock.calls.map(([platform]) => platform)).toEqual(['ps2', 'psp', 'psp']);
     expect(toastTexts()).toEqual([msg('emul.detectApplied')]);
+  });
+
+  it('says a path refused for a reason with a colon as what failed, naming the emulator, then the reason as its own sentence', async () => {
+    locale.set('en');
+    vi.mocked(setEmulatorPath)
+      .mockResolvedValueOnce({ ...PS2, path: '/apps/pcsx2', status: 'ready' })
+      .mockRejectedValueOnce(new Error('typhon:emulators.windows_program: exe'));
+    const { dialog, apply, user } = await openFound();
+
+    await user.click(apply());
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'These paths were not saved: Could not set the emulator PPSSPP. A Windows program does not work on this system: use the emulator build made for it',
+    );
   });
 
   it('holds Apply when the path left after a partial save is unticked: a saved path that left the list does not count', async () => {
