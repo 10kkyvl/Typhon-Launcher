@@ -12,10 +12,10 @@
   import { chooseSavesDir } from '../game/actions/saves';
   import { emulationPlatform, isEmulated } from '../library/emulation';
   import { selectImageFile } from '../services/emulators';
-  import { errorCode, msg } from '../i18n';
+  import { msg } from '../i18n';
   import { propertiesErrorText as errorText } from '../game/propertiesErrors';
   import { createGameModeWrites } from '../game/gameModeWrites.svelte';
-  import { defaultWrapper, describeImports, presetsFor, problemActions, problemText, progressView } from '../game/compatMode';
+  import { createCompatSwitch } from '../game/compatSwitch.svelte';
   import {
     clearSavesDir,
     getLaunchArgsLine,
@@ -28,23 +28,11 @@
   } from '../services/library';
   import { executableCandidates, type Candidate } from '../services/install';
   import { appInfo, elevationSupported } from '../services/system';
-  import {
-    disableWrapper,
-    disableWrapperKeepChanged,
-    enableWrapper,
-    inspectWrapper,
-    onWrapperProgress,
-    type WrapperId,
-    type WrapperInfo,
-    type WrapperProgress,
-  } from '../services/wrappers';
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
   import { libraryGames, runningGames } from '../stores/library';
   import type { GameModeKey, OverrideState } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
-  import { focusableIn } from '../layers/focus';
   import { focusHandOff } from '../utils/focusHandOff';
-  import { bytesSize } from '../utils/format';
 
   const target = $derived($gamePropertiesTarget);
   const game = $derived(target ? ($libraryGames.find((g) => g.id === target.gameId) ?? null) : null);
@@ -81,30 +69,16 @@
   let gameModeShown = $state(false);
   let gameModeMac = $state(false);
 
-  let compat = $state<WrapperInfo | null>(null);
-  let compatLoading = $state(false);
-  // Games whose compatibility mode is being switched. The component outlives the dialog (App mounts it
-  // once), so a switch that goes on after the dialog closed is still known when it opens again.
-  let compatBusyFor = $state<string[]>([]);
-  let compatError = $state('');
-  let compatOn = $state(false);
-  let compatForce = $state(false);
-  let compatWrapper = $state<WrapperId>('dgvoodoo');
-  let compatPreset = $state('default');
-  let compatProgress = $state<WrapperProgress | null>(null);
-  let compatKeepOffer = $state(false);
-  // Which problem action was pressed: that button stays focused and busy while the switch runs.
-  let compatAction = $state<'' | 'revert' | 'keep'>('');
-
   const running = $derived(Boolean(game && $runningGames.has(game.id)));
-  const compatBusy = $derived(game ? compatBusyFor.includes(game.id) : false);
-  const compatVisible = $derived(Boolean(compat && (compat.supported || compat.active || compat.problem)));
-  const compatSuggested = $derived(compat?.suggested ?? '');
-  const compatLocked = $derived(!compat?.active && compatSuggested === '' && !compatForce);
-  const compatApi = $derived(compat ? describeImports(compat.imports) : '');
-  const compatView = $derived(compatProgress ? progressView(compatProgress, bytesSize) : null);
-  const compatActions = $derived(compat?.problem ? problemActions(compat.problem.code) : null);
-  const compatFiles = $derived((compat?.active?.files ?? []).join(', '));
+  const compat = createCompatSwitch({
+    target: () => target,
+    game: () => game,
+    pressedNow,
+    held: () => compatHeld,
+    focus: { section: () => compatSection, props: () => propsEl },
+    seq: () => seq,
+  });
+  const compatBusy = $derived(compat.busy);
 
   let savesBusy = $state<'' | 'browse' | 'reset'>('');
   let savesError = $state('');
@@ -165,7 +139,6 @@
       presenceBusy = false;
       gameModes.reset();
       savesBusy = '';
-      compatAction = '';
       candidates = [];
       candidatesError = '';
       exeError = '';
@@ -177,13 +150,9 @@
       gameModeError = '';
       presenceError = '';
       savesError = '';
-      compat = null;
-      compatError = '';
-      compatForce = false;
-      compatProgress = null;
-      compatKeepOffer = false;
+      compat.reset();
       void load(current.gameId);
-      void loadCompat(current.gameId);
+      void compat.load(current.gameId);
     });
   });
 
@@ -198,18 +167,6 @@
   $effect(() => {
     void game?.gameMode;
     untrack(() => gameModes.settle());
-  });
-
-  $effect(() => {
-    compatOn = Boolean(compat?.active);
-  });
-
-  $effect(() => {
-    const id = game?.id;
-    if (!id) return;
-    return onWrapperProgress((event) => {
-      if (event.gameId === id) compatProgress = event;
-    });
   });
 
   $effect(() => {
@@ -244,92 +201,8 @@
     gameModeMac = info.status === 'fulfilled' && info.value.platform === 'darwin';
   }
 
-  async function loadCompat(gameId: string) {
-    if (emulated) return;
-    const mine = seq;
-    compatLoading = true;
-    try {
-      const info = await inspectWrapper(gameId);
-      if (mine !== seq) return;
-      compat = info;
-      compatWrapper = info.active ? info.active.wrapper : defaultWrapper(info);
-      compatPreset = info.active ? info.active.preset : 'default';
-    } catch (err) {
-      if (mine !== seq) return;
-      compatError = errorText(err, msg('modals.compatInspectFailed'));
-    } finally {
-      if (mine === seq) compatLoading = false;
-    }
-  }
-
-  function pickWrapper(id: string) {
-    compatWrapper = id as WrapperId;
-    if (!presetsFor(compatWrapper).includes(compatPreset)) compatPreset = 'default';
-  }
-
-  async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '') {
-    if (!game || compatBusy || compatHeld) return;
-    const id = game.id;
-    const { heard, title } = pressedNow();
-    compatBusyFor = [...compatBusyFor, id];
-    compatAction = action;
-    compatError = '';
-    compatKeepOffer = false;
-    compatProgress = null;
-    // The dialog cannot be closed while this runs, yet it may be turned to another game or closed from
-    // outside (the game removed). The switch stays known as running by game, across openings; its
-    // outcome is said in the opening it was pressed in, else in a toast naming the game.
-    const shown = () => target?.gameId === id;
-    // A problem's action goes with its notice once it worked: focus it held goes to the compatibility
-    // switch, which then says the outcome, else to the control that followed the notice.
-    const hand = action ? focusHandOff() : null;
-    const after = action ? controlAfterNotice() : null;
-    let failure: string | undefined;
-    try {
-      if (on) await enableWrapper(id, compatWrapper, compatPreset);
-      else if (keepChanged) await disableWrapperKeepChanged(id);
-      else await disableWrapper(id);
-    } catch (err) {
-      failure = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
-      if (heard()) {
-        compatKeepOffer = !on && errorCode(err) === 'wrappers.tampered';
-        compatError = failure;
-      }
-    } finally {
-      compatBusyFor = compatBusyFor.filter((busy) => busy !== id);
-      if (heard()) compatAction = '';
-      if (shown()) compatProgress = null;
-    }
-    if (!heard()) {
-      if (failure === undefined) sayLate(title);
-      else toast(msg('modals.compatLateFailed', { title, reason: (await recordedProblem(id)) ?? failure }), 'danger');
-    }
-    if (shown()) await loadCompat(id);
-    if (heard()) await hand?.(() => compatSection?.querySelector<HTMLElement>('[role="switch"]') ?? (after?.isConnected ? after : null));
-  }
-
-  // A switch that failed and could not undo itself leaves a problem Go recorded (files partly
-  // replaced): its words say more than the failure, which may carry no code at all.
-  async function recordedProblem(id: string): Promise<string | null> {
-    try {
-      const problem = (await inspectWrapper(id)).problem;
-      return problem ? problemText(problem.code, problem.file) : null;
-    } catch (err) {
-      console.warn('read the wrapper problem after a late failure', err);
-      return null;
-    }
-  }
-
   let propsEl = $state<HTMLElement>();
   let compatSection = $state<HTMLElement>();
-
-  function controlAfterNotice(): HTMLElement | null {
-    const notice = document.activeElement?.closest('.notice');
-    if (!notice || !propsEl) return null;
-    const all = focusableIn(propsEl);
-    const mine = all.filter((el) => notice.contains(el));
-    return all[all.indexOf(mine[mine.length - 1]) + 1] ?? null;
-  }
 
   async function pickCandidate(path: string) {
     if (!game || exeBusy || exeHeld) return;
@@ -560,35 +433,31 @@
 
       {#if !emulated}
         <PropertiesCompat
-          {compat}
-          loading={compatLoading}
-          visible={compatVisible}
-          on={compatOn}
+          compat={compat.compat}
+          loading={compat.loading}
+          visible={compat.visible}
+          on={compat.on}
           busy={compatBusy}
           heldBy={compatHeld}
           {running}
-          locked={compatLocked}
-          suggested={compatSuggested}
-          api={compatApi}
-          view={compatView}
-          actions={compatActions}
-          files={compatFiles}
-          force={compatForce}
-          wrapper={compatWrapper}
-          bind:preset={compatPreset}
-          action={compatAction}
-          error={compatError}
-          keepOffer={compatKeepOffer}
+          locked={compat.locked}
+          suggested={compat.suggested}
+          api={compat.api}
+          view={compat.view}
+          actions={compat.actions}
+          files={compat.files}
+          force={compat.force}
+          wrapper={compat.wrapper}
+          bind:preset={compat.preset}
+          action={compat.action}
+          error={compat.error}
+          keepOffer={compat.keepOffer}
           bind:section={compatSection}
-          onswitch={(on) => {
-            if (compatBusy || compatHeld) return;
-            compatOn = on;
-            void changeCompat(on);
-          }}
-          onforce={() => (compatForce = !compatForce)}
-          onwrapper={pickWrapper}
-          onrevert={() => changeCompat(false, false, 'revert')}
-          onkeep={() => changeCompat(false, true, 'keep')}
+          onswitch={compat.toggle}
+          onforce={compat.toggleForce}
+          onwrapper={compat.pickWrapper}
+          onrevert={compat.revert}
+          onkeep={compat.keep}
         />
       {/if}
 
