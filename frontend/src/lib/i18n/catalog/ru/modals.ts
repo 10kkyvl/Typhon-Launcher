@@ -48,6 +48,7 @@ export const modals = {
   'modals.addDownloadElevateAheadSub': 'В загрузке установщик — ему нужны права. Подтвердите сейчас, и установка пройдёт без вас; иначе она дождётся вашего подтверждения',
   'modals.addDownloadStart': 'Начать загрузку',
   'modals.addDownloadNeedsMagnet': 'Вставьте ссылку, которая начинается с magnet:',
+  'modals.addDownloadNoFiles': 'Отметьте хотя бы один файл',
   'modals.addDownloadRefusedFor': 'Не удалось начать загрузку «{title}»: {reason}',
   'modals.addDownloadRestartNeeded':
     'Пока загрузка запускалась, сменилась сеть, и данные торрента получены заново. Нажмите «Начать загрузку» ещё раз.',
@@ -224,6 +225,8 @@ export const modals = {
   'modals.removeGameWorking': 'Удаляем...',
   'modals.removeGameFailedFor': 'Не удалось удалить «{title}»',
   'modals.removeGameFailedForReason': 'Не удалось удалить «{title}»: {reason}',
+  'modals.removeGameRemovedFromDiskUnfinished': '«{title}» удалена с компьютера, но очистка после неё не завершилась: {reason}',
+  'modals.removeGameRemovedFromLibraryUnfinished': '«{title}» удалена из библиотеки, но очистка после неё не завершилась: {reason}',
 
   // MoveGameModal.svelte
   'modals.moveGameDesktopOnly': 'Выбор папки доступен только в desktop-сборке',
@@ -371,6 +374,9 @@ export const modals = {
   'modals.installChooseGameExecutable': 'Выберите исполняемый файл игры',
   'modals.installGameAdded': 'Игра добавлена в библиотеку',
   'modals.installDownloadDataDeleted': 'Загруженные файлы удалены',
+  'modals.installGameAddedFor': '«{title}» добавлена в библиотеку',
+  'modals.installDownloadDataDeletedFor': 'Загруженные файлы «{title}» удалены',
+  'modals.installWarningDownloadLeft': 'Игра установлена, но её загрузку не удалось убрать из списка загрузок.',
   'modals.installTitle': 'Установка',
   'modals.installAnalyzing': 'Анализ пакета…',
   'modals.installSource': 'Источник',

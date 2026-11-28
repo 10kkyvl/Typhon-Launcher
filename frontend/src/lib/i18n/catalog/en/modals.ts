@@ -51,6 +51,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addDownloadElevateAheadSub': 'This download holds an installer that needs rights. Confirm now and the install runs without you; otherwise it waits for your confirmation',
   'modals.addDownloadStart': 'Start download',
   'modals.addDownloadNeedsMagnet': 'Paste a link that starts with magnet:',
+  'modals.addDownloadNoFiles': 'Tick at least one file',
   'modals.addDownloadRefusedFor': 'Could not start downloading "{title}": {reason}',
   'modals.addDownloadRestartNeeded':
     'The network changed while the download was starting, so the torrent details were fetched again. Press "Start download" once more.',
@@ -227,6 +228,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.removeGameWorking': 'Removing...',
   'modals.removeGameFailedFor': 'Could not remove "{title}"',
   'modals.removeGameFailedForReason': 'Could not remove "{title}": {reason}',
+  'modals.removeGameRemovedFromDiskUnfinished': '"{title}" removed from this computer, but its cleanup did not finish: {reason}',
+  'modals.removeGameRemovedFromLibraryUnfinished': '"{title}" removed from the library, but its cleanup did not finish: {reason}',
 
   // MoveGameModal.svelte
   'modals.moveGameDesktopOnly': 'Folder selection is only available in the desktop build',
@@ -374,6 +377,9 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installChooseGameExecutable': 'Choose the game executable',
   'modals.installGameAdded': 'Game added to the library',
   'modals.installDownloadDataDeleted': 'Downloaded files deleted',
+  'modals.installGameAddedFor': '"{title}" added to the library',
+  'modals.installDownloadDataDeletedFor': 'Downloaded files of "{title}" deleted',
+  'modals.installWarningDownloadLeft': 'The game is installed, but its download could not be removed from the downloads list.',
   'modals.installTitle': 'Install',
   'modals.installAnalyzing': 'Analyzing package…',
   'modals.installSource': 'Source',
