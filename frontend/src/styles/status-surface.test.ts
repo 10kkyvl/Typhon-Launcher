@@ -241,7 +241,6 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/LegalAcceptanceScreen.svelte': ['the card of the screen', '.error'],
   'lib/components/TelemetryConsentScreen.svelte': ['the card of the screen', '.error'],
   'lib/components/AvatarEditor.svelte': ['the profile canvas', '.error'],
-  'lib/components/profile/BlockSettings.svelte': ['the settings panel of a block', '.error'],
   'lib/components/profile/CollectionBlock.svelte': ['the scrim over a cover; marks', '.heart', '.mastered'],
   'lib/components/SystemRequirements.svelte': [
     'the plate of the checks',
@@ -271,7 +270,6 @@ const LOCAL_SURFACE: Record<string, string> = {
   'routes/settings/Settings.svelte': '.tabs-plate',
   'routes/downloads/FailedList.svelte': '.row',
   'lib/components/TopbarSearch.svelte': '.results',
-  'lib/components/profile/BlockSettings.svelte': '.settings',
   'lib/components/SystemRequirements.svelte': '.checks',
   'lib/components/Notice.svelte': '.notice',
   'lib/components/LiveIsland.svelte': '.live-island',

@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/svelte';
+import type { ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { libraryGames } from '../../stores/library';
 import { igdbIdsOf } from '../../services/profile';
@@ -25,13 +26,13 @@ function block(type: string, config: Record<string, unknown> = {}, id = 'b1'): P
 
 const TITLES: Record<number, string> = { 11: 'Alpha', 12: 'Beta', 13: 'Gamma' };
 
-function mount(target: ProfileBlock, patch: Record<string, unknown> = {}, others: ProfileBlock[] = []) {
+function mount(target: ProfileBlock, patch: Partial<ComponentProps<typeof BlockSettings>> = {}, others: ProfileBlock[] = []) {
   const onconfig = vi.fn();
   const onremember = vi.fn();
   const onremove = vi.fn();
   const onclose = vi.fn();
   const layout: ProfileLayout = { version: 1, blocks: [target, ...others] };
-  const rendered = renderDom(BlockSettings, {
+  const props: ComponentProps<typeof BlockSettings> = {
     block: target,
     layout,
     titleOf: (id: number) => TITLES[id] ?? `#${id}`,
@@ -40,7 +41,8 @@ function mount(target: ProfileBlock, patch: Record<string, unknown> = {}, others
     onremove,
     onclose,
     ...patch,
-  });
+  };
+  const rendered = renderDom(BlockSettings, props);
   return { ...rendered, onconfig, onremember, onremove, onclose };
 }
 
@@ -232,5 +234,80 @@ describe('while the draft is being saved', () => {
     await user.click(screen.getByRole('button', { name: msg('profile.removeBlock', { name: msg('profile.blockCollection') }) }));
     await user.click(await screen.findByRole('button', { name: 'Picked One' }));
     expect([onconfig.mock.calls, onremove.mock.calls]).toEqual([[], []]);
+  });
+});
+
+describe('the fields of the settings', () => {
+  const described = (field: HTMLElement) =>
+    (field.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent?.trim());
+
+  it('count a caption and a text against their limits in the profile words, and follow the direction of the text typed', () => {
+    const { unmount } = mount(block('pinned', { igdbId: 12, caption: 'Hello' }));
+    const caption = screen.getByRole('textbox', { name: msg('profile.pinnedCaption') });
+
+    expect(caption.closest('.text-area')?.querySelector('.counter')?.textContent).toBe(msg('profile.fieldCounter', { count: 5, max: 140 }));
+    expect(caption.getAttribute('dir')).toBe('auto');
+    unmount();
+
+    mount(block('text', { title: '', body: 'Привет' }));
+    const body = screen.getByRole('textbox', { name: msg('profile.textBody') });
+    expect(body.closest('.text-area')?.querySelector('.counter')?.textContent).toBe(msg('profile.fieldCounter', { count: 6, max: 1000 }));
+    expect(body.getAttribute('dir')).toBe('auto');
+  });
+
+  it('say once in the profile words that a caption has come near its limit', async () => {
+    const { user } = mount(block('pinned', { igdbId: 12, caption: 'x'.repeat(125) }));
+    const caption = screen.getByRole('textbox', { name: msg('profile.pinnedCaption') });
+
+    await user.type(caption, 'y');
+    const status = caption.closest('.text-area')?.querySelector('[role="status"]');
+    expect(status?.textContent).toBe(msg('profile.fieldNear', { count: 140 - 126 }));
+  });
+
+  // A one-line field has no counter: the count stands beside its name, its description is its error.
+  const titleCount = (title: HTMLElement) => title.closest('.field')?.querySelector('.counter')?.textContent;
+
+  it('count a title against its limit beside its name, and describe it by its error alone', () => {
+    mount(block('text', { title: 'Hi', body: 'a\tb' }), { issue: { code: 'bad_chars', field: 'title' } });
+    const title = screen.getByRole('textbox', { name: msg('profile.textTitle') });
+
+    expect(title.closest('.text-field')).not.toBeNull();
+    expect(titleCount(title)).toBe(msg('profile.fieldCounter', { count: 2, max: 40 }));
+    expect(described(title)).toEqual([expect.stringContaining('characters that are not allowed')]);
+  });
+
+  it('counts characters, not the halves of a letter outside the basic plane', () => {
+    mount(block('collection', { source: 'manual', title: '😀😀', igdbIds: [11] }));
+    const title = screen.getByRole('textbox', { name: msg('profile.collectionTitle') });
+
+    expect(titleCount(title)).toBe(msg('profile.fieldCounter', { count: 2, max: 40 }));
+  });
+});
+
+describe('when the save starts while focus is in the settings', () => {
+  it('a field keeps its focus and refuses edits instead of turning disabled', async () => {
+    const { user, rerender, onconfig } = mount(block('text', { title: 'T', body: 'B' }));
+    const body = screen.getByRole('textbox', { name: msg('profile.textBody') }) as HTMLTextAreaElement;
+    body.focus();
+
+    await rerender({ disabled: true });
+    expect(document.activeElement).toBe(body);
+    expect([body.matches(':disabled'), body.readOnly]).toEqual([false, true]);
+    await user.type(body, 'x');
+    expect(onconfig).not.toHaveBeenCalled();
+  });
+
+  it('a button keeps its focus, held with the reason', async () => {
+    const { rerender } = mount(block('collection', { source: 'manual', title: '', igdbIds: [11, 12] }));
+    const remove = screen.getByRole('button', { name: msg('profile.collectionRemoveGame', { title: 'Alpha' }) }) as HTMLButtonElement;
+    const removeBlock = screen.getByRole('button', { name: msg('profile.removeBlock', { name: msg('profile.blockCollection') }) }) as HTMLButtonElement;
+    remove.focus();
+
+    await rerender({ disabled: true });
+    expect(document.activeElement).toBe(remove);
+    for (const button of [remove, removeBlock]) {
+      expect([button.matches(':disabled'), button.getAttribute('aria-disabled')]).toEqual([false, 'true']);
+      expect(document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent).toBe(msg('social.saving'));
+    }
   });
 });

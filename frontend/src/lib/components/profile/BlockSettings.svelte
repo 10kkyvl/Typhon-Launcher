@@ -4,6 +4,9 @@
   import EmptyState from '../EmptyState.svelte';
   import IconButton from '../IconButton.svelte';
   import Select from '../Select.svelte';
+  import TextArea from '../TextArea.svelte';
+  import TextField from '../TextField.svelte';
+  import type { TextAreaCounter } from '../textArea';
   import { msg } from '../../i18n';
   import { layoutErrorText, runeCount, type LayoutError } from '../../profile/layout';
   import { showcaseTitle } from '../../profile/layoutView';
@@ -46,9 +49,28 @@
   const config = $derived(block.config);
   const name = $derived(blockLabel(block.type));
   const charError = (field: string) => (issue?.code === 'bad_chars' && issue.field === field ? layoutErrorText(issue) : '');
-  // A field says it is wrong and is described by its error while the error shows.
-  const invalid = (field: string) => (charError(field) ? { 'aria-invalid': 'true' as const, 'aria-describedby': `${uid}-${field}-error` } : {});
   const text = (key: string) => (typeof config[key] === 'string' ? (config[key] as string) : '');
+  // While the draft saves, the settings refuse edits without turning disabled: a pointer press on Save
+  // moves no focus in the macOS view, so focus may still be in here, and a disabled control drops it.
+  const held = $derived(disabled ? msg('social.saving') : '');
+
+  // Counted as the layout's own check counts its limits: in characters.
+  function counter(max: number): TextAreaCounter {
+    return {
+      max,
+      measure: runeCount,
+      text: (count, limit) => msg('profile.fieldCounter', { count, max: limit }),
+      limitText: (count, limit) => {
+        if (count > limit) return msg('profile.fieldOver', { count: count - limit });
+        if (count === limit) return msg('profile.fieldAt');
+        return msg('profile.fieldNear', { count: limit - count });
+      },
+    };
+  }
+
+  // A one-line field has no counter of its own: its count stands beside its name, as a text area's
+  // does, and stays out of its description, which is its error alone.
+  const counted = (key: string, max: number) => msg('profile.fieldCounter', { count: runeCount(text(key)), max });
   const igdbId = $derived(typeof config.igdbId === 'number' ? config.igdbId : 0);
   const source = $derived(text('source'));
   const ids = $derived(
@@ -88,61 +110,58 @@
   }
 </script>
 
+{#snippet titleField(label: string)}
+  <div class="field">
+    <div class="field-label">
+      <label id="{uid}-title-label" for="{uid}-title">{label}</label>
+      <span class="counter">{counted('title', MAX_BLOCK_TITLE)}</span>
+    </div>
+    <TextField
+      id="{uid}-title"
+      labelledby="{uid}-title-label"
+      maxlength={MAX_BLOCK_TITLE}
+      readonly={disabled}
+      error={charError('title')}
+      value={text('title')}
+      oninput={(event) => onconfig({ title: event.currentTarget.value })}
+    />
+  </div>
+{/snippet}
+
 <section class="settings" aria-label={msg('profile.blockSettings', { name })}>
   <div class="head">
     <h2>{name}</h2>
     <IconButton label={msg('common.close')} onclick={onclose}><X size="1.8rem" /></IconButton>
   </div>
   <div class="scroll">
-    <fieldset {disabled}>
+    <div class="fields">
       {#if block.type === 'pinned'}
         <div class="field">
           <span class="field-label">{msg('profile.pinnedGame')}</span>
           <p class="current">{igdbId > 0 ? titleOf(igdbId) : msg('profile.pinnedNone')}</p>
           <GamePicker chosen={igdbId > 0 ? [igdbId] : []} {disabled} onpick={pickPinned} />
         </div>
-        <div class="field">
-          <div class="field-label">
-            <label for="{uid}-caption">{msg('profile.pinnedCaption')}</label>
-            <span class="counter">{runeCount(text('caption'))}/{MAX_CAPTION}</span>
-          </div>
-          <textarea
-            id="{uid}-caption"
-            class="input area"
-            rows="3"
-            maxlength={MAX_CAPTION}
-            value={text('caption')}
-            {...invalid('caption')}
-            oninput={(event) => onconfig({ caption: event.currentTarget.value })}
-          ></textarea>
-          {#if charError('caption')}<span class="error" id="{uid}-caption-error" role="alert">{charError('caption')}</span>{/if}
-        </div>
+        <TextArea
+          label={msg('profile.pinnedCaption')}
+          rows={3}
+          maxlength={MAX_CAPTION}
+          counter={counter(MAX_CAPTION)}
+          readonly={disabled}
+          error={charError('caption')}
+          value={text('caption')}
+          oninput={(event) => onconfig({ caption: event.currentTarget.value })}
+        />
       {:else if block.type === 'collection'}
         <div class="field">
           <span class="field-label" id="{uid}-source-label">{msg('profile.collectionSource')}</span>
-          <Select options={sources} value={source} width="100%" labelledby="{uid}-source-label" onchange={changeSource} />
+          <Select options={sources} value={source} width="100%" labelledby="{uid}-source-label" {disabled} onchange={changeSource} />
         </div>
         {#if source === 'manual'}
-          <div class="field">
-            <div class="field-label">
-              <label for="{uid}-title">{msg('profile.collectionTitle')}</label>
-              <span class="counter">{runeCount(text('title'))}/{MAX_BLOCK_TITLE}</span>
-            </div>
-            <input
-              id="{uid}-title"
-              class="input"
-              type="text"
-              maxlength={MAX_BLOCK_TITLE}
-              value={text('title')}
-              {...invalid('title')}
-              oninput={(event) => onconfig({ title: event.currentTarget.value })}
-            />
-            {#if charError('title')}<span class="error" id="{uid}-title-error" role="alert">{charError('title')}</span>{/if}
-          </div>
+          {@render titleField(msg('profile.collectionTitle'))}
           <div class="field">
             <span class="field-label">
               {msg('profile.collectionGames')}
-              <span class="counter">{ids.length}/{MAX_COLLECTION_GAMES}</span>
+              <span class="counter">{msg('profile.fieldCounter', { count: ids.length, max: MAX_COLLECTION_GAMES })}</span>
             </span>
             {#if ids.length === 0}
               <EmptyState size="inline" title={msg('profile.collectionEmpty')} />
@@ -151,13 +170,13 @@
                 {#each ids as id, index (id)}
                   <li>
                     <span class="game">{titleOf(id)}</span>
-                    <IconButton size="sm" label={msg('social.moveUp', { title: titleOf(id) })} disabled={index === 0 || disabled} onclick={() => shift(index, -1)}>
+                    <IconButton size="sm" label={msg('social.moveUp', { title: titleOf(id) })} disabled={index === 0 || disabled} reason={held} onclick={() => shift(index, -1)}>
                       <ArrowUp size="1.4rem" />
                     </IconButton>
-                    <IconButton size="sm" label={msg('social.moveDown', { title: titleOf(id) })} disabled={index === ids.length - 1 || disabled} onclick={() => shift(index, 1)}>
+                    <IconButton size="sm" label={msg('social.moveDown', { title: titleOf(id) })} disabled={index === ids.length - 1 || disabled} reason={held} onclick={() => shift(index, 1)}>
                       <ArrowDown size="1.4rem" />
                     </IconButton>
-                    <IconButton size="sm" label={msg('profile.collectionRemoveGame', { title: titleOf(id) })} {disabled} onclick={() => onconfig({ igdbIds: ids.filter((item) => item !== id) })}>
+                    <IconButton size="sm" label={msg('profile.collectionRemoveGame', { title: titleOf(id) })} {disabled} reason={held} onclick={() => onconfig({ igdbIds: ids.filter((item) => item !== id) })}>
                       <X size="1.4rem" />
                     </IconButton>
                   </li>
@@ -177,48 +196,27 @@
           <p class="hint">{msg('profile.collectionAutoHint')}</p>
         {/if}
       {:else if block.type === 'text'}
-        <div class="field">
-          <div class="field-label">
-            <label for="{uid}-title">{msg('profile.textTitle')}</label>
-            <span class="counter">{runeCount(text('title'))}/{MAX_BLOCK_TITLE}</span>
-          </div>
-          <input
-            id="{uid}-title"
-            class="input"
-            type="text"
-            maxlength={MAX_BLOCK_TITLE}
-            value={text('title')}
-            {...invalid('title')}
-            oninput={(event) => onconfig({ title: event.currentTarget.value })}
-          />
-          {#if charError('title')}<span class="error" id="{uid}-title-error" role="alert">{charError('title')}</span>{/if}
-        </div>
-        <div class="field">
-          <div class="field-label">
-            <label for="{uid}-body">{msg('profile.textBody')}</label>
-            <span class="counter">{runeCount(text('body'))}/{MAX_TEXT_BODY}</span>
-          </div>
-          <textarea
-            id="{uid}-body"
-            class="input area"
-            rows="8"
-            maxlength={MAX_TEXT_BODY}
-            value={text('body')}
-            {...invalid('body')}
-            oninput={(event) => onconfig({ body: event.currentTarget.value })}
-          ></textarea>
-          {#if charError('body')}<span class="error" id="{uid}-body-error" role="alert">{charError('body')}</span>{/if}
-        </div>
+        {@render titleField(msg('profile.textTitle'))}
+        <TextArea
+          label={msg('profile.textBody')}
+          rows={8}
+          maxlength={MAX_TEXT_BODY}
+          counter={counter(MAX_TEXT_BODY)}
+          readonly={disabled}
+          error={charError('body')}
+          value={text('body')}
+          oninput={(event) => onconfig({ body: event.currentTarget.value })}
+        />
       {:else}
         <p class="hint">{msg('profile.blockNoSettings')}</p>
         {#if block.type === 'completed'}
           <p class="hint">{msg('profile.completedVisibility')}</p>
         {/if}
       {/if}
-    </fieldset>
+    </div>
   </div>
   <div class="foot">
-    <Button variant="ghost" {disabled} onclick={onremove}>
+    <Button variant="ghost" {disabled} reason={held} onclick={onremove}>
       <Trash2 size="1.4rem" />{msg('profile.removeBlock', { name })}
     </Button>
   </div>
@@ -257,18 +255,11 @@
     margin: var(--space-3) -0.3rem 0;
   }
 
-  fieldset {
+  .fields {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
     min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  fieldset:disabled {
-    opacity: 0.65;
   }
 
   .field {
@@ -290,14 +281,6 @@
   .counter {
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
-  }
-
-  .area {
-    height: auto;
-    font-family: inherit;
-    padding: 0.9rem 1.2rem;
-    resize: vertical;
-    line-height: 1.5;
   }
 
   .current {
@@ -329,12 +312,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .error {
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--danger);
   }
 
   .hint {
