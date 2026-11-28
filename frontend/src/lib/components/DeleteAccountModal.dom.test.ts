@@ -151,15 +151,14 @@ describe('DeleteAccountModal: what it does today', () => {
     expect([get(authState), get(authView), get(currentUser)]).toEqual(['unauthenticated', 'login', null]);
   });
 
-  it('a refusal after which the account is gone: said in a toast, and the dialog closes', async () => {
-    vi.mocked(fetchCurrentUser).mockRejectedValueOnce(new AccountError('unauthenticated'));
+  it('a refusal that ended the session: only its reason is said, in a toast, and the dialog closes', async () => {
     const deletion = held<void>();
     const { onclose } = await pressDelete(deletion.promise);
 
-    deletion.reject(new AccountError('server_error'));
+    deletion.reject(new AccountError('session_revoked'));
 
     await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
-    expect(said()).toEqual([[msg('state.accountErrorServerError'), 'danger']]);
+    expect(said()).toEqual([[msg('profile.deleteAccountFailed'), 'danger']]);
     expect(get(authState)).toBe('unauthenticated');
   });
 });
@@ -248,6 +247,60 @@ describe('DeleteAccountModal: an answer after the dialog is gone', () => {
 
     expect(onclose).not.toHaveBeenCalled();
     expect(said()).toEqual([[msg('profile.deleteAccountFailedFor', { name: 'ana', reason: msg('profile.deleteAccountWrongPassword') }), 'danger']]);
+  });
+});
+
+// The app swaps its whole tree for the sign-in screen the moment the session ends, before the dialog hears its answer.
+describe('DeleteAccountModal under the app, which drops it when the session ends', () => {
+  async function pressUnderTheApp(answer: Promise<void>) {
+    const opened = await pressDelete(answer);
+    const stop = authState.subscribe((state) => {
+      if (state === 'unauthenticated') opened.unmount();
+    });
+    return { ...opened, stop };
+  }
+
+  it('the server deleted the account and only this computer\'s cleanup failed: said as deleted, never as a refusal', async () => {
+    vi.mocked(fetchCurrentUser).mockRejectedValueOnce(new AccountError('unauthenticated'));
+    const deletion = held<void>();
+    const { onclose, stop } = await pressUnderTheApp(deletion.promise);
+
+    deletion.reject(new AccountError('server_error'));
+    await vi.waitFor(() => expect(said()).toHaveLength(1));
+    await tick();
+    stop();
+
+    expect(said()).toEqual([[msg('profile.deleteAccountDone'), 'success']]);
+    expect([get(authState), get(authView), get(currentUser)]).toEqual(['unauthenticated', 'login', null]);
+    expect(onclose).not.toHaveBeenCalled();
+  });
+
+  it('a refusal that ended the session says its reason and does not claim the account was kept', async () => {
+    const deletion = held<void>();
+    const { onclose, stop } = await pressUnderTheApp(deletion.promise);
+
+    deletion.reject(new AccountError('session_revoked'));
+    await vi.waitFor(() => expect(said()).toHaveLength(1));
+    await tick();
+    stop();
+
+    expect(said()).toEqual([[msg('profile.deleteAccountFailed'), 'danger']]);
+    expect(onclose).not.toHaveBeenCalled();
+  });
+
+  it('a refusal heard under another account says nothing', async () => {
+    const deletion = held<void>();
+    const { unmount, onclose } = await pressDelete(deletion.promise);
+    unmount();
+    currentUser.set({ id: 'u-ben', username: 'ben', displayName: 'Ben' } as CurrentUser);
+
+    deletion.reject(new AccountError('network_error'));
+    await tick();
+    await tick();
+    await new Promise((done) => setTimeout(done, 0));
+
+    expect(said()).toEqual([]);
+    expect(onclose).not.toHaveBeenCalled();
   });
 });
 

@@ -213,16 +213,17 @@ const ACCOUNT_INTACT_CODES = new Set([
 ]);
 
 // A non-contract failure from the Go service arrives as server_error, whether the
-// request failed or only the local cleanup after a successful delete did.
-async function accountSurvived(err: unknown): Promise<boolean> {
+// request failed or only the local cleanup after a successful delete did: the server is asked
+// which. Any other code ended the session without saying what became of the account.
+async function accountAfter(err: unknown): Promise<'intact' | 'deleted' | 'unknown'> {
   const code = err instanceof AccountError ? err.code : '';
-  if (ACCOUNT_INTACT_CODES.has(code)) return true;
-  if (code !== 'server_error' && code !== 'internal') return false;
+  if (ACCOUNT_INTACT_CODES.has(code)) return 'intact';
+  if (code !== 'server_error' && code !== 'internal') return 'unknown';
   try {
     await fetchCurrentUser();
-    return true;
+    return 'intact';
   } catch (probe) {
-    return !(probe instanceof AccountError && probe.code === 'unauthenticated');
+    return probe instanceof AccountError && probe.code === 'unauthenticated' ? 'deleted' : 'intact';
   }
 }
 
@@ -238,8 +239,11 @@ export async function deleteAccount(password: string): Promise<void> {
   try {
     await requestAccountDeletion(password);
   } catch (err) {
-    if (await accountSurvived(err)) throw err;
+    const account = await accountAfter(err);
+    if (account === 'intact') throw err;
     leaveSession();
+    // The account is gone and only this computer's cleanup failed: for the player the deletion landed.
+    if (account === 'deleted') return;
     throw err;
   }
   leaveSession();

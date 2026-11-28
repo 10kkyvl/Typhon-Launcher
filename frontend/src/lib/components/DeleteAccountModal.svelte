@@ -58,14 +58,20 @@
       return;
     } catch (err) {
       const text = failureText(err);
-      if (!alive) {
-        toast(msg('profile.deleteAccountFailedFor', { name: presser?.username ?? '', reason: text }), 'danger');
+      const signedIn = get(authState) === 'authenticated' || get(authState) === 'offline';
+      const owner = signedIn ? get(currentUser) : null;
+      if (!owner) {
+        // The refusal ended the session: what became of the account is not known here, so only the reason is said.
+        toast(text, 'danger');
+        if (alive) onclose();
         return;
       }
-      const stayed = (get(authState) === 'authenticated' || get(authState) === 'offline') && get(currentUser)?.id === presser?.id;
-      if (!stayed) {
-        toast(text, 'danger');
-        onclose();
+      if (owner.id !== presser?.id) {
+        if (alive) onclose();
+        return;
+      }
+      if (!alive) {
+        toast(msg('profile.deleteAccountFailedFor', { name: owner.username, reason: text }), 'danger');
         return;
       }
       error = text;

@@ -417,12 +417,12 @@ describe('deleteAccount', () => {
     }
   });
 
-  it('signs out after a generic failure when the session no longer exists on the server', async () => {
+  it('takes the account as deleted when a generic failure leaves no session on the server', async () => {
     const { accountMock, userStore } = await signedIn();
     vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('server_error'));
     vi.mocked(accountMock.fetchCurrentUser).mockRejectedValue(new accountMock.AccountError('unauthenticated'));
 
-    await expect(userStore.deleteAccount('password')).rejects.toMatchObject({ code: 'server_error' });
+    await expect(userStore.deleteAccount('password')).resolves.toBeUndefined();
 
     expect(get(userStore.authState)).toBe('unauthenticated');
     expect(get(userStore.currentUser)).toBeNull();
