@@ -344,6 +344,7 @@ export const games: Record<GamesKey, Message> = {
   'games.installedOpenDialogError': 'Failed to open the file picker',
   'games.installedGameAddedToast': '"{title}" added to library',
   'games.installedAddGameError': 'Failed to add the game',
+  'games.installedAddGameFailedFor': 'Could not add "{title}": {reason}',
   'games.installedChooseExeLabel': 'Choose launch file',
   'games.installedScanProgress': 'Scanning {processed}/{total}',
   'games.installedScanning': 'Scanning for games...',

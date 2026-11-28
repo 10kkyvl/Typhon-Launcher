@@ -342,6 +342,7 @@ export const games = {
   'games.installedOpenDialogError': 'Не удалось открыть диалог выбора файла',
   'games.installedGameAddedToast': '«{title}» добавлена в библиотеку',
   'games.installedAddGameError': 'Не удалось добавить игру',
+  'games.installedAddGameFailedFor': 'Не удалось добавить «{title}»: {reason}',
   'games.installedChooseExeLabel': 'Выбрать файл запуска',
   'games.installedScanProgress': 'Поиск {processed}/{total}',
   'games.installedScanning': 'Поиск игр...',
