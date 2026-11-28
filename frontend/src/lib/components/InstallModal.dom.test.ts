@@ -329,6 +329,19 @@ describe('InstallModal: done', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(done));
     settings.set(null);
   });
+
+  it('keeps the downloaded files on "Keep": the choice goes and nothing is sent', async () => {
+    settings.set({ installCleanupPolicy: 'ask' } as Settings);
+    onTestFinished(() => settings.set(null));
+    installations.set([installation({ status: 'completed', type: 'archive_zip', candidates: null })]);
+    const { dialog } = openDialog();
+
+    await user().click(within(dialog).getByRole('button', { name: msg('modals.installKeep') }));
+
+    expect(within(dialog).queryByRole('button', { name: msg('modals.installDeleteDownloadedFiles') })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: msg('modals.installKeep') })).toBeNull();
+    expect(deleteDownloadData).not.toHaveBeenCalled();
+  });
 });
 
 describe('InstallModal: messages', () => {
