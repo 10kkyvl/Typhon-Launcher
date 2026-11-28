@@ -1,11 +1,26 @@
 import { screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../services/backend', () => ({ inWails: false }));
+vi.mock('../../services/backend', () => ({ inWails: true }));
+vi.mock('../../../../bindings/typhon/internal/account', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../../bindings/typhon/internal/library', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'library'));
+vi.mock('../../../../bindings/typhon/internal/profile', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../services/account', async (original) => (await import('./blocksTesting')).wholeService(await original()));
+vi.mock('../../services/library', async (original) => (await import('./blocksTesting')).wholeService(await original()));
+vi.mock('../../services/profile', async (original) => (await import('./blocksTesting')).wholeService(await original()));
 
 import { msg } from '../../i18n';
 import { renderDom } from '../../testing/dom';
+import { calls, resetBindings } from '../../testing/fakeBinding';
 import BlockPicker from './BlockPicker.svelte';
+
+beforeEach(() => {
+  resetBindings();
+});
+
+afterEach(() => {
+  expect(calls).toEqual([]);
+});
 
 describe('BlockPicker', () => {
   it('its button says that it shows the list of blocks below it, and which list, not that it is pressed', async () => {

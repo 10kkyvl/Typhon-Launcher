@@ -1,10 +1,17 @@
 import { render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../services/backend', () => ({ inWails: false }));
+vi.mock('../../services/backend', () => ({ inWails: true }));
+vi.mock('../../../../bindings/typhon/internal/account', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../../bindings/typhon/internal/library', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'library'));
+vi.mock('../../../../bindings/typhon/internal/profile', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../services/account', async (original) => (await import('./blocksTesting')).wholeService(await original()));
+vi.mock('../../services/library', async (original) => (await import('./blocksTesting')).wholeService(await original()));
+vi.mock('../../services/profile', async (original) => (await import('./blocksTesting')).wholeService(await original()));
 
 import BlockGrid from './BlockGrid.svelte';
 import { locale, msg } from '../../i18n';
+import { calls, resetBindings } from '../../testing/fakeBinding';
 import type { GridBlock } from '../../profile/layoutView';
 import { blockLabel } from './blockLabels';
 
@@ -12,6 +19,7 @@ let app: HTMLDivElement;
 
 beforeEach(() => {
   locale.set('en');
+  resetBindings();
   app = document.createElement('div');
   app.id = 'app';
   document.body.append(app);
@@ -20,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.replaceChildren();
   locale.set('ru');
+  expect(calls).toEqual([]);
 });
 
 function text(id: string, index: number, title: string): GridBlock {

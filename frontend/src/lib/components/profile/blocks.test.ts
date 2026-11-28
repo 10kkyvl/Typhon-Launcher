@@ -8,7 +8,7 @@ import AboutBlock from './AboutBlock.svelte';
 import BlockGrid from './BlockGrid.svelte';
 import TextBlock from './TextBlock.svelte';
 
-vi.mock('../../services/backend', () => ({ inWails: false }));
+vi.mock('../../services/backend', () => ({ inWails: true }));
 vi.mock('../../../../bindings/typhon/internal/account', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'account'));
 vi.mock('../../../../bindings/typhon/internal/library', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'library'));
 vi.mock('../../../../bindings/typhon/internal/profile', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'profile'));

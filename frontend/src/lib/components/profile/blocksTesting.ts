@@ -6,8 +6,10 @@ import type { LibraryGame } from '../../services/library';
 // blocks' settings and the picker of block kinds import the account service, whose functions reach Go
 // with the player's session. So each test file that mounts a part of this folder replaces the three
 // services whole (every function a mock; constants and types stay) through the factory here, and
-// fakes their generated bindings, so a call that slipped past the mocks is recorded, not sent:
+// fakes their generated bindings, so a call that slipped past the mocks is recorded, not sent; the
+// services run as inside Wails, so such a call does go on to its binding (blocks.mocks.test.ts):
 //
+//   vi.mock('../../services/backend', () => ({ inWails: true }));
 //   vi.mock('../../../../bindings/typhon/internal/account', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'account'));
 //   vi.mock('../../../../bindings/typhon/internal/library', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'library'));
 //   vi.mock('../../../../bindings/typhon/internal/profile', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'profile'));
@@ -18,10 +20,12 @@ import type { LibraryGame } from '../../services/library';
 // The library store imports the library service through a cycle (services/library → stores/cloudsaves
 // → stores/library): a file that imports both imports the store first. Games here are made up.
 
-/** Every function of `original` a mock that answers nothing; its constants as they are. */
+const isClass = (value: unknown) => typeof value === 'function' && /^class\b/.test(Function.prototype.toString.call(value));
+
+/** Every function of `original` a mock that answers nothing; its constants and classes (an error type) as they are. */
 export function wholeService<T extends object>(original: T): T {
   const out: Record<string, unknown> = {};
-  for (const [name, value] of Object.entries(original)) out[name] = typeof value === 'function' ? vi.fn() : value;
+  for (const [name, value] of Object.entries(original)) out[name] = typeof value === 'function' && !isClass(value) ? vi.fn() : value;
   return out as T;
 }
 

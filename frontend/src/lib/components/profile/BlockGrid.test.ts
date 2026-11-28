@@ -2,10 +2,17 @@ import { createRawSnippet } from 'svelte';
 import { render } from 'svelte/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../services/backend', () => ({ inWails: false }));
+vi.mock('../../services/backend', () => ({ inWails: true }));
+vi.mock('../../../../bindings/typhon/internal/account', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'account'));
+vi.mock('../../../../bindings/typhon/internal/library', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'library'));
+vi.mock('../../../../bindings/typhon/internal/profile', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'profile'));
+vi.mock('../../services/account', async (original) => (await import('./blocksTesting')).wholeService(await original()));
+vi.mock('../../services/library', async (original) => (await import('./blocksTesting')).wholeService(await original()));
+vi.mock('../../services/profile', async (original) => (await import('./blocksTesting')).wholeService(await original()));
 
 import BlockGrid from './BlockGrid.svelte';
 import { locale } from '../../i18n';
+import { calls, resetBindings } from '../../testing/fakeBinding';
 import type { BlockBody, BlockGame, GridBlock } from '../../profile/layoutView';
 
 function game(key: string, patch: Partial<BlockGame> = {}): BlockGame {
@@ -39,10 +46,12 @@ function html(blocks: GridBlock[], props: Record<string, unknown> = {}): string 
 
 beforeEach(() => {
   locale.set('en');
+  resetBindings();
 });
 
 afterEach(() => {
   locale.set('ru');
+  expect(calls).toEqual([]);
 });
 
 describe('BlockGrid cells', () => {

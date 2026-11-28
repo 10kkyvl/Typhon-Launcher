@@ -11,7 +11,7 @@ import { libraryGame } from './blocksTesting';
 import GamePicker from './GamePicker.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../testing/dom')).wailsRuntime());
-vi.mock('../../services/backend', () => ({ inWails: false }));
+vi.mock('../../services/backend', () => ({ inWails: true }));
 vi.mock('../../../../bindings/typhon/internal/account', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'account'));
 vi.mock('../../../../bindings/typhon/internal/library', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'library'));
 vi.mock('../../../../bindings/typhon/internal/profile', async (original) => (await import('./blocksTesting')).fakeService(await original(), 'profile'));
