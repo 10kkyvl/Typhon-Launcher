@@ -327,6 +327,7 @@ export const modals = {
   'modals.sourceDetailsStatusActive': 'Активен',
   'modals.sourceDetailsStatusDisabled': 'Отключен',
   'modals.sourceDetailsStatusUpdating': 'Обновление',
+  'modals.sourceDetailsStatusUnknown': 'Состояние неизвестно',
   'modals.sourceDetailsTitle': 'Источник',
   'modals.sourceDetailsUpdatedAt': 'Обновлено: {date}',
   'modals.sourceDetailsRefreshing': 'Обновление…',
