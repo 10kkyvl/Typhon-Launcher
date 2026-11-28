@@ -273,7 +273,9 @@ async function addAt(kind: SourceType, place: string | undefined, send: () => Pr
       said = { id: saved.id, failure: err };
       return { source: saved, failure: err };
     }
-    await reload();
+    // Go answered with the source: a list that cannot be read now is the list's trouble, and the
+    // source is shown from its events or, when none came yet, from the answer.
+    if (!(await readList(listSources)) && !get(sources).some((s) => s.id === source.id)) upsert(source);
     return { source };
   } finally {
     settleAdd(run, said);
@@ -282,12 +284,9 @@ async function addAt(kind: SourceType, place: string | undefined, send: () => Pr
 
 async function savedBy(kind: SourceType, place: string | undefined, whole: boolean, before: Set<string>, err: unknown) {
   if (errorCode(err) === 'sources.source_exists') return undefined;
-  try {
-    await reload();
-  } catch {
-    // The list could not be read: nothing shows the source was saved, so the add's own reason stands.
-    return undefined;
-  }
+  // A list that cannot be read leaves the one the events built: a source they brought is still Go's
+  // word that it was saved; without one the add's own reason stands.
+  await readList(listSources);
   const fresh = get(sources).filter((s) => s.type === kind && !before.has(s.id));
   // Without Go's spelling, a lone new source is this add's only when the press saw the whole list.
   const mine = place !== undefined ? fresh.filter((s) => locationOf(s) === place) : whole ? fresh : [];

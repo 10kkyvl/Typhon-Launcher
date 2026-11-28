@@ -360,6 +360,78 @@ describe('an add whose first refresh failed', () => {
   });
 });
 
+// Go answered with the source: a list that cannot be read after it is the list's trouble, not the add's.
+describe('an add whose list read after it fails', () => {
+  const FEED = 'https://feed.example/feed.json';
+  const saved = (patch: Partial<Source> = {}) => ({ id: 'n', name: 'feed.example', type: 'url', url: FEED, status: 'active', ...patch }) as Source;
+  const refreshFailed = new Error('typhon:sources.feed_bad_status: GET https://feed.example/feed.json: status 503');
+
+  it('answers the source Go added, listed from its events', async () => {
+    const { store } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      handlers['source:updated']({ data: saved() });
+      return saved();
+    });
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+
+    const result = await store.add(FEED);
+
+    expect(result).toEqual({ source: saved() });
+    expect(get(store.sources).map((s) => s.id)).toEqual(['n']);
+  });
+
+  it('answers the source Go added and lists it from the answer when no event came', async () => {
+    seeded = [saved({ id: 'o', url: 'https://other.example/feed.json' })];
+    const { store } = await load();
+    api.addSource.mockResolvedValueOnce(saved());
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+
+    expect((await store.add(FEED)).source.id).toBe('n');
+    expect(get(store.sources).map((s) => s.id)).toEqual(['o', 'n']);
+  });
+
+  it('keeps what a newer event said of the source over the answer', async () => {
+    const { store } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      handlers['source:updated']({ data: saved({ status: 'updating' }) });
+      return saved();
+    });
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+
+    await store.add(FEED);
+
+    expect(get(store.sources).map((s) => s.status)).toEqual(['updating']);
+  });
+
+  it('keeps a failed first read as the list’s reason, not the add’s', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+    api.addSource.mockResolvedValueOnce(saved());
+    api.listSources.mockRejectedValueOnce(new Error('still not ready'));
+
+    expect((await store.add(FEED)).source.id).toBe('n');
+    expect(get(store.sourcesLoaded)).toBe(false);
+    expect(String(get(store.sourcesLoadError))).toContain('still not ready');
+  });
+
+  it('answers the saved source with its failure from the list its events left, and says the failure once', async () => {
+    const { store, toast } = await load();
+    api.addSource.mockImplementationOnce(async () => {
+      handlers['source:updated']({ data: saved({ status: 'updating' }) });
+      handlers['source:updated']({ data: saved({ status: 'error' }) });
+      handlers['source:error']({ data: { sourceId: 'n', name: 'feed.example', message: refreshFailed.message, scheduled: false } });
+      throw refreshFailed;
+    });
+    api.listSources.mockRejectedValueOnce(new Error('list failed'));
+
+    const result = await store.add(FEED);
+
+    expect(result.source.id).toBe('n');
+    expect(result.failure).toBe(refreshFailed);
+    expect(toast).not.toHaveBeenCalled();
+  });
+});
+
 // Wails orders events and call answers independently: the first refresh's error event may come
 // before or after the add's answer, and the add may end without saying it.
 describe('the first refresh’s error, said once whatever the order', () => {

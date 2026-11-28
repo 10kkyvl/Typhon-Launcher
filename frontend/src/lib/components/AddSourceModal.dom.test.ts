@@ -3,7 +3,8 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { addSource, addSourceFile, listSources, selectFeedFile, testSource, testSourceFile, type Source, type SourcePreview } from '../services/sources';
-import { sources } from '../stores/sources';
+import { Events } from '@wailsio/runtime';
+import { initSources, sources } from '../stores/sources';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import { resetBindings } from '../testing/fakeBinding';
@@ -338,6 +339,34 @@ describe('AddSourceModal: a source saved whose first refresh failed', () => {
     adding.reject(goError('sources.feed_bad_status: status 503'));
 
     await vi.waitFor(() => expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([told()]));
+  });
+
+  it('says it once in a warning when the dialog was minimised, its error event came and the list could not be read', async () => {
+    const heard: Record<string, (event: { data: unknown }) => void> = {};
+    vi.mocked(Events.On).mockImplementation((name, cb) => {
+      heard[name] = cb as (event: { data: unknown }) => void;
+      return () => {};
+    });
+    await initSources();
+    const adding = held<Source>();
+    vi.mocked(addSource).mockReturnValueOnce(adding.promise);
+    const { dialog, keys } = await checked(async () => preview());
+    await keys.click(await within(dialog).findByRole('button', { name: msg('common.add') }));
+    await keys.click(within(dialog).getByRole('button', { name: msg('modals.addSourceMinimize') }));
+
+    // An id of its own: the store outlives the tests of this file and remembers the adds before.
+    const mine = { ...saved, id: 'heard-late' };
+    const failed = goError('sources.feed_bad_status: status 503');
+    heard['source:updated']({ data: { ...mine, status: 'updating' } });
+    heard['source:updated']({ data: mine });
+    heard['source:error']({ data: { sourceId: mine.id, name: 'feed.test', message: failed.message, scheduled: false } });
+    vi.mocked(listSources).mockRejectedValue(new Error('list failed'));
+    adding.reject(failed);
+
+    await vi.waitFor(() => expect(get(toasts).length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(get(toasts).map((toast) => [toast.message, toast.kind])).toEqual([told()]);
+    expect(get(sources).map((item) => item.id)).toEqual([mine.id]);
   });
 
   it('finds the source saved in Go’s spelling of a Cyrillic URL, by the place Go named at Check, beside another new one', async () => {
