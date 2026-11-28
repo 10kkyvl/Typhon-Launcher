@@ -58,7 +58,6 @@ describe('createGameModeWrites', () => {
     void writes.write('g1', 'hideLauncher', 'on');
     const queued = writes.write('g1', 'raisePriority', 'off');
     writes.reset();
-    expect(writes.waiting('g1')).toBe(2);
     first.resolve(undefined);
     await queued;
 
@@ -68,6 +67,5 @@ describe('createGameModeWrites', () => {
     ]);
     expect(writes.chosen('hideLauncher')).toBeUndefined();
     expect(writes.chosen('raisePriority')).toBeUndefined();
-    expect(writes.waiting('g1')).toBe(0);
   });
 });

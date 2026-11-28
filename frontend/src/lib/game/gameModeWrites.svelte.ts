@@ -1,6 +1,13 @@
 import { gameModeKeys, overrideState, withOverride, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
 import type { GameModeOverride } from '../services/library';
 
+/** The name of each game mode row, as the properties dialog shows it and its late toast names it. */
+export const gameModeTitles = {
+  highPerformance: 'settings.gameModePowerLabel',
+  hideLauncher: 'settings.gameModeHideLabel',
+  raisePriority: 'settings.gameModePriorityLabel',
+} as const satisfies Record<GameModeKey, string>;
+
 interface Chosen {
   state: OverrideState;
   /** The write that set it: an older one's answer does not touch a newer choice. */
@@ -27,16 +34,12 @@ export function createGameModeWrites(
   let shown = $state<Partial<Record<GameModeKey, Chosen>>>({});
   let tail: Promise<void> = Promise.resolve();
   const taken = new Map<string, GameModeOverride>();
-  const waiting = new Map<string, number>();
   let n = 0;
   let opening = 0;
 
   const without = (key: GameModeKey) => Object.fromEntries(Object.entries(shown).filter(([k]) => k !== key)) as typeof shown;
 
-  function finish(gameId: string, key: GameModeKey, mine: number, at: number, ok: boolean) {
-    const left = (waiting.get(gameId) ?? 1) - 1;
-    if (left > 0) waiting.set(gameId, left);
-    else waiting.delete(gameId);
+  function finish(key: GameModeKey, mine: number, at: number, ok: boolean) {
     if (at !== opening || shown[key]?.n !== mine) return;
     shown = ok ? { ...shown, [key]: { ...shown[key], done: true } } : without(key);
   }
@@ -44,15 +47,11 @@ export function createGameModeWrites(
   return {
     chosen: (key: GameModeKey): OverrideState | undefined => shown[key]?.state,
 
-    /** How many of this game's changes are still to be answered. */
-    waiting: (gameId: string) => waiting.get(gameId) ?? 0,
-
     /** Resolves once Go stored the change; rejects with its refusal. */
     write(gameId: string, key: GameModeKey, state: OverrideState): Promise<void> {
       const mine = ++n;
       const at = opening;
       shown = { ...shown, [key]: { state, n: mine, done: false } };
-      waiting.set(gameId, (waiting.get(gameId) ?? 0) + 1);
       const run = tail.then(async () => {
         const next = withOverride(taken.get(gameId) ?? stored(gameId), key, state);
         await send(gameId, next);
@@ -61,9 +60,9 @@ export function createGameModeWrites(
       // The refusal reaches the caller through `run`; the next change still goes.
       tail = run.catch(() => undefined);
       return run.then(
-        () => finish(gameId, key, mine, at, true),
+        () => finish(key, mine, at, true),
         (err: unknown) => {
-          finish(gameId, key, mine, at, false);
+          finish(key, mine, at, false);
           throw err;
         },
       );

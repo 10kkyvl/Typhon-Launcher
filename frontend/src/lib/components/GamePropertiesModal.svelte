@@ -14,7 +14,7 @@
   import { selectImageFile } from '../services/emulators';
   import { msg } from '../i18n';
   import { propertiesErrorText as errorText } from '../game/propertiesErrors';
-  import { createGameModeWrites } from '../game/gameModeWrites.svelte';
+  import { createGameModeWrites, gameModeTitles } from '../game/gameModeWrites.svelte';
   import { createCompatSwitch } from '../game/compatSwitch.svelte';
   import { createFileWrites, type FileWrite } from '../game/fileWrites.svelte';
   import {
@@ -31,7 +31,7 @@
   import { appInfo, elevationSupported } from '../services/system';
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
   import { libraryGames, runningGames } from '../stores/library';
-  import type { GameModeKey, OverrideState } from '../gamemode/gamemode';
+  import { gameModeKeys, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
   import { focusHandOff } from '../utils/focusHandOff';
 
@@ -314,12 +314,21 @@
     }
   }
 
-  // A change made while another is written waits its turn; changes still waiting when the opening
-  // passes are said in one toast once the last is stored, a refusal in its own.
+  // The game mode changes of each opening still to be answered, and how those answered after it
+  // passed went, by row (the last answer of a row is what it holds). Counted by opening, not by game:
+  // a newer opening of the same game queues its own.
+  const gameModeBatches = new Map<number, { title: string; left: number; late: Map<GameModeKey, string | undefined> }>();
+
+  // A change made while another is written waits its turn. The changes of an opening answered after it
+  // passed are said in one toast once the last of them is answered: saved, or the rows Go refused.
   async function changeGameMode(key: GameModeKey, state: OverrideState) {
     if (!game) return;
     const id = game.id;
+    const at = opening;
     const { heard, title } = pressedNow();
+    const batch = gameModeBatches.get(at) ?? { title, left: 0, late: new Map() };
+    gameModeBatches.set(at, batch);
+    batch.left += 1;
     gameModeError = '';
     let failure: string | undefined;
     try {
@@ -327,11 +336,23 @@
     } catch (err) {
       failure = errorText(err, msg('modals.propertiesGameModeFailed'));
     }
-    if (!heard()) {
-      if (failure !== undefined || gameModes.waiting(id) === 0) sayLate(title, failure);
+    batch.left -= 1;
+    if (batch.left === 0) gameModeBatches.delete(at);
+    if (heard()) {
+      if (failure !== undefined) gameModeError = failure;
       return;
     }
-    if (failure !== undefined) gameModeError = failure;
+    batch.late.set(key, failure);
+    if (batch.left === 0) sayGameModesLate(batch.title, batch.late);
+  }
+
+  function sayGameModesLate(title: string, late: Map<GameModeKey, string | undefined>) {
+    const refused = gameModeKeys.filter((key) => late.get(key) !== undefined);
+    if (refused.length === 0) return sayLate(title);
+    const separator = msg('modals.propertiesGameModeLateSeparator');
+    const rows = refused.map((key) => msg(gameModeTitles[key])).join(separator);
+    const reason = [...new Set(refused.map((key) => late.get(key)))].join(separator);
+    toast(msg('modals.propertiesGameModeLateRefused', { title, rows, reason }), 'danger');
   }
 
   async function changePresence(on: boolean) {

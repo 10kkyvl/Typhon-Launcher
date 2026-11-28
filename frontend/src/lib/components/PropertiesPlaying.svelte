@@ -4,6 +4,7 @@
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
   import { gameModeKeys, inheritLabel, overrideState, type GameModeKey, type OverrideState } from '../gamemode/gamemode';
+  import { gameModeTitles } from '../game/gameModeWrites.svelte';
   import type { LibraryGame } from '../services/library';
   import { settings } from '../stores/settings';
 
@@ -36,12 +37,6 @@
   } = $props();
   const uid = $props.id();
   const held = $derived(msg('modals.actionRunning'));
-
-  const gameModeTitles = {
-    highPerformance: 'settings.gameModePowerLabel',
-    hideLauncher: 'settings.gameModeHideLabel',
-    raisePriority: 'settings.gameModePriorityLabel',
-  } as const;
 
   const gameModeRows = $derived(
     gameModeKeys

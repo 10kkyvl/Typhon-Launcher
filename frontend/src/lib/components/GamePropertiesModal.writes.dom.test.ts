@@ -341,7 +341,8 @@ describe('GamePropertiesModal: game mode changes made while one is written', () 
     first.resolve(hades);
 
     await vi.waitFor(() => expect(vi.mocked(setGameModeOverride)).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([['success', msg('modals.propertiesLateSaved', { title: 'Hades' })]]));
+    // The toast store folds the same words raised twice into one with a count: the count is compared too.
+    await vi.waitFor(() => expect(get(toasts).map((t) => [t.kind, t.message, t.count ?? 1])).toEqual([['success', msg('modals.propertiesLateSaved', { title: 'Hades' }), 1]]));
   });
 });
 
