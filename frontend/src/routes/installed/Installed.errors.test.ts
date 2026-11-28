@@ -25,7 +25,7 @@ describe('Installed error toasts', () => {
   });
 
   const sites: Array<{ name: string; source: string; snippet: string }> = [
-    { name: 'submitAdd', source: addGame, snippet: "toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');" },
+    { name: 'submitAdd', source: addGame, snippet: "const reason = libraryErrorText(err, msg('games.installedAddGameError'));" },
     { name: 'play', source: game, snippet: "toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');" },
     { name: 'findGames', source: page, snippet: "toast(sourceErrorText(err, msg('games.installedScanError')), 'danger');" },
     { name: 'chooseExecutable', source: list, snippet: "toast(libraryErrorText(err, msg('games.installedChooseExeError')), 'danger');" },
