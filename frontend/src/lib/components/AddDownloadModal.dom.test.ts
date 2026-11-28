@@ -766,3 +766,68 @@ describe('AddDownloadModal: a Start answered after the dialog moved on', () => {
     expect(cleanup.discard).toHaveBeenCalledWith('abc');
   });
 });
+
+describe('AddDownloadModal: what a running Start sent is what the files step shows', () => {
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  const shown = (box: HTMLElement) => box.getAttribute('aria-checked');
+  const sentOptions = () =>
+    vi.mocked(startDownloadFrom).mock.calls.map((call) => ({ files: call[2], ...(call[3] as { autoInstall?: boolean; elevateAhead?: boolean }) }));
+
+  it('holds the file boxes and "Install after the download" with a reason while the Start runs', async () => {
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const { user } = await files();
+    await user.click(startButton());
+    const install = screen.getByRole('checkbox', { name: msg('modals.addDownloadAutoInstallLabel') });
+    const setup = fileBox('Celeste/setup.exe');
+
+    await user.click(install);
+    await user.click(setup);
+
+    expect({ install: shown(install), setup: shown(setup) }).toEqual({ install: 'false', setup: 'true' });
+    expect(sentOptions()).toEqual([{ files: [0, 1], autoInstall: false, elevateAhead: false }]);
+    for (const box of [install, setup, fileBox('Celeste/readme.txt')]) {
+      expect(box.getAttribute('aria-disabled')).toBe('true');
+      expect(description(box)).toContain(msg('modals.actionRunning'));
+    }
+    starting.resolve({} as Download);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('holds "Confirm administrator rights now" while the Start runs, and shows what it sent', async () => {
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const { user } = await files();
+    await user.click(screen.getByRole('checkbox', { name: msg('modals.addDownloadAutoInstallLabel') }));
+    const rights = await screen.findByRole('checkbox', { name: msg('modals.addDownloadElevateAheadLabel') });
+    await user.click(rights);
+    await user.click(startButton());
+
+    await user.click(rights);
+
+    expect(shown(rights)).toBe('true');
+    expect(sentOptions()).toEqual([{ files: [0, 1], autoInstall: true, elevateAhead: true }]);
+    expect(rights.getAttribute('aria-disabled')).toBe('true');
+    starting.resolve({} as Download);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('holds Start with a reason while no file is ticked, and sends nothing for a press', async () => {
+    const { user } = await files();
+    await user.click(fileBox('Celeste/setup.exe'));
+    await user.click(fileBox('Celeste/readme.txt'));
+    const start = startButton();
+
+    expect(start.getAttribute('aria-disabled')).toBe('true');
+    expect(start).toHaveProperty('disabled', false);
+    expect(description(start)).toContain(msg('modals.addDownloadNoFiles'));
+    await user.click(start);
+    expect(startDownloadFrom).not.toHaveBeenCalled();
+
+    await user.click(fileBox('Celeste/readme.txt'));
+    expect(start.getAttribute('aria-disabled')).toBeNull();
+  });
+});

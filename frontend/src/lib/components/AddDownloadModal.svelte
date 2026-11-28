@@ -269,7 +269,7 @@
   }
 
   async function start() {
-    if (!info || starting) return;
+    if (!info || starting || selectedCount === 0) return;
     const at = opening;
     const heard = () => alive && at === opening;
     const files = info.files;
@@ -322,6 +322,12 @@
 
   const continueReason = $derived(canContinue ? '' : msg('modals.addDownloadNeedsMagnet'));
   const heldReason = $derived(starting ? msg('modals.actionRunning') : '');
+  const startReason = $derived(starting || selectedCount > 0 ? '' : msg('modals.addDownloadNoFiles'));
+
+  // While a Start runs, the choices it sent stay what the files step shows.
+  function choose(change: () => void) {
+    if (!starting) change();
+  }
 </script>
 
 {#if !libraryReady}
@@ -405,21 +411,34 @@
       </div>
       <div class="file-list">
         {#each info.files as file, i (i)}
-          <Checkbox bind:checked={selected[i]} label={file.path} aside={bytesSize(file.size)} />
+          <Checkbox
+            checked={selected[i]}
+            onchange={(on) => choose(() => (selected[i] = on))}
+            label={file.path}
+            aside={bytesSize(file.size)}
+            disabled={starting}
+            reason={heldReason}
+          />
         {/each}
       </div>
       <div class="options">
         <Checkbox
-          bind:checked={autoInstall}
+          checked={autoInstall}
+          onchange={(on) => choose(() => (autoInstall = on))}
           label={msg('modals.addDownloadAutoInstallLabel')}
           description={msg('modals.addDownloadAutoInstallSub')}
+          disabled={starting}
+          reason={heldReason}
         />
         {#if canElevateAhead}
           <div class="nested">
             <Checkbox
-              bind:checked={elevateAhead}
+              checked={elevateAhead}
+              onchange={(on) => choose(() => (elevateAhead = on))}
               label={msg('modals.addDownloadElevateAheadLabel')}
               description={msg('modals.addDownloadElevateAheadSub')}
+              disabled={starting}
+              reason={heldReason}
             />
           </div>
         {/if}
@@ -439,7 +458,7 @@
         {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
       <Button disabled={starting} reason={heldReason} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button id="{uid}-start" variant="primary" disabled={selectedCount === 0} busy={starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
+      <Button id="{uid}-start" variant="primary" disabled={!!startReason} reason={startReason} busy={starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
     {/if}
   {/snippet}
 </Modal>
